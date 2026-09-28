@@ -5,16 +5,27 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,7 +46,6 @@ import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.Serializable
 
 @androidx.media3.common.util.UnstableApi
 @AndroidEntryPoint
@@ -125,36 +135,58 @@ class DownloadQualityBottomSheet : BottomSheetDialogFragment() {
                 val provider = remember { UserPreferences.currentProvider }
                 var updatedServers by remember { mutableStateOf(servers) }
                 val extractionStatus = remember { mutableStateMapOf<String, String>() }
+                val serverStreamMeta = remember { mutableStateMapOf<String, DownloadQualityFormatter.StreamMetadata>() }
 
                 LaunchedEffect(servers) {
                     if (provider != null) {
                         servers.forEach { server ->
                             if (server.video == null) {
                                 launch(Dispatchers.IO) {
-                                    extractionStatus[server.id] = "loading"
+                                    withContext(Dispatchers.Main) {
+                                        extractionStatus[server.id] = "loading"
+                                    }
                                     try {
                                         val video = provider.getVideo(server)
                                         server.video = video
-                                        updatedServers = updatedServers.map { if (it.id == server.id) it.copy().apply { this.video = video } else it }
-                                        extractionStatus[server.id] = "done"
+                                        val meta = DownloadQualityFormatter.inspectStreamMetadata(video)
+                                        withContext(Dispatchers.Main) {
+                                            serverStreamMeta[server.id] = meta
+                                            updatedServers = updatedServers.map { if (it.id == server.id) it.copy().apply { this.video = video } else it }
+                                            extractionStatus[server.id] = "done"
+                                        }
                                     } catch (e: Exception) {
-                                        extractionStatus[server.id] = "failed"
+                                        withContext(Dispatchers.Main) {
+                                            extractionStatus[server.id] = "failed"
+                                        }
                                         android.util.Log.e("DownloadBS", "Background fetch failed for ${server.name}: ${e.message}")
                                     }
                                 }
                             } else {
-                                extractionStatus[server.id] = "done"
+                                launch(Dispatchers.IO) {
+                                    val meta = DownloadQualityFormatter.inspectStreamMetadata(server.video!!)
+                                    withContext(Dispatchers.Main) {
+                                        serverStreamMeta[server.id] = meta
+                                        extractionStatus[server.id] = "done"
+                                    }
+                                }
                             }
                         }
                     }
                 }
 
                 var selectedResolution by remember { mutableStateOf("") }
+                var selectedServerId by remember { mutableStateOf<String?>(null) }
+                var showUnavailableSection by remember { mutableStateOf(false) }
 
                 fun getSupportedResolutions(server: Video.Server): List<String> {
+                    val meta = serverStreamMeta[server.id]
+                    if (meta != null && meta.resolutionLabel.isNotBlank() && meta.resolutionLabel != "HD") {
+                        return listOf(meta.resolutionLabel.uppercase())
+                    }
+
                     val label = DownloadQualityFormatter.title(server).substringBefore(" - ")
                     if (label != "Unknown" && label.endsWith("p")) {
-                        return listOf(label)
+                        return listOf(label.uppercase())
                     }
 
                     val sourceUrl = server.video?.source.orEmpty()
@@ -166,7 +198,7 @@ class DownloadQualityBottomSheet : BottomSheetDialogFragment() {
                             val resolutions = Regex("""RESOLUTION=\d+x(\d+)""", RegexOption.IGNORE_CASE)
                                 .findAll(manifestContent)
                                 .mapNotNull { it.groupValues.getOrNull(1)?.toIntOrNull() }
-                                .map { "${it}p" }
+                                .map { "${it}P" }
                                 .toList()
                             if (resolutions.isNotEmpty()) {
                                 return resolutions.distinct()
@@ -176,194 +208,291 @@ class DownloadQualityBottomSheet : BottomSheetDialogFragment() {
 
                     val text = "${server.name} ${server.src} $sourceUrl".lowercase()
                     val numeric = Regex("""(?<!\d)(2160|1440|1080|720|576|540|480|360|240)p?(?!\d)""").find(text)?.groupValues?.getOrNull(1)
-                    if (numeric != null) return listOf("${numeric}p")
+                    if (numeric != null) return listOf("${numeric}P")
 
                     if (text.contains("vixsrc") || text.contains("2embed") || text.contains("vidsrc") || text.contains("vidlink") || text.contains("vidflix")) {
-                        return listOf("1080p", "720p", "480p", "360p")
+                        return listOf("1080P", "720P", "480P", "360P")
                     }
-                    return listOf("720p")
+                    return listOf("720P")
                 }
 
-                val resolutions = remember(updatedServers) {
-                    updatedServers.flatMap { getSupportedResolutions(it) }.distinct().sortedByDescending {
-                        it.substringBefore("p").toIntOrNull() ?: 0
+                // Filter working/loading servers vs failed servers
+                val validServers = remember(updatedServers, extractionStatus.toMap()) {
+                    updatedServers.filter { extractionStatus[it.id] != "failed" }
+                }
+                val failedServers = remember(updatedServers, extractionStatus.toMap()) {
+                    updatedServers.filter { extractionStatus[it.id] == "failed" }
+                }
+
+                // Compute ONLY available resolutions from working/loading servers
+                val availableResolutions = remember(validServers, serverStreamMeta.toMap()) {
+                    val candidates = validServers.ifEmpty { updatedServers }
+                    candidates.flatMap { getSupportedResolutions(it) }.distinct().sortedByDescending {
+                        it.removeSuffix("P").removeSuffix("p").toIntOrNull() ?: 0
                     }
                 }
 
-                val activeResolution = if (selectedResolution.isNotBlank() && selectedResolution in resolutions) {
+                val activeResolution = if (selectedResolution.isNotBlank() && selectedResolution in availableResolutions) {
                     selectedResolution
                 } else {
-                    resolutions.firstOrNull() ?: ""
+                    availableResolutions.firstOrNull() ?: "720P"
                 }
 
+                val activeServers = remember(activeResolution, validServers, updatedServers, serverStreamMeta.toMap()) {
+                    val pool = validServers.ifEmpty { updatedServers }
+                    pool.filter { activeResolution in getSupportedResolutions(it) }
+                }
+
+                // Default selection
+                LaunchedEffect(activeServers) {
+                    if (selectedServerId == null || activeServers.none { it.id == selectedServerId }) {
+                        selectedServerId = activeServers.firstOrNull()?.id
+                    }
+                }
+
+                val currentSelectedServer = activeServers.firstOrNull { it.id == selectedServerId } ?: activeServers.firstOrNull()
+                val currentMeta = currentSelectedServer?.let { serverStreamMeta[it.id] }
+                val selectedSizeLabel = currentMeta?.exactSizeBytes?.let { DownloadQualityFormatter.formatSizeBytes(it) }
+                    ?: currentSelectedServer?.let { DownloadQualityFormatter.estimatedSizeString(it, activeResolution) }
+                    ?: "Unknown Size"
+
                 Surface(
-                    color = Color(0xFF141416),
+                    color = Color(0xFF121214),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 20.dp)
-                            .padding(top = 10.dp, bottom = 24.dp)
+                            .padding(top = 10.dp, bottom = 20.dp)
                     ) {
-                        // Drag Handle
+                        // Drag handle
                         Box(
                             modifier = Modifier
                                 .width(40.dp)
                                 .height(4.dp)
-                                .background(Color.DarkGray, RoundedCornerShape(2.dp))
+                                .background(Color(0xFF333338), RoundedCornerShape(2.dp))
                                 .align(Alignment.CenterHorizontally)
                         )
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        Text(
-                            text = "Select Download Quality",
-                            color = Color.White,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 20.sp,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
+                        // Header Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = if (mediaTitle.isNotBlank()) mediaTitle else "Download",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 20.sp
+                            )
+                            IconButton(
+                                onClick = { dismiss() },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Close",
+                                    tint = Color.Gray
+                                )
+                            }
+                        }
 
-                        if (resolutions.isNotEmpty()) {
-                            @OptIn(ExperimentalMaterial3Api::class)
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // Available Quality Chips Bar
+                        if (availableResolutions.isNotEmpty()) {
                             LazyRow(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 8.dp)
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                items(resolutions) { res ->
+                                items(availableResolutions) { res ->
                                     val isSelected = res == activeResolution
-                                    FilterChip(
-                                        selected = isSelected,
-                                        onClick = { selectedResolution = res },
-                                        label = { Text(res, fontWeight = FontWeight.Bold) },
-                                        colors = FilterChipDefaults.filterChipColors(
-                                            containerColor = Color(0xFF222225),
-                                            labelColor = Color.Gray,
-                                            selectedContainerColor = Color(0xFFE50914),
-                                            selectedLabelColor = Color.White
-                                        ),
-                                        border = null,
-                                        shape = RoundedCornerShape(12.dp)
-                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .background(
+                                                color = if (isSelected) Color(0xFF2A2E33) else Color(0xFF1E1E22),
+                                                shape = RoundedCornerShape(8.dp)
+                                            )
+                                            .border(
+                                                width = 1.dp,
+                                                color = if (isSelected) Color(0xFF00E5FF) else Color.Transparent,
+                                                shape = RoundedCornerShape(8.dp)
+                                            )
+                                            .clickable { selectedResolution = res }
+                                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                                    ) {
+                                        Text(
+                                            text = res,
+                                            color = if (isSelected) Color(0xFF00E5FF) else Color.LightGray,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp
+                                        )
+                                    }
                                 }
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                        val filteredServers = remember(activeResolution, updatedServers) {
-                            updatedServers.filter { activeResolution in getSupportedResolutions(it) }
-                        }
-
-                        fun handleServerClick(server: Video.Server) {
-                            startExtractionAndDownload(server, activeResolution)
-                            dismiss()
-                        }
-
-                        if (filteredServers.isEmpty() && servers.isNotEmpty()) {
-                            Text(
-                                text = "No options available for this quality",
-                                color = Color.Gray,
-                                fontSize = 14.sp,
-                                modifier = Modifier.padding(vertical = 32.dp).align(Alignment.CenterHorizontally)
-                            )
-                        }
-
+                        // Active Working Stream Options List
                         LazyColumn(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(max = 450.dp),
+                                .heightIn(max = 320.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            items(filteredServers) { server ->
+                            items(activeServers) { server ->
                                 val status = extractionStatus[server.id] ?: "loading"
-                                val isDone = status == "done"
-                                val isFailed = status == "failed"
-                                
-                                val rawDetails = DownloadQualityFormatter.details(server)
-                                val details = if (isFailed) "Failed to extract link" 
-                                             else if (!isDone) "Fetching link details..."
-                                             else rawDetails
+                                val isSelected = server.id == currentSelectedServer?.id
+                                val meta = serverStreamMeta[server.id]
 
-                                val isRecommended = isDone && (details.contains("Mbps") || details.contains("GB"))
+                                val sizeText = meta?.exactSizeBytes?.let { DownloadQualityFormatter.formatSizeBytes(it) }
+                                    ?: DownloadQualityFormatter.estimatedSizeString(server, activeResolution)
+                                val formatText = meta?.formatLabel ?: DownloadQualityFormatter.format(server.video?.type, server.video?.source ?: server.src)
+                                val dimText = meta?.dimensions?.let { " ($it)" } ?: ""
+                                val bwText = DownloadQualityFormatter.formatBitrate(meta?.bitrate)?.let { " • $it" } ?: ""
 
-                                Card(
+                                Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clickable(enabled = isDone) {
-                                            handleServerClick(server)
-                                        },
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = Color(0xFF1E1E22),
-                                        disabledContainerColor = Color(0xFF1E1E22).copy(alpha = 0.5f)
-                                    ),
-                                    shape = RoundedCornerShape(12.dp),
-                                    border = if (isRecommended) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE50914).copy(alpha = 0.5f)) else null
+                                        .background(
+                                            color = if (isSelected) Color(0xFF1A2228) else Color(0xFF18181B),
+                                            shape = RoundedCornerShape(12.dp)
+                                        )
+                                        .border(
+                                            width = 1.dp,
+                                            color = if (isSelected) Color(0xFF00E5FF).copy(alpha = 0.6f) else Color(0xFF242428),
+                                            shape = RoundedCornerShape(12.dp)
+                                        )
+                                        .clickable { selectedServerId = server.id }
+                                        .padding(14.dp)
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(16.dp),
-                                        verticalAlignment = Alignment.CenterVertically
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(40.dp)
-                                                .background(Color(0xFF2A2A2E), RoundedCornerShape(8.dp)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            if (status == "loading") {
-                                                CircularProgressIndicator(
-                                                    modifier = Modifier.size(20.dp),
-                                                    strokeWidth = 2.dp,
-                                                    color = Color(0xFFE50914)
-                                                )
-                                            } else {
-                                                Icon(
-                                                    imageVector = if (details.contains("MP4")) Icons.Default.Download else Icons.Default.PlayCircle,
-                                                    contentDescription = null,
-                                                    tint = if (isRecommended) Color(0xFFE50914) else if (isFailed) Color.DarkGray else Color.LightGray,
-                                                    modifier = Modifier.size(24.dp)
-                                                )
-                                            }
-                                        }
+                                        Icon(
+                                            imageVector = if (isSelected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                            contentDescription = null,
+                                            tint = if (isSelected) Color(0xFF00E5FF) else Color.DarkGray,
+                                            modifier = Modifier.size(22.dp)
+                                        )
 
-                                        Spacer(modifier = Modifier.width(16.dp))
+                                        Spacer(modifier = Modifier.width(12.dp))
 
                                         Column(modifier = Modifier.weight(1f)) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Text(
-                                                    text = DownloadQualityFormatter.title(server),
-                                                    color = if (isFailed) Color.Gray else Color.White,
-                                                    fontWeight = FontWeight.Bold,
-                                                    fontSize = 15.sp
-                                                )
-                                                if (isRecommended) {
-                                                    Spacer(modifier = Modifier.width(8.dp))
-                                                    AssistChip(
-                                                        onClick = {},
-                                                        label = { Text("Recommended", fontSize = 10.sp) },
-                                                        colors = AssistChipDefaults.assistChipColors(
-                                                            containerColor = Color(0xFFE50914).copy(alpha = 0.1f),
-                                                            labelColor = Color(0xFFE50914)
-                                                        ),
-                                                        border = null,
-                                                        shape = RoundedCornerShape(4.dp),
-                                                        modifier = Modifier.height(20.dp)
-                                                    )
-                                                }
-                                            }
-                                            if (details.isNotBlank()) {
-                                                Text(
-                                                    text = details,
-                                                    color = if (isFailed) Color(0xFFE50914).copy(alpha = 0.7f) else Color.Gray,
-                                                    fontSize = 12.sp
-                                                )
-                                            }
+                                            Text(
+                                                text = "${DownloadQualityFormatter.title(server)}$dimText",
+                                                color = Color.White,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 15.sp
+                                            )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = "$sizeText$bwText | $formatText",
+                                                color = Color.Gray,
+                                                fontSize = 12.sp
+                                            )
+                                        }
+
+                                        if (status == "loading") {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(18.dp),
+                                                strokeWidth = 2.dp,
+                                                color = Color(0xFF00E5FF)
+                                            )
                                         }
                                     }
                                 }
+                            }
+
+                            // Collapsible Unavailable Sources
+                            if (failedServers.isNotEmpty()) {
+                                item {
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { showUnavailableSection = !showUnavailableSection }
+                                            .padding(vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = "Unavailable Sources (${failedServers.size})",
+                                            color = Color.Gray,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        Icon(
+                                            imageVector = if (showUnavailableSection) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                            contentDescription = null,
+                                            tint = Color.Gray,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+
+                                if (showUnavailableSection) {
+                                    items(failedServers) { failedServer ->
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(Color(0xFF141416), RoundedCornerShape(8.dp))
+                                                .padding(12.dp)
+                                        ) {
+                                            Text(
+                                                text = "${DownloadQualityFormatter.title(failedServer)} - Connection Failed",
+                                                color = Color.DarkGray,
+                                                fontSize = 12.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Reference-Matched Action Button: [ Download · 982.4 MB ]
+                        Button(
+                            onClick = {
+                                currentSelectedServer?.let { server ->
+                                    startExtractionAndDownload(server, activeResolution)
+                                    dismiss()
+                                }
+                            },
+                            enabled = currentSelectedServer != null,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF00E5FF),
+                                contentColor = Color.Black,
+                                disabledContainerColor = Color(0xFF222225),
+                                disabledContentColor = Color.Gray
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Download,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Download · $selectedSizeLabel",
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 16.sp
+                                )
                             }
                         }
                     }
@@ -377,12 +506,12 @@ class DownloadQualityBottomSheet : BottomSheetDialogFragment() {
         val appContext = requireContext().applicationContext
         val lifecycleScope = requireActivity().lifecycleScope
         
-        Toast.makeText(appContext, "Starting extraction...", Toast.LENGTH_SHORT).show()
+        Toast.makeText(appContext, "Starting download...", Toast.LENGTH_SHORT).show()
         
         lifecycleScope.launch {
             try {
                 val video = withContext(Dispatchers.IO) {
-                    provider.getVideo(server)
+                    server.video ?: provider.getVideo(server)
                 }
                 
                 downloadManager.startDownload(

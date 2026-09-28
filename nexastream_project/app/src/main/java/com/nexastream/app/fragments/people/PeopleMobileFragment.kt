@@ -23,6 +23,7 @@ import com.nexastream.app.models.Movie
 import com.nexastream.app.models.People
 import com.nexastream.app.models.TvShow
 import com.nexastream.app.ui.SpacingItemDecoration
+import com.nexastream.app.ui.components.SafeGridLayoutManager
 import com.nexastream.app.utils.CacheUtils
 import com.nexastream.app.utils.LoggingUtils
 import com.nexastream.app.utils.dp
@@ -108,11 +109,15 @@ class PeopleMobileFragment : Fragment() {
 
     private fun initializePeople() {
         binding.rvPeople.apply {
-            layoutManager = GridLayoutManager(context, 3).also {
+            layoutManager = SafeGridLayoutManager(context, 3).also {
                 it.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
                     override fun getSpanSize(position: Int): Int {
-                        val viewType = appAdapter.getItemViewType(position)
-                        return when (AppAdapter.Type.entries[viewType]) {
+                        val viewType = try {
+                            appAdapter.getItemViewType(position)
+                        } catch (_: Exception) {
+                            return 1
+                        }
+                        return when (AppAdapter.Type.entries.getOrNull(viewType)) {
                             AppAdapter.Type.HEADER -> it.spanCount
                             else -> 1
                         }

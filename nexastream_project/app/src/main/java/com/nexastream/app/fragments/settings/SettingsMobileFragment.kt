@@ -1,3 +1,5 @@
+@file:OptIn(androidx.media3.common.util.UnstableApi::class)
+
 package com.nexastream.app.fragments.settings
 
 import android.app.Activity
@@ -1000,12 +1002,13 @@ class SettingsMobileFragment : PreferenceFragmentCompat() {
         updateDownloadPreferenceState()
     }
 
+    @androidx.media3.common.util.UnstableApi
     private fun setupDownloadPreferences() {
         findPreference<SwitchPreferenceCompat>("DOWNLOAD_WIFI_ONLY")?.apply {
             isChecked = UserPreferences.downloadWifiOnly
             setOnPreferenceChangeListener { _, newValue ->
                 UserPreferences.downloadWifiOnly = newValue as Boolean
-                (requireContext().applicationContext as? NexastreamApp)?.appDownloadManager?.onSettingsChanged()
+                (requireContext().applicationContext as? NexastreamApp)?.appDownloadManagerProvider?.get()?.onSettingsChanged()
                 true
             }
         }
@@ -1016,7 +1019,7 @@ class SettingsMobileFragment : PreferenceFragmentCompat() {
             setOnPreferenceChangeListener { preference, newValue ->
                 val newVal = (newValue as String).toIntOrNull() ?: 3
                 UserPreferences.maxParallelDownloads = newVal
-                (requireContext().applicationContext as? NexastreamApp)?.appDownloadManager?.onSettingsChanged()
+                (requireContext().applicationContext as? NexastreamApp)?.appDownloadManagerProvider?.get()?.onSettingsChanged()
                 if (preference is ListPreference) {
                     preference.summary = preference.entries?.getOrNull(preference.findIndexOfValue(newValue))
                 }

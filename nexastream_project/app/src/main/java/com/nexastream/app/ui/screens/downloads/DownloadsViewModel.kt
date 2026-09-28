@@ -47,4 +47,11 @@ class DownloadsViewModel @Inject constructor(
             }
         }
     }
+
+    fun toggleAllowMobileData(allow: Boolean) {
+        viewModelScope.launch {
+            com.nexastream.app.utils.UserPreferences.downloadWifiOnly = !allow
+            downloadManager.onSettingsChanged()
+        }
+    }
 }

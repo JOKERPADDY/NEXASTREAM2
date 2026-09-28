@@ -52,21 +52,20 @@ object UserPreferences {
     }
 
     fun setup(context: Context) {
+        if (::prefs.isInitialized) return
         val prefsName = "${BuildConfig.APPLICATION_ID}.preferences"
         prefs = context.getSharedPreferences(
             prefsName,
             Context.MODE_PRIVATE,
         )
-        if (::prefs.isInitialized) {
-            debugLog { "prefs initialized: ${prefs.hashCode()}" }
+        debugLog { "prefs initialized: ${prefs.hashCode()}" }
 
-            val jsonString = Key.PROVIDER_CACHE.getString() ?: "{}"
-            providerCache = runCatching { JSONObject(jsonString) }.getOrDefault(JSONObject())
-            
-            // Force home provider as default provider every time app opens
-            Key.CURRENT_PROVIDER.setString(NexaHomeProvider.name)
-            cachedProvider = NexaHomeProvider
-        }
+        val jsonString = Key.PROVIDER_CACHE.getString() ?: "{}"
+        providerCache = runCatching { JSONObject(jsonString) }.getOrDefault(JSONObject())
+        
+        // Force home provider as default provider every time app opens
+        Key.CURRENT_PROVIDER.setString(NexaHomeProvider.name)
+        cachedProvider = NexaHomeProvider
     }
 
     @Volatile

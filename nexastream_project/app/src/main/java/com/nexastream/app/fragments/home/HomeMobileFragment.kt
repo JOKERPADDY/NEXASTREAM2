@@ -41,9 +41,11 @@ class HomeMobileFragment : Fragment() {
     private val binding get() = _binding!!
 
     private val viewModel by activityViewModelsFactory {
+        val appCtx = requireActivity().applicationContext
+        val db = AppDatabase.getInstance(appCtx)
         HomeViewModel(
-            AppDatabase.getInstance(requireActivity()),
-            HomeRepository(requireActivity(), AppDatabase.getInstance(requireActivity()))
+            db,
+            HomeRepository(appCtx, db)
         )
     }
 
@@ -102,10 +104,14 @@ class HomeMobileFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.state.flowWithLifecycle(lifecycle, Lifecycle.State.STARTED).collect { state ->
                 when (state) {
-                    HomeViewModel.State.Loading -> binding.isLoading.apply {
-                        root.visibility = View.VISIBLE
-                        pbIsLoading.visibility = View.VISIBLE
-                        gIsLoadingRetry.visibility = View.GONE
+                    HomeViewModel.State.Loading -> {
+                        if (appAdapter.items.isEmpty()) {
+                            binding.isLoading.apply {
+                                root.visibility = View.VISIBLE
+                                pbIsLoading.visibility = View.VISIBLE
+                                gIsLoadingRetry.visibility = View.GONE
+                            }
+                        }
                     }
                     is HomeViewModel.State.SuccessLoading -> {
                         displayHome(state.categories)
@@ -189,16 +195,16 @@ class HomeMobileFragment : Fragment() {
                         "New Season and Episode", "New Season & Episode" -> "new_season_tv" to category.name
                         
                         "Netflix Movies" -> "tmdb_watch_provider_movies_8" to category.name
-                        "Disney+ Movies" -> "tmdb_watch_provider_movies_337" to category.name
-                        "Paramount+ Movies" -> "tmdb_watch_provider_movies_531" to category.name
+                        "Disney+ Movies", "Disney+" -> "tmdb_watch_provider_movies_337" to category.name
+                        "Paramount+ Movies", "Paramount+" -> "tmdb_watch_provider_movies_531" to category.name
                         
                         "Netflix Series" -> "tmdb_network_tv_213" to category.name
-                        "Prime Video Series" -> "tmdb_network_tv_1024" to category.name
+                        "Prime Video Series", "Prime Video" -> "tmdb_network_tv_1024" to category.name
                         "Disney+ Series" -> "tmdb_network_tv_2739" to category.name
-                        "Max Series" -> "tmdb_network_tv_49" to category.name
+                        "Max Series", "Max" -> "tmdb_network_tv_49" to category.name
                         "Paramount+ Series" -> "tmdb_network_tv_4330" to category.name
-                        "Apple TV Series" -> "tmdb_network_tv_2552" to category.name
-                        "Hulu Series" -> "tmdb_network_tv_453" to category.name
+                        "Apple TV Series", "Apple TV" -> "tmdb_network_tv_2552" to category.name
+                        "Hulu Series", "Hulu" -> "tmdb_network_tv_453" to category.name
 
                         "Action Movies" -> "tmdb_movies_genre_28" to category.name
                         "Crime Movies" -> "tmdb_movies_genre_80" to category.name
@@ -235,23 +241,24 @@ class HomeMobileFragment : Fragment() {
                         "Romance Series" -> "tmdb_tv_genre_10749" to category.name
                         "Thriller Series" -> "tmdb_tv_genre_53" to category.name
                         "War & Politics Series" -> "tmdb_tv_genre_10768" to category.name
-                        "Reality TV" -> "tmdb_tv_genre_10764" to category.name
+                        "Reality TV", "Reality Series" -> "tmdb_tv_genre_10764" to category.name
                         "Western Series" -> "tmdb_tv_genre_37" to category.name
                         "Teen Romance Series", "Teen Romance", "Trending Teen Romance" -> "teen_romance_series" to category.name
                         "Biography Series" -> "biography_series" to category.name
                         "Sport Series" -> "sport_series" to category.name
                         "Musical Series" -> "search_Musical Series" to category.name
+                        "Top Rated TV Shows", "Top Rated TV Show" -> "tmdb_tv_top_rated" to category.name
                         "All TV Shows", "Top TV Shows" -> "tmdb_tv_popular" to category.name
                         "Trending Series" -> "tmdb_tv_popular" to category.name
 
                         "Kids & Family", "Kids" -> "tmdb_kids_family" to category.name
-                        "Cartoon Movies" -> "tmdb_cartoon_movies" to category.name
+                        "Cartoon Movies", "CartoonMovies" -> "tmdb_cartoon_movies" to category.name
                         "Cartoon Series" -> "tmdb_cartoon_series" to category.name
                         "Baby" -> "tmdb_keyword_10229" to category.name
                         "Age 2-6" -> "tmdb_kids_family" to category.name
                         "Pixar" -> "tmdb_studio_3" to category.name
                         "DreamWorks" -> "tmdb_studio_521" to category.name
-                        "Blue Sky Studios" -> "tmdb_studio_10378" to category.name
+                        "Blue Sky Studios", "BlueSky Studios", "Bluesky Studios" -> "tmdb_studio_10378" to category.name
                         "Illumination" -> "tmdb_studio_6704" to category.name
                         "Toys" -> "tmdb_keyword_11134" to category.name
                         "Kung Fu Panda" -> "search_Kung Fu Panda" to category.name
@@ -263,7 +270,7 @@ class HomeMobileFragment : Fragment() {
                         "Anime Universe", "Anime" -> "tmdb_anime_universe" to category.name
                         "Anime Movies" -> "tmdb_cartoon_movies" to category.name
                         "Japanese Anime" -> "tmdb_japanese_anime" to category.name
-                        "European & American Anime" -> "tmdb_western_anime" to category.name
+                        "European & American Anime", "American Anime" -> "tmdb_western_anime" to category.name
                         "Age 7-12" -> "tmdb_anime_age_7_12" to category.name
                         "Dragon Ball" -> "search_Dragon Ball" to category.name
                         "Naruto" -> "search_Naruto" to category.name
@@ -366,17 +373,17 @@ class HomeMobileFragment : Fragment() {
             }
         } else {
             val kidsCategories = listOf(
-                "Kids Banner", "Kids & Family", "Cartoon Movies", "Cartoon Series",
-                "Baby", "Age 2-6", "Pixar", "DreamWorks", "Blue Sky Studios",
+                "Kids Banner", "Kids & Family", "Cartoon Movies", "CartoonMovies", "Cartoon Series",
+                "Baby", "Age 2-6", "Pixar", "DreamWorks", "Blue Sky Studios", "BlueSky Studios", "Bluesky Studios",
                 "Illumination", "Toys", "Kung Fu Panda", "Cars", "Frozen", "Minions", "Peppa Pig"
             )
             val animeCategories = listOf(
                 "Anime Banner", "Anime Universe", "Anime Movies", "Japanese Anime",
-                "European & American Anime", "Age 7-12", "Dragon Ball", "Naruto", "One Piece"
+                "European & American Anime", "American Anime", "Age 7-12", "Dragon Ball", "Naruto", "One Piece"
             )
             val moviesCategories = listOf(
                 "Movies Banner", "Trending Movies", "Top Rated Movies", "Upcoming Movies",
-                "Latest Movies", "All Cinema", "Netflix Movies", "Disney+ Movies", "Paramount+ Movies",
+                "Latest Movies", "All Cinema", "Netflix Movies", "Disney+ Movies", "Disney+", "Paramount+ Movies", "Paramount+",
                 "Action Movies", "Crime Movies", "Drama Movies", "Adventure Movies", "Comedy Movies",
                 "Thriller Movies", "Romance Movies", "Sci-Fi Movies", "Documentary Movies",
                 "Horror Movies", "Fantasy Movies", "Family Movies", "History Movies",
@@ -384,13 +391,13 @@ class HomeMobileFragment : Fragment() {
                 "All Movies", "Top Movies", "At Cinema"
             )
             val seriesCategories = listOf(
-                "Series Banner", "Trending Series", "Top Rated TV Shows",
-                "New Season and Episode", "Netflix Series", "Prime Video Series", "Disney+ Series",
-                "Max Series", "Paramount+ Series", "Apple TV Series", "Hulu Series",
-                "Action & Adventure Series", "Comedy Series", "Crime Series", "Teen Romance Series",
+                "Series Banner", "Trending Series", "Top Rated TV Shows", "Top Rated TV Show",
+                "New Season and Episode", "Netflix Series", "Prime Video Series", "Prime Video", "Disney+ Series",
+                "Max Series", "Paramount+ Series", "Apple TV Series", "Apple TV", "Hulu Series", "Hulu",
+                "Action & Adventure Series", "Action & Adventure", "Comedy Series", "Crime Series", "Teen Romance Series", "Teen Romance",
                 "Documentary Series", "Drama Series", "Family Series", "Sci-Fi & Fantasy Series",
                 "History Series", "Horror Series", "Mystery Series", "Romance Series",
-                "Thriller Series", "War & Politics Series", "Biography Series", "Reality TV", "Sport Series", "Western Series",
+                "Thriller Series", "War & Politics Series", "Biography Series", "Reality TV", "Reality Series", "Sport Series", "Western Series",
                 "All TV Shows", "Top TV Shows", "New Season & Episode", "Musical Series"
             )
 

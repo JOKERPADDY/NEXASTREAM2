@@ -117,6 +117,12 @@ interface Provider {
 
         fun supportsDownloads(provider: Provider?): Boolean {
             if (provider == null || provider is IptvProvider) return false
+            val isTv = runCatching {
+                com.nexastream.app.NexastreamApp.instance.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK)
+            }.getOrDefault(false) || com.nexastream.app.utils.UserPreferences.forceTvUi
+
+            if (isTv) return false
+
             if (provider is TmdbProvider) return true
             val support = providers[provider] ?: return false
             return support.movies || support.tvShows

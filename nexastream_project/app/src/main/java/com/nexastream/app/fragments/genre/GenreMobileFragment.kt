@@ -23,6 +23,8 @@ import com.nexastream.app.models.Genre
 import com.nexastream.app.models.Movie
 import com.nexastream.app.models.TvShow
 import com.nexastream.app.ui.SpacingItemDecoration
+import com.nexastream.app.ui.components.SafeGridLayoutManager
+import com.nexastream.app.ui.components.SafeLinearLayoutManager
 import com.nexastream.app.utils.CacheUtils
 import com.nexastream.app.utils.dp
 import dagger.hilt.android.AndroidEntryPoint
@@ -113,16 +115,20 @@ class GenreMobileFragment : Fragment() {
     private fun initializeGenre() {
         binding.rvGenre.apply {
             if (args.id == "cdn_sports") {
-                layoutManager = LinearLayoutManager(context)
+                layoutManager = SafeLinearLayoutManager(context)
                 addItemDecoration(
                     SpacingItemDecoration(20.dp(requireContext()), 0)
                 )
             } else {
-                layoutManager = GridLayoutManager(context, 3).also {
+                layoutManager = SafeGridLayoutManager(context, 3).also {
                     it.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
                         override fun getSpanSize(position: Int): Int {
-                            val viewType = appAdapter.getItemViewType(position)
-                            return when (AppAdapter.Type.entries[viewType]) {
+                            val viewType = try {
+                                appAdapter.getItemViewType(position)
+                            } catch (e: Exception) {
+                                return 1
+                            }
+                            return when (AppAdapter.Type.entries.getOrNull(viewType)) {
                                 AppAdapter.Type.HEADER -> it.spanCount
                                 else -> 1
                             }

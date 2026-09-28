@@ -30,27 +30,24 @@ class MoviesViewModel @Inject constructor(
         }
     }
     @OptIn(ExperimentalCoroutinesApi::class)
-    val state: Flow<State> = combine(
-        _state,
-        _state.transformLatest { state ->
-            if (state is State.SuccessLoading) {
-                if (state.movies.isEmpty()) {
-                    emit(emptyList())
-                } else {
-                    emitAll(database.movieDao().getByIds(state.movies.map { it.id }))
-                }
-            } else emit(emptyList<Movie>())
-        },
-    ) { state, moviesDb ->
+    val state: Flow<State> = _state.flatMapLatest { state ->
         if (state is State.SuccessLoading) {
-            val moviesById = moviesDb.associateBy { it.id }
-            State.SuccessLoading(
-                movies = state.movies.map { movie ->
-                    moviesById[movie.id]?.takeIf { !movie.isSame(it) }?.let { movie.copy().merge(it) } ?: movie
-                },
-                hasMore = state.hasMore
-            )
-        } else state
+            if (state.movies.isEmpty()) {
+                flowOf(state)
+            } else {
+                database.movieDao().getByIds(state.movies.map { it.id }).map { moviesDb ->
+                    val moviesById = moviesDb.associateBy { it.id }
+                    State.SuccessLoading(
+                        movies = state.movies.map { movie ->
+                            moviesById[movie.id]?.takeIf { !movie.isSame(it) }?.let { movie.copy().merge(it) } ?: movie
+                        },
+                        hasMore = state.hasMore
+                    )
+                }
+            }
+        } else {
+            flowOf(state)
+        }
     }.flowOn(Dispatchers.IO)
 
     private var page = 1

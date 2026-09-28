@@ -32,42 +32,38 @@ class GenreViewModel @Inject constructor(
     private val _state = MutableStateFlow<State>(State.Loading)
     
     @OptIn(ExperimentalCoroutinesApi::class)
-    val state: Flow<State> = combine(
-        _state,
-        _state.flatMapLatest { state ->
-            if (state is State.SuccessLoading) {
-                val shows = state.genre.shows
-                if (shows.isEmpty()) {
-                    flowOf(emptyList<AppAdapter.Item>())
-                } else {
-                    val movies = shows.filterIsInstance<Movie>()
-                    val tvShows = shows.filterIsInstance<TvShow>()
+    val state: Flow<State> = _state.flatMapLatest { state ->
+        if (state is State.SuccessLoading) {
+            val shows = state.genre.shows
+            if (shows.isEmpty()) {
+                flowOf(state)
+            } else {
+                val movies = shows.filterIsInstance<Movie>()
+                val tvShows = shows.filterIsInstance<TvShow>()
+                
+                val moviesDbFlow = if (movies.isEmpty()) flowOf(emptyList<Movie>()) else database.movieDao().getByIds(movies.map { it.id })
+                val tvShowsDbFlow = if (tvShows.isEmpty()) flowOf(emptyList<TvShow>()) else database.tvShowDao().getByIds(tvShows.map { it.id })
+                
+                combine(moviesDbFlow, tvShowsDbFlow) { mDb, tvDb ->
+                    val mDbMap = mDb.associateBy { it.id }
+                    val tvDbMap = tvDb.associateBy { it.id }
                     
-                    val moviesDbFlow = if (movies.isEmpty()) flowOf(emptyList<Movie>()) else database.movieDao().getByIds(movies.map { it.id })
-                    val tvShowsDbFlow = if (tvShows.isEmpty()) flowOf(emptyList<TvShow>()) else database.tvShowDao().getByIds(tvShows.map { it.id })
-                    
-                    combine(moviesDbFlow, tvShowsDbFlow) { mDb, tvDb ->
-                        val mDbMap = mDb.associateBy { it.id }
-                        val tvDbMap = tvDb.associateBy { it.id }
-                        
-                        shows.map { item ->
-                            when (item) {
-                                is Movie -> mDbMap[item.id]?.takeIf { !item.isSame(it) }?.let { item.copy().merge(it) } ?: item
-                                is TvShow -> tvDbMap[item.id]?.takeIf { !item.isSame(it) }?.let { item.copy().merge(it) } ?: item
-                                else -> item
-                            }
+                    val mergedShows = shows.map { item ->
+                        when (item) {
+                            is Movie -> mDbMap[item.id]?.takeIf { !item.isSame(it) }?.let { item.copy().merge(it) } ?: item
+                            is TvShow -> tvDbMap[item.id]?.takeIf { !item.isSame(it) }?.let { item.copy().merge(it) } ?: item
+                            else -> item
                         }
                     }
+                    State.SuccessLoading(
+                        genre = state.genre.copy(shows = mergedShows),
+                        hasMore = state.hasMore
+                    )
                 }
-            } else flowOf(emptyList<AppAdapter.Item>())
+            }
+        } else {
+            flowOf(state)
         }
-    ) { state, showsDb ->
-        if (state is State.SuccessLoading) {
-            State.SuccessLoading(
-                genre = state.genre.copy(shows = showsDb),
-                hasMore = state.hasMore
-            )
-        } else state
     }.flowOn(Dispatchers.IO)
 
     private var page = 1

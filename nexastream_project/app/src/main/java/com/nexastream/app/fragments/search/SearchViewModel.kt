@@ -75,45 +75,31 @@ class SearchViewModel @Inject constructor(
         .flowOn(Dispatchers.IO)
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val state: Flow<SearchState> = combine(
-        _state,
-        _state.transformLatest { state ->
-            when (state) {
-                is SearchState.SuccessSearching -> {
-                    val movies = state.results.filterIsInstance<Movie>()
-                    if (movies.isEmpty()) emit(emptyList())
-                    else emitAll(database.movieDao().getByIds(movies.map { it.id }))
-                }
-                else -> emit(emptyList<Movie>())
-            }
-        },
-        _state.transformLatest { state ->
-            when (state) {
-                is SearchState.SuccessSearching -> {
-                    val tvShows = state.results.filterIsInstance<TvShow>()
-                    if (tvShows.isEmpty()) emit(emptyList())
-                    else emitAll(database.tvShowDao().getByIds(tvShows.map { it.id }))
-                }
-                else -> emit(emptyList<TvShow>())
-            }
-        },
-    ) { state, moviesDb, tvShowsDb ->
+    val state: Flow<SearchState> = _state.flatMapLatest { state ->
         when (state) {
             is SearchState.SuccessSearching -> {
-                val moviesById = moviesDb.associateBy { it.id }
-                val tvShowsById = tvShowsDb.associateBy { it.id }
+                val movies = state.results.filterIsInstance<Movie>()
+                val tvShows = state.results.filterIsInstance<TvShow>()
+                
+                val moviesDbFlow = if (movies.isEmpty()) flowOf(emptyList<Movie>()) else database.movieDao().getByIds(movies.map { it.id })
+                val tvShowsDbFlow = if (tvShows.isEmpty()) flowOf(emptyList<TvShow>()) else database.tvShowDao().getByIds(tvShows.map { it.id })
+                
+                combine(moviesDbFlow, tvShowsDbFlow) { moviesDb, tvShowsDb ->
+                    val moviesById = moviesDb.associateBy { it.id }
+                    val tvShowsById = tvShowsDb.associateBy { it.id }
 
-                val enrichedResults = state.results.map { item ->
-                    when (item) {
-                        is Movie -> moviesById[item.id]?.takeIf { !item.isSame(it) }?.let { item.copy().merge(it) } ?: item
-                        is TvShow -> tvShowsById[item.id]?.takeIf { !item.isSame(it) }?.let { item.copy().merge(it) } ?: item
-                        else -> item
+                    val enrichedResults = state.results.map { item ->
+                        when (item) {
+                            is Movie -> moviesById[item.id]?.takeIf { !item.isSame(it) }?.let { item.copy().merge(it) } ?: item
+                            is TvShow -> tvShowsById[item.id]?.takeIf { !item.isSame(it) }?.let { item.copy().merge(it) } ?: item
+                            else -> item
+                        }
                     }
-                }
 
-                SearchState.SuccessSearching(results = enrichedResults, hasMore = state.hasMore)
+                    SearchState.SuccessSearching(results = enrichedResults, hasMore = state.hasMore)
+                }
             }
-            else -> state
+            else -> flowOf(state)
         }
     }.flowOn(Dispatchers.IO)
 

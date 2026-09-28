@@ -143,18 +143,24 @@
 
     </LinearLayout>
 
-    <Button
+    <TextView
         android:id="@+id/btn_home_edit_mode"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/edit_mode"
-        android:layout_marginTop="24dp"
-        android:layout_marginEnd="24dp"
-        android:backgroundTint="#222222"
-        android:textColor="@color/white"
+        android:layout_marginTop="28dp"
+        android:layout_marginEnd="60dp"
+        android:focusable="true"
+        android:background="@drawable/bg_button_ghost"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp"
+        android:textColor="@color/color_text_button_ghost"
+        android:textSize="13sp"
+        android:textStyle="bold"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        style="@style/Widget.Material3.Button.TonalButton"/>
+        app:layout_constraintTop_toTopOf="parent" />
 
     <include
         android:id="@+id/is_loading"

@@ -32,7 +32,7 @@ import com.nexastream.app.models.Download
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DownloadsScreen(
-    onPlayClick: (String) -> Unit,
+    onPlayClick: (Download) -> Unit,
     viewModel: DownloadsViewModel = hiltViewModel()
 ) {
     val downloads by viewModel.downloads.collectAsState(initial = emptyList())
@@ -112,16 +112,71 @@ fun DownloadsScreen(
                 Text("No downloads yet", color = Color.Gray)
             }
         } else {
-            LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
-                items(downloads, key = { it.id }) { download ->
-                    DownloadItem(
-                        download = download,
-                        onPlay = { onPlayClick(download.id) },
-                        onPause = { viewModel.pauseDownload(download.id) },
-                        onResume = { viewModel.resumeDownload(download.id) },
-                        onRetry = { viewModel.retryDownload(download.id) },
-                        onDelete = { downloadToDelete = download }
-                    )
+            val isWaitingForWifi = downloads.any { download ->
+                (download.status == Download.Status.QUEUED || download.status == Download.Status.DOWNLOADING) &&
+                        (download.waitingReason and Requirements.NETWORK_UNMETERED) != 0
+            }
+
+            Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+                if (isWaitingForWifi) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF2B2200)),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Downloads paused (Wi-Fi required)",
+                                    color = Color(0xFFFFD54F),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                                Text(
+                                    text = "Wi-Fi Only mode is enabled in Settings.",
+                                    color = Color.LightGray,
+                                    fontSize = 11.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Button(
+                                onClick = { viewModel.toggleAllowMobileData(true) },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFFFFC107),
+                                    contentColor = Color.Black
+                                ),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Text(
+                                    text = "Allow Mobile Data",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+
+                LazyColumn(modifier = Modifier.fillMaxSize().weight(1f)) {
+                    items(downloads, key = { it.id }) { download ->
+                        DownloadItem(
+                            download = download,
+                            onPlay = { onPlayClick(download) },
+                            onPause = { viewModel.pauseDownload(download.id) },
+                            onResume = { viewModel.resumeDownload(download.id) },
+                            onRetry = { viewModel.retryDownload(download.id) },
+                            onDelete = { downloadToDelete = download }
+                        )
+                    }
                 }
             }
         }
@@ -233,7 +288,7 @@ fun DownloadItem(
                     color = statusColor(download),
                     fontSize = 12.sp
                 )
-                if (download.status == Download.Status.PAUSED || download.status == Download.Status.COMPLETED) {
+                if (download.status == Download.Status.PAUSED || download.status == Download.Status.COMPLETED || download.status == Download.Status.QUEUED) {
                     DownloadMetadata(download)
                 }
                 if (download.status == Download.Status.FAILED && !download.errorMessage.isNullOrEmpty()) {
@@ -254,7 +309,7 @@ fun DownloadItem(
                         Icon(Icons.Default.Pause, contentDescription = "Pause", tint = Color.White)
                     }
                 }
-                Download.Status.PAUSED -> {
+                Download.Status.PAUSED, Download.Status.QUEUED -> {
                     IconButton(onClick = onResume) {
                         Icon(Icons.Default.PlayArrow, contentDescription = "Resume", tint = Color.White)
                     }
@@ -269,7 +324,6 @@ fun DownloadItem(
                         Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = Color.White)
                     }
                 }
-                Download.Status.QUEUED -> Unit
             }
             IconButton(onClick = onDelete) {
                 Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.Gray)
@@ -280,16 +334,7 @@ fun DownloadItem(
 
 @Composable
 private fun DownloadMetadata(download: Download) {
-    val qualityText = download.quality
-    val displayQuality = if (!qualityText.isNullOrBlank() && qualityText.contains(" - ")) {
-        qualityText.substringAfter(" - ").takeIf { it.isNotBlank() }
-    } else {
-        null
-    }
-
     val parts = listOfNotNull(
-        displayQuality,
-        storageLabel(download),
         formatSizeProgress(download).takeIf { it.isNotBlank() },
         formatSpeed(download.downloadSpeed).takeIf { download.status == Download.Status.DOWNLOADING && download.downloadSpeed > 0L },
         formatEta(download.etaSeconds).takeIf { download.status == Download.Status.DOWNLOADING && download.etaSeconds != null }
@@ -297,7 +342,7 @@ private fun DownloadMetadata(download: Download) {
 
     if (parts.isNotEmpty()) {
         Text(
-            text = parts.joinToString(" - "),
+            text = parts.joinToString(" • "),
             color = Color.Gray,
             fontSize = 11.sp,
             maxLines = 1
@@ -305,12 +350,21 @@ private fun DownloadMetadata(download: Download) {
     }
 }
 
+@UnstableApi
 private fun statusLabel(download: Download): String {
     return when (download.status) {
         Download.Status.FAILED -> "Failed"
         Download.Status.PAUSED -> "Paused"
         Download.Status.COMPLETED -> "Ready to watch"
-        Download.Status.QUEUED -> "Queued"
+        Download.Status.QUEUED -> {
+            if (download.waitingReason != 0) {
+                when {
+                    (download.waitingReason and Requirements.NETWORK_UNMETERED) != 0 -> "Waiting for Wi-Fi..."
+                    (download.waitingReason and Requirements.NETWORK) != 0 -> "Waiting for network..."
+                    else -> "Queued"
+                }
+            } else "Queued"
+        }
         Download.Status.DOWNLOADING -> "Downloading"
     }
 }
@@ -320,6 +374,7 @@ private fun statusColor(download: Download): Color {
         Download.Status.COMPLETED -> Color.Green
         Download.Status.FAILED -> Color.Red
         Download.Status.PAUSED -> Color(0xFFFFC107)
+        Download.Status.QUEUED -> if (download.waitingReason != 0) Color(0xFFFFC107) else Color.Gray
         else -> Color.Gray
     }
 }
@@ -335,14 +390,7 @@ private fun formatSizeProgress(download: Download): String {
     }
 }
 
-private fun storageLabel(download: Download): String {
-    return when (download.storageType) {
-        Download.StorageType.DIRECT_FILE_CACHE -> "Offline video cache"
-        Download.StorageType.HLS_CACHE -> "Offline HLS cache"
-        Download.StorageType.DASH_CACHE -> "Offline DASH cache"
-        Download.StorageType.MEDIA_CACHE -> "Offline media cache"
-    }
-}
+
 
 private fun formatSpeed(bytesPerSecond: Long): String {
     return "${formatBytes(bytesPerSecond)}/s"

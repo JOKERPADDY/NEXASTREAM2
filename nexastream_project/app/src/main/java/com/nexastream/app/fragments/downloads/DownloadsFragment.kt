@@ -37,13 +37,19 @@ class DownloadsFragment : Fragment() {
             setContent {
                 Nexastream2Theme {
                     DownloadsScreen(
-                        onPlayClick = { id ->
+                        onPlayClick = { download ->
                             findNavController().navigate(
                                 DownloadsFragmentDirections.actionDownloadsToPlayer(
-                                    id = id,
-                                    title = "", 
-                                    subtitle = "",
-                                    videoType = com.nexastream.app.models.Video.Type.Movie(id, "", "", "", null)
+                                    id = download.id,
+                                    title = download.title,
+                                    subtitle = download.quality ?: "",
+                                    videoType = com.nexastream.app.models.Video.Type.Movie(
+                                        download.id,
+                                        download.title,
+                                        "",
+                                        download.poster ?: "",
+                                        null
+                                    )
                                 )
                             )
                         }

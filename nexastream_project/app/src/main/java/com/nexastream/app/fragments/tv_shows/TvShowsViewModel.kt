@@ -30,27 +30,24 @@ class TvShowsViewModel @Inject constructor(
         }
     }
     @OptIn(ExperimentalCoroutinesApi::class)
-    val state: Flow<State> = combine(
-        _state,
-        _state.transformLatest { state ->
-            if (state is State.SuccessLoading) {
-                if (state.tvShows.isEmpty()) {
-                    emit(emptyList())
-                } else {
-                    emitAll(database.tvShowDao().getByIds(state.tvShows.map { it.id }))
-                }
-            } else emit(emptyList<TvShow>())
-        },
-    ) { state, tvShowsDb ->
+    val state: Flow<State> = _state.flatMapLatest { state ->
         if (state is State.SuccessLoading) {
-            val tvShowsById = tvShowsDb.associateBy { it.id }
-            State.SuccessLoading(
-                tvShows = state.tvShows.map { tvShow ->
-                    tvShowsById[tvShow.id]?.takeIf { !tvShow.isSame(it) }?.let { tvShow.copy().merge(it) } ?: tvShow
-                },
-                hasMore = state.hasMore
-            )
-        } else state
+            if (state.tvShows.isEmpty()) {
+                flowOf(state)
+            } else {
+                database.tvShowDao().getByIds(state.tvShows.map { it.id }).map { tvShowsDb ->
+                    val tvShowsById = tvShowsDb.associateBy { it.id }
+                    State.SuccessLoading(
+                        tvShows = state.tvShows.map { tvShow ->
+                            tvShowsById[tvShow.id]?.takeIf { !tvShow.isSame(it) }?.let { tvShow.copy().merge(it) } ?: tvShow
+                        },
+                        hasMore = state.hasMore
+                    )
+                }
+            }
+        } else {
+            flowOf(state)
+        }
     }.flowOn(Dispatchers.IO)
 
     private var page = 1

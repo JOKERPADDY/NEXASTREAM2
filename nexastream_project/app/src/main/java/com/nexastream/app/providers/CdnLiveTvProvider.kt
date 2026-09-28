@@ -99,7 +99,7 @@ object CdnLiveTvProvider : Provider {
 
         // 1. Featured Channels
         if (channels.isNotEmpty()) {
-            val tvShowItems = channels.take(30).map { it.toTvShow() }
+            val tvShowItems = channels.map { it.toTvShow() }
             categories.add(
                 Category(
                     name = "CDN Live Channels",
@@ -112,7 +112,7 @@ object CdnLiveTvProvider : Provider {
     }
 
     private suspend fun CDNChannel.toTvShow() = TvShow(
-        id = "cdn:$code",
+        id = if (url.isNotBlank()) "cdn:$url" else "cdn:$name:$code",
         title = name,
         poster = com.nexastream.app.utils.ChannelLogoRepository.getLogoUrl(name) ?: com.nexastream.app.utils.ArtworkRequestHeaders.run {
             val urlWithParams = appendQueryParams(image, mapOf("user" to USER, "plan" to PLAN))
@@ -130,13 +130,24 @@ object CdnLiveTvProvider : Provider {
         itemType = AppAdapter.Type.TV_SHOW_MOBILE_ITEM 
     }
 
-    override suspend fun getServers(id: String
-, videoType: Video.Type): List<Video.Server> {
+    override suspend fun getServers(id: String, videoType: Video.Type): List<Video.Server> {
         if (id.startsWith("cdn:")) {
-            val code = id.removePrefix("cdn:")
-            val channels = runCatching { service.getChannels().channels }.getOrNull() ?: return emptyList()
-            val channel = channels.find { it.code == code } ?: return emptyList()
-            return listOf(Video.Server(id = channel.url, name = "CDN Direct"))
+            val target = id.removePrefix("cdn:")
+            
+            if (target.startsWith("http://") || target.startsWith("https://")) {
+                return listOf(Video.Server(id = target, name = "CDN Direct"))
+            }
+
+            val channels = if (cachedChannels.isNotEmpty()) cachedChannels else runCatching { service.getChannels().channels }.getOrNull() ?: emptyList()
+            val channel = channels.find { ch ->
+                ch.url == target ||
+                "${ch.name}:${ch.code}".equals(target, ignoreCase = true) ||
+                ch.name.equals(target, ignoreCase = true) ||
+                ch.code.equals(target, ignoreCase = true)
+            }
+            if (channel != null) {
+                return listOf(Video.Server(id = channel.url, name = "CDN Direct"))
+            }
         }
 
         return emptyList()
@@ -342,10 +353,19 @@ object CdnLiveTvProvider : Provider {
     override suspend fun getMovie(id: String): Movie = Movie(id = id, title = "Not Supported")
     override suspend fun getTvShow(id: String): TvShow {
         if (id.startsWith("cdn:")) {
-            val code = id.removePrefix("cdn:")
-            val channels = runCatching { service.getChannels().channels }.getOrNull() ?: return TvShow(id = id, title = "Error")
-            val channel = channels.find { it.code == code } ?: return TvShow(id = id, title = "Not Found")
-            return channel.toTvShow()
+            val target = id.removePrefix("cdn:")
+            val channels = if (cachedChannels.isNotEmpty()) cachedChannels else runCatching { service.getChannels().channels }.getOrNull() ?: emptyList()
+            val channel = channels.find { ch ->
+                ch.url == target ||
+                "${ch.name}:${ch.code}".equals(target, ignoreCase = true) ||
+                ch.name.equals(target, ignoreCase = true) ||
+                ch.code.equals(target, ignoreCase = true)
+            }
+            if (channel != null) return channel.toTvShow()
+            if (target.startsWith("http://") || target.startsWith("https://")) {
+                return TvShow(id = id, title = "Live Stream", quality = "LIVE", providerName = "CDN Live TV")
+            }
+            return TvShow(id = id, title = "Not Found")
         }
         return TvShow(id = id, title = "Unsupported")
     }

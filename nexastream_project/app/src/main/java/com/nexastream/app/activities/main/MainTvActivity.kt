@@ -54,16 +54,13 @@ class MainTvActivity : FragmentActivity() {
         setTheme(ThemeManager.tvThemeRes(UserPreferences.selectedTheme))
         super.onCreate(savedInstanceState)
         
-        FilmyOnlineCcProvider.init(this)
-        
         _binding = ActivityMainTvBinding.inflate(layoutInflater)
         setContentView(binding.root)
         applyThemeNavigationChrome()
 
         binding.ivSplashOverlay.animate()
             .alpha(0f)
-            .setDuration(400)
-            .setStartDelay(200)
+            .setDuration(150)
             .withEndAction {
                 binding.ivSplashOverlay.visibility = View.GONE
             }
@@ -77,7 +74,9 @@ class MainTvActivity : FragmentActivity() {
 
             if (savedInstanceState == null) {
                 UserPreferences.currentProvider?.let {
-                    navController?.navigate(R.id.home)
+                    if (navController?.currentDestination?.id != R.id.home) {
+                        runCatching { navController?.navigate(R.id.home) }
+                    }
                 }
             }
 

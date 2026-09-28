@@ -71,63 +71,37 @@ class HomeRepository(
     suspend fun enrichContinueWatchingEpisodes(
         provider: Provider,
         episodes: List<Episode>
-    ): List<Episode> = coroutineScope {
-        // Limit enrichment to the most recent 10 items for performance, especially on TV
+    ): List<Episode> {
         val targetList = if (episodes.size > 10) episodes.take(10) else episodes
         
-        targetList.map { episode ->
-            async {
-                try {
-                    val tvShowId = episode.tvShow?.id ?: return@async episode
-                    val resolvedTvShow = continueWatchingTvShowCache[tvShowId] ?: runCatching {
-                        provider.getTvShow(tvShowId)
-                    }.getOrNull()?.also { fetchedTvShow ->
-                        continueWatchingTvShowCache[tvShowId] = fetchedTvShow
-                    }
+        return targetList.map { episode ->
+            val tvShowId = episode.tvShow?.id
+            val cachedTvShow = tvShowId?.let { continueWatchingTvShowCache[it] }
 
-                    val mergedTvShow = resolvedTvShow?.copy().apply {
-                        this?.let { show ->
-                            episode.tvShow?.let { existingTvShow -> show.merge(existingTvShow) }
-                        }
-                    } ?: episode.tvShow
-
-                    val resolvedSeason = episode.season?.let { season ->
-                        mergedTvShow?.seasons?.firstOrNull { it.id == season.id || it.number == season.number }
-                            ?: season
-                    }
-
-                    val resolvedEpisode = if (UserPreferences.enableTmdb) {
-                        val seasonId = resolvedSeason?.id ?: episode.season?.id
-                        seasonId?.let { key ->
-                            continueWatchingSeasonEpisodesCache[key] ?: runCatching {
-                                provider.getEpisodesBySeason(key)
-                            }.getOrDefault(emptyList()).also { fetchedEpisodes ->
-                                if (fetchedEpisodes.isNotEmpty()) {
-                                    continueWatchingSeasonEpisodesCache[key] = fetchedEpisodes
-                                }
-                            }
-                        }?.firstOrNull { seasonEpisode ->
-                            seasonEpisode.id == episode.id || seasonEpisode.number == episode.number
-                        }
-                    } else {
-                        null
-                    }
-
-                    episode.copy(
-                        title = resolvedEpisode?.title ?: episode.title,
-                        overview = resolvedEpisode?.overview ?: episode.overview,
-                        poster = resolvedEpisode?.poster ?: episode.poster,
-                        tvShow = mergedTvShow,
-                        season = resolvedSeason,
-                    ).apply {
-                        merge(episode)
-                    }
-                } catch (e: Exception) {
-                    android.util.Log.e("HomeRepository", "Failed to enrich episode: ${episode.id}", e)
-                    episode
+            val mergedTvShow = cachedTvShow?.copy().apply {
+                this?.let { show ->
+                    episode.tvShow?.let { existingTvShow -> show.merge(existingTvShow) }
                 }
+            } ?: episode.tvShow
+
+            val resolvedSeason = episode.season?.let { season ->
+                mergedTvShow?.seasons?.firstOrNull { it.id == season.id || it.number == season.number }
+                    ?: season
             }
-        }.awaitAll()
+
+            val cachedEpisodes = resolvedSeason?.id?.let { continueWatchingSeasonEpisodesCache[it] }
+            val resolvedEpisode = cachedEpisodes?.firstOrNull { seasonEpisode ->
+                seasonEpisode.id == episode.id || seasonEpisode.number == episode.number
+            }
+
+            episode.copy(
+                title = resolvedEpisode?.title ?: episode.title,
+                overview = resolvedEpisode?.overview ?: episode.overview,
+                poster = resolvedEpisode?.poster ?: episode.poster,
+                tvShow = mergedTvShow,
+                season = resolvedSeason,
+            )
+        }
     }
 
     fun getUserDataFlow(provider: Provider): Flow<UserDataCache.UserData?> {

@@ -51,17 +51,20 @@ class HeaderInterceptingDataSource(
         }
 
         val downloads = getHeaderDownloads(database)
+        if (downloads.isEmpty()) return null
+
+        // 1. Exact URL match
         downloads.firstOrNull { it.url == url }?.headers?.let { return it }
 
         val requestUri = Uri.parse(url)
-        val pathMatches = downloads.filter { requestMatchesDownloadPath(requestUri, it.url) }
-        commonHeaders(pathMatches)?.let { return it }
 
-        // Some providers put manifests and segments on different paths of the same CDN.
-        // Only use the origin fallback when every matching download agrees on the headers;
-        // otherwise concurrent downloads from one CDN could leak credentials into each other.
+        // 2. Path prefix match (e.g. manifest/segment base path)
+        val pathMatches = downloads.filter { requestMatchesDownloadPath(requestUri, it.url) }
+        pathMatches.firstOrNull()?.headers?.let { return it }
+
+        // 3. Origin match (e.g. same CDN host)
         val originMatches = downloads.filter { requestMatchesDownloadOrigin(requestUri, it.url) }
-        return commonHeaders(originMatches)
+        return originMatches.firstOrNull()?.headers
     }
 
     private suspend fun getHeaderDownloads(database: AppDatabase): List<HeaderDownload> {
@@ -106,13 +109,6 @@ class HeaderInterceptingDataSource(
             .map(Uri::parse)
 
         return listOfNotNull(directUri) + playlistUris
-    }
-
-    private fun commonHeaders(downloads: List<HeaderDownload>): Map<String, String>? {
-        return downloads
-            .map { it.headers }
-            .distinct()
-            .singleOrNull()
     }
 
     private fun requestMatchesManifestBase(requestUri: Uri, manifestUri: Uri): Boolean {

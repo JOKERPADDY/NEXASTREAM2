@@ -96,10 +96,6 @@ class MainMobileActivity : AppCompatActivity() {
 
     private var updateAppDialog: UpdateAppMobileDialog? = null
 
-    @androidx.media3.common.util.UnstableApi
-    @Inject
-    lateinit var appDownloadManager: AppDownloadManager
-
     override fun attachBaseContext(newBase: android.content.Context) {
         super.attachBaseContext(AppLanguageManager.wrap(newBase))
     }
@@ -109,9 +105,6 @@ class MainMobileActivity : AppCompatActivity() {
         setTheme(ThemeManager.mobileThemeRes(UserPreferences.selectedTheme))
 
         super.onCreate(savedInstanceState)
-
-
-        FilmyOnlineCcProvider.init(this)
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val palette = ThemeManager.palette(UserPreferences.selectedTheme)

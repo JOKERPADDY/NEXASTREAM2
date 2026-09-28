@@ -26,7 +26,7 @@ class NexastreamApp : Application() {
 
     @OptIn(UnstableApi::class)
     @Inject
-    lateinit var appDownloadManager: AppDownloadManager
+    lateinit var appDownloadManagerProvider: javax.inject.Provider<AppDownloadManager>
 
     companion object {
         lateinit var instance: NexastreamApp
@@ -45,7 +45,6 @@ class NexastreamApp : Application() {
     }
 
     override fun onCreate() {
-        UserPreferences.setup(this)
         super.onCreate()
         instance = this
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
@@ -76,16 +75,16 @@ class NexastreamApp : Application() {
 
         DnsResolver.setDnsUrl(UserPreferences.dohProviderUrl)
 
-        @OptIn(UnstableApi::class)
-        Log.d("NexastreamApp", "DownloadManager initialized: ${appDownloadManager.hashCode()}")
-
         val appContext = applicationContext
         val isTv = packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
         val threshold = if (isTv) 10L else 50L
 
         applicationScope.launch(Dispatchers.IO) {
             AppDatabase.setup(appContext)
-            appDownloadManager.recoverDownloads()
+            val downloadManager = appDownloadManagerProvider.get()
+            @OptIn(UnstableApi::class)
+            Log.d("NexastreamApp", "DownloadManager initialized: ${downloadManager.hashCode()}")
+            downloadManager.recoverDownloads()
             ArtworkRepairScheduler.schedule(appContext, UserPreferences.currentProvider)
             CacheUtils.autoClearIfNeeded(appContext, thresholdMb = threshold)
             if (isTv) {

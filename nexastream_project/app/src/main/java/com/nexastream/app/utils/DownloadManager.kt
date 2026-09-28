@@ -58,7 +58,15 @@ class DownloadManager @Inject constructor(
     }
 
     private fun inferMimeType(url: String, mimeType: String?): String? {
-        if (!mimeType.isNullOrBlank()) return mimeType
+        val normalizedType = mimeType?.trim()?.lowercase()
+        if (!normalizedType.isNullOrBlank()) {
+            when {
+                normalizedType.contains("m3u8") || normalizedType.contains("hls") -> return MimeTypes.APPLICATION_M3U8
+                normalizedType.contains("mpd") || normalizedType.contains("dash") -> return MimeTypes.APPLICATION_MPD
+                normalizedType.contains("mp4") -> return MimeTypes.VIDEO_MP4
+                normalizedType.startsWith("video/") || normalizedType.startsWith("application/") -> return mimeType
+            }
+        }
 
         return when {
             url.startsWith("data:application/vnd.apple.mpegurl", ignoreCase = true) -> MimeTypes.APPLICATION_M3U8
@@ -478,6 +486,7 @@ class DownloadManager @Inject constructor(
             downloadRequest,
             shouldUseForegroundService()
         )
+        startProgressPolling()
     }
 
     fun deleteDownload(id: String) {
@@ -535,7 +544,7 @@ class DownloadManager @Inject constructor(
     }
 
     private fun shouldUseForegroundService(): Boolean {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && NexastreamApp.currentActivity == null
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
     }
 
     private data class ProgressSample(

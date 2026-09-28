@@ -46,6 +46,7 @@ import com.nexastream.app.databinding.ItemEpisodeTvBinding
 import com.nexastream.app.databinding.ItemGenreGridMobileBinding
 import com.nexastream.app.databinding.ItemGenreGridTvBinding
 import com.nexastream.app.databinding.ItemLivestreamMobileBinding
+import com.nexastream.app.databinding.ItemLivestreamTvBinding
 import com.nexastream.app.databinding.ItemLoadingBinding
 import com.nexastream.app.databinding.ItemMovieGridMobileBinding
 import com.nexastream.app.databinding.ItemMovieGridTvBinding
@@ -128,6 +129,7 @@ class AppAdapter(
         LOADING_ITEM,
 
         LIVESTREAM_MOBILE_ITEM,
+        LIVESTREAM_TV_ITEM,
 
         MOVIE_MOBILE_ITEM,
         MOVIE_TV_ITEM,
@@ -287,6 +289,13 @@ class AppAdapter(
 
             Type.LIVESTREAM_MOBILE_ITEM -> TvShowViewHolder(
                 ItemLivestreamMobileBinding.inflate(
+                    LayoutInflater.from(parent.context),
+                    parent,
+                    false,
+                )
+            )
+            Type.LIVESTREAM_TV_ITEM -> TvShowViewHolder(
+                ItemLivestreamTvBinding.inflate(
                     LayoutInflater.from(parent.context),
                     parent,
                     false,
@@ -639,6 +648,8 @@ class AppAdapter(
         }
     }
 
+    private var submitGeneration = 0
+
     override fun getItemCount(): Int = items.size +
             (header?.let { 1 } ?: 0) +
             (onLoadMoreListener?.let { 1 } ?: 0) +
@@ -646,11 +657,6 @@ class AppAdapter(
 
     override fun getItemId(position: Int): Long {
         if (header != null && position == 0) return Long.MIN_VALUE
-
-        val adjustedPosition = header?.let { position - 1 } ?: position
-        if (adjustedPosition in itemStableIds.indices) {
-            return itemStableIds[adjustedPosition]
-        }
 
         val loadMorePosition = itemCount - 1 - (if (footer != null) 1 else 0)
         if (onLoadMoreListener != null && position == loadMorePosition) {
@@ -661,21 +667,17 @@ class AppAdapter(
             return Long.MIN_VALUE + 2
         }
 
+        val adjustedPosition = header?.let { position - 1 } ?: position
+        if (adjustedPosition in itemStableIds.indices) {
+            return itemStableIds[adjustedPosition]
+        }
+
         return RecyclerView.NO_ID
     }
 
     override fun getItemViewType(position: Int): Int {
         if (header != null && position == 0) {
             return Type.HEADER.ordinal
-        }
-
-        val adjustedPosition = header?.let { position - 1 } ?: position
-        if (adjustedPosition in items.indices) {
-            return try {
-                items[adjustedPosition].itemType.ordinal
-            } catch (e: Exception) {
-                Type.LOADING_ITEM.ordinal
-            }
         }
 
         val loadMorePosition = itemCount - 1 - (if (footer != null) 1 else 0)
@@ -685,6 +687,15 @@ class AppAdapter(
 
         if (footer != null && position == itemCount - 1) {
             return Type.FOOTER.ordinal
+        }
+
+        val adjustedPosition = header?.let { position - 1 } ?: position
+        if (adjustedPosition in items.indices) {
+            return try {
+                items[adjustedPosition].itemType.ordinal
+            } catch (e: Exception) {
+                Type.LOADING_ITEM.ordinal
+            }
         }
 
         return Type.LOADING_ITEM.ordinal
@@ -746,6 +757,7 @@ class AppAdapter(
         isLoading = false
         if (items == list) return
 
+        val generation = ++submitGeneration
         val oldItems = items.toList()
         val newItemCount = list.size
 
@@ -800,6 +812,8 @@ class AppAdapter(
             })
 
             android.os.Handler(android.os.Looper.getMainLooper()).post {
+                if (generation != submitGeneration) return@post
+
                 val newStates = mutableMapOf<Int, android.os.Parcelable?>()
                 val headerOffset = header?.let { 1 } ?: 0
                 for (newItemPosition in list.indices) {

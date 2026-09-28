@@ -48,9 +48,11 @@ class HomeTvFragment : Fragment() {
     private val binding get() = _binding!!
 
     private val viewModel by activityViewModelsFactory {
+        val appCtx = requireActivity().applicationContext
+        val db = AppDatabase.getInstance(appCtx)
         HomeViewModel(
-            AppDatabase.getInstance(requireActivity()),
-            HomeRepository(requireActivity(), AppDatabase.getInstance(requireActivity()))
+            db,
+            HomeRepository(appCtx, db)
         )
     }
     private val mainViewModel: MainViewModel by activityViewModels()
@@ -86,10 +88,14 @@ class HomeTvFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.state.flowWithLifecycle(lifecycle, Lifecycle.State.STARTED).collect { state ->
                 when (state) {
-                    HomeViewModel.State.Loading -> binding.isLoading.apply {
-                        root.visibility = View.VISIBLE
-                        pbIsLoading.visibility = View.VISIBLE
-                        gIsLoadingRetry.visibility = View.GONE
+                    HomeViewModel.State.Loading -> {
+                        if (appAdapter.items.isEmpty()) {
+                            binding.isLoading.apply {
+                                root.visibility = View.VISIBLE
+                                pbIsLoading.visibility = View.VISIBLE
+                                gIsLoadingRetry.visibility = View.GONE
+                            }
+                        }
                     }
                     is HomeViewModel.State.SuccessLoading -> {
                         displayHome(state.categories)
@@ -219,8 +225,6 @@ class HomeTvFragment : Fragment() {
     }
 
     private fun initializeHome() {
-        val database = AppDatabase.getInstance(requireContext())
-        
         binding.btnHomeEditMode.setOnClickListener {
             appAdapter.isEditMode = !appAdapter.isEditMode
             binding.llHomeEditActions.isVisible = appAdapter.isEditMode
@@ -240,6 +244,7 @@ class HomeTvFragment : Fragment() {
             if (selectedItems.isEmpty()) return@setOnClickListener
 
             viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+                val database = AppDatabase.getInstance(requireContext().applicationContext)
                 selectedItems.forEach { item ->
                     when (item) {
                         is Movie -> database.movieDao().delete(item)
@@ -262,6 +267,7 @@ class HomeTvFragment : Fragment() {
                 .setMessage("Are you sure you want to clear all history and favorites?")
                 .setPositiveButton(android.R.string.ok) { dialog, _ ->
                     viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+                        val database = AppDatabase.getInstance(requireContext().applicationContext)
                         database.movieDao().deleteAll()
                         database.tvShowDao().deleteAll()
                         database.episodeDao().deleteAll()
@@ -283,23 +289,23 @@ class HomeTvFragment : Fragment() {
                 stateRestorationPolicy = RecyclerView.Adapter.StateRestorationPolicy.PREVENT_WHEN_EMPTY
                 onViewAllClickListener = { category ->
                     val (genreId, genreName) = when (category.name) {
-                        "CDN Live Channels" -> "cdn_all_channels" to "CDN Live TV"
-                        "Live Sports (CDN)" -> "cdn_sports" to "Live Sports"
+                        "CDN Live Channels", "Livestream", "Live Channels" -> "cdn_all_channels" to "CDN Live TV"
+                        "Live Sports (CDN)", "Live Sports" -> "cdn_sports" to "Live Sports"
                         "Latest Movies" -> "latest_movies" to category.name
-                        "All Cinema" -> "all_cinema" to category.name
-                        "New Season and Episode" -> "new_season_tv" to category.name
+                        "All Cinema", "At Cinema" -> "all_cinema" to category.name
+                        "New Season and Episode", "New Season & Episode" -> "new_season_tv" to category.name
                         
                         "Netflix Movies" -> "tmdb_watch_provider_movies_8" to category.name
-                        "Disney+ Movies" -> "tmdb_watch_provider_movies_337" to category.name
-                        "Paramount+ Movies" -> "tmdb_watch_provider_movies_531" to category.name
+                        "Disney+ Movies", "Disney+" -> "tmdb_watch_provider_movies_337" to category.name
+                        "Paramount+ Movies", "Paramount+" -> "tmdb_watch_provider_movies_531" to category.name
                         
                         "Netflix Series" -> "tmdb_network_tv_213" to category.name
-                        "Prime Video Series" -> "tmdb_network_tv_1024" to category.name
+                        "Prime Video Series", "Prime Video" -> "tmdb_network_tv_1024" to category.name
                         "Disney+ Series" -> "tmdb_network_tv_2739" to category.name
-                        "Max Series" -> "tmdb_network_tv_49" to category.name
+                        "Max Series", "Max" -> "tmdb_network_tv_49" to category.name
                         "Paramount+ Series" -> "tmdb_network_tv_4330" to category.name
-                        "Apple TV Series" -> "tmdb_network_tv_2552" to category.name
-                        "Hulu Series" -> "tmdb_network_tv_453" to category.name
+                        "Apple TV Series", "Apple TV" -> "tmdb_network_tv_2552" to category.name
+                        "Hulu Series", "Hulu" -> "tmdb_network_tv_453" to category.name
 
                         "Action Movies" -> "tmdb_movies_genre_28" to category.name
                         "Crime Movies" -> "tmdb_movies_genre_80" to category.name
@@ -336,22 +342,23 @@ class HomeTvFragment : Fragment() {
                         "Romance Series" -> "tmdb_tv_genre_10749" to category.name
                         "Thriller Series" -> "tmdb_tv_genre_53" to category.name
                         "War & Politics Series" -> "tmdb_tv_genre_10768" to category.name
-                        "Reality TV" -> "tmdb_tv_genre_10764" to category.name
+                        "Reality TV", "Reality Series" -> "tmdb_tv_genre_10764" to category.name
                         "Western Series" -> "tmdb_tv_genre_37" to category.name
-                        "Teen Romance Series" -> "teen_romance_series" to category.name
+                        "Teen Romance Series", "Teen Romance", "Trending Teen Romance" -> "teen_romance_series" to category.name
                         "Biography Series" -> "biography_series" to category.name
                         "Sport Series" -> "sport_series" to category.name
+                        "Top Rated TV Shows", "Top Rated TV Show" -> "tmdb_tv_top_rated" to category.name
                         "All TV Shows" -> "tmdb_tv_popular" to category.name
                         "Trending Series" -> "tmdb_tv_popular" to category.name
 
                         "Kids & Family" -> "tmdb_kids_family" to category.name
-                        "Cartoon Movies" -> "tmdb_cartoon_movies" to category.name
+                        "Cartoon Movies", "CartoonMovies" -> "tmdb_cartoon_movies" to category.name
                         "Cartoon Series" -> "tmdb_cartoon_series" to category.name
                         "Baby" -> "tmdb_keyword_10229" to category.name
                         "Age 2-6" -> "tmdb_kids_family" to category.name
                         "Pixar" -> "tmdb_studio_3" to category.name
                         "DreamWorks" -> "tmdb_studio_521" to category.name
-                        "Blue Sky Studios" -> "tmdb_studio_10378" to category.name
+                        "Blue Sky Studios", "BlueSky Studios", "Bluesky Studios" -> "tmdb_studio_10378" to category.name
                         "Illumination" -> "tmdb_studio_6704" to category.name
                         "Toys" -> "tmdb_keyword_11134" to category.name
                         "Kung Fu Panda" -> "search_Kung Fu Panda" to category.name
@@ -363,7 +370,7 @@ class HomeTvFragment : Fragment() {
                         "Anime Universe" -> "tmdb_anime_universe" to category.name
                         "Anime Movies" -> "tmdb_cartoon_movies" to category.name
                         "Japanese Anime" -> "tmdb_japanese_anime" to category.name
-                        "European & American Anime" -> "tmdb_western_anime" to category.name
+                        "European & American Anime", "American Anime" -> "tmdb_western_anime" to category.name
                         "Age 7-12" -> "tmdb_anime_age_7_12" to category.name
                         "Dragon Ball" -> "search_Dragon Ball" to category.name
                         "Naruto" -> "search_Naruto" to category.name
@@ -464,11 +471,19 @@ class HomeTvFragment : Fragment() {
                 .onEach { category ->
                     if (category.name != getString(R.string.home_continue_watching)) {
                         category.list.forEach { show ->
-                            when (show) {
-                                is Episode -> show.itemType = AppAdapter.Type.EPISODE_TV_ITEM
-                                is Movie -> show.itemType = AppAdapter.Type.MOVIE_TV_ITEM
-                                is TvShow -> show.itemType = AppAdapter.Type.TV_SHOW_TV_ITEM
-                                is SportMatch -> show.itemType = AppAdapter.Type.SPORT_MATCH_ITEM
+                            if (category.name == "Livestream" || category.name == "CDN Live Channels" || category.name == "Live Channels") {
+                                if (show is TvShow) {
+                                    show.itemType = AppAdapter.Type.LIVESTREAM_TV_ITEM
+                                } else {
+                                    show.itemType = AppAdapter.Type.TV_SHOW_TV_ITEM
+                                }
+                            } else {
+                                when (show) {
+                                    is Episode -> show.itemType = AppAdapter.Type.EPISODE_TV_ITEM
+                                    is Movie -> show.itemType = AppAdapter.Type.MOVIE_TV_ITEM
+                                    is TvShow -> show.itemType = AppAdapter.Type.TV_SHOW_TV_ITEM
+                                    is SportMatch -> show.itemType = AppAdapter.Type.SPORT_MATCH_ITEM
+                                }
                             }
                         }
                     }

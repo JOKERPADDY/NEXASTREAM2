@@ -126,8 +126,8 @@ fun NavGraph(navController: NavHostController) {
         composable(Screen.Downloads.route) {
             if (Provider.supportsDownloads(UserPreferences.currentProvider)) {
                 DownloadsScreen(
-                    onPlayClick = { id ->
-                        navController.navigate(Screen.Player.createRoute(id))
+                    onPlayClick = { download ->
+                        navController.navigate(Screen.Player.createRoute(download.id))
                     }
                 )
             } else {

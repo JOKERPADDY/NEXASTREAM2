@@ -102,6 +102,7 @@ class TvShowViewHolder(
         when (_binding) {
             is ItemTvShowMobileBinding -> displayMobileItem(_binding)
             is ItemLivestreamMobileBinding -> displayLivestreamMobileItem(_binding)
+            is ItemLivestreamTvBinding -> displayLivestreamTvItem(_binding)
             is ItemTvShowTvBinding -> displayTvItem(_binding)
             is ItemTvShowGridMobileBinding -> displayGridMobileItem(_binding)
             is ItemTvShowGridBinding -> displayGridTvItem(_binding)
@@ -287,6 +288,30 @@ class TvShowViewHolder(
     }
 
     private fun displayLivestreamMobileItem(binding: ItemLivestreamMobileBinding) {
+        binding.root.setOnClickListener {
+            checkProviderAndRun {
+                handleDirectPlay(binding.root.findNavController())
+            }
+        }
+        binding.root.setOnLongClickListener {
+            if (tvShow.liveMetadata != null) LiveChannelOptionsDialog.show(context, tvShow)
+            true
+        }
+        
+        binding.ivLivestreamPoster.scaleType = ImageView.ScaleType.FIT_CENTER
+        binding.ivLivestreamPoster.setPadding(16, 16, 16, 16)
+
+        Glide.with(context)
+            .load(tvShow.poster ?: tvShow.banner)
+            .placeholder(R.drawable.bg_livestream_card)
+            .error(R.drawable.bg_livestream_card)
+            .transition(DrawableTransitionOptions.withCrossFade())
+            .into(binding.ivLivestreamPoster)
+
+        binding.tvLivestreamTitle.text = tvShow.title
+    }
+
+    private fun displayLivestreamTvItem(binding: ItemLivestreamTvBinding) {
         binding.root.setOnClickListener {
             checkProviderAndRun {
                 handleDirectPlay(binding.root.findNavController())
