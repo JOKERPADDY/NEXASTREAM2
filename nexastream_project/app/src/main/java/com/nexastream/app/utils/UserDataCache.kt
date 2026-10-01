@@ -184,6 +184,7 @@ object UserDataCache {
         write(context, provider, current.copy(
             continueWatchingMovies = current.continueWatchingMovies.filter { it.id != id }
         ))
+        WatchNextUtils.deleteProgramByContentId(context, id)
     }
 
     suspend fun addMovieToContinueWatching(context: Context, provider: Provider, movie: Movie) {
@@ -226,6 +227,7 @@ object UserDataCache {
         write(context, provider, current.copy(
             continueWatchingEpisodes = current.continueWatchingEpisodes.filter { it.id != id }
         ))
+        WatchNextUtils.deleteProgramByContentId(context, id)
     }
 
     suspend fun addEpisodeToContinueWatching(context: Context, provider: Provider, episode: Episode) {
@@ -291,6 +293,12 @@ object UserDataCache {
             continueWatchingMovies = updatedContinueWatching,
             favoritesMovies = updatedFavorites
         ))
+
+        if (movie.watchHistory != null && !movie.isWatched) {
+            WatchNextUtils.updateWatchNext(context, movie)
+        } else {
+            WatchNextUtils.deleteProgramByContentId(context, movie.id)
+        }
     }
 
     suspend fun syncEpisodeToCache(context: Context, provider: Provider, episode: Episode) {
@@ -306,6 +314,12 @@ object UserDataCache {
         write(context, provider, current.copy(
             continueWatchingEpisodes = updatedContinueWatching
         ))
+
+        if (episode.watchHistory != null && !episode.isWatched) {
+            WatchNextUtils.updateWatchNext(context, episode)
+        } else {
+            WatchNextUtils.deleteProgramByContentId(context, episode.id)
+        }
     }
 
     suspend fun syncTvShowToCache(context: Context, provider: Provider, tvShow: TvShow) {

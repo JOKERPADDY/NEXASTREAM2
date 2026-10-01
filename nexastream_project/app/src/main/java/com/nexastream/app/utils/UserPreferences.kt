@@ -159,6 +159,12 @@ object UserPreferences {
             Key.AUTOPLAY.setBoolean(value)
         }
 
+    var autoPlayTrailers: Boolean
+        get() = Key.AUTOPLAY_TRAILERS.getBoolean() ?: true
+        set(value) {
+            Key.AUTOPLAY_TRAILERS.setBoolean(value)
+        }
+
     var keepScreenOnWhenPaused: Boolean
         get() = Key.KEEP_SCREEN_ON_WHEN_PAUSED.getBoolean() ?: false
         set(value) {
@@ -647,6 +653,7 @@ object UserPreferences {
         POSEIDON_DOMAIN,
         DOH_PROVIDER_URL, // Removed STREAMINGCOMMUNITY_DNS_OVER_HTTPS, added DOH_PROVIDER_URL
         AUTOPLAY,
+        AUTOPLAY_TRAILERS,
         PROVIDER_CACHE,
         KEEP_SCREEN_ON_WHEN_PAUSED,
         PLAYER_GESTURES,

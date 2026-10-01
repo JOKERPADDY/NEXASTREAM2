@@ -106,18 +106,33 @@ class HomeMobileFragment : Fragment() {
                 when (state) {
                     HomeViewModel.State.Loading -> {
                         if (appAdapter.items.isEmpty()) {
+                            (activity as? com.nexastream.app.activities.main.MainMobileActivity)?.setHomeLoadingState(true)
                             binding.isLoading.apply {
+                                root.alpha = 1f
                                 root.visibility = View.VISIBLE
                                 pbIsLoading.visibility = View.VISIBLE
                                 gIsLoadingRetry.visibility = View.GONE
+                                tvLoadingVersion.text = "v${com.nexastream.app.BuildConfig.VERSION_NAME}"
                             }
                         }
                     }
                     is HomeViewModel.State.SuccessLoading -> {
                         displayHome(state.categories)
-                        binding.isLoading.root.visibility = View.GONE
+                        (activity as? com.nexastream.app.activities.main.MainMobileActivity)?.setHomeLoadingState(false)
+                        if (binding.isLoading.root.visibility == View.VISIBLE) {
+                            binding.isLoading.root.animate()
+                                .alpha(0f)
+                                .setDuration(250)
+                                .withEndAction {
+                                    _binding?.isLoading?.root?.visibility = View.GONE
+                                    _binding?.isLoading?.root?.alpha = 1f
+                                }
+                        } else {
+                            binding.isLoading.root.visibility = View.GONE
+                        }
                     }
                     is HomeViewModel.State.FailedLoading -> {
+                        (activity as? com.nexastream.app.activities.main.MainMobileActivity)?.setHomeLoadingState(false)
                         val code = (state.error as? retrofit2.HttpException)?.code()
                         if (code == 409 && !hasAutoCleared409) {
                             hasAutoCleared409 = true
@@ -281,6 +296,7 @@ class HomeMobileFragment : Fragment() {
                         "Kids Banner" -> "tmdb_kids_family" to "Kids & Family"
                         "Anime Banner" -> "tmdb_anime_universe" to "Anime Universe"
                         "Trending Today" -> "tmdb_movies_popular" to "Trending"
+                        "✨ Recommended For You", "Recommended For You", "Recommended for you" -> "tmdb_recommended_for_you" to "Recommended For You"
 
                         else -> {
                             val name = category.name
@@ -401,16 +417,45 @@ class HomeMobileFragment : Fragment() {
                 "All TV Shows", "Top TV Shows", "New Season & Episode", "Musical Series"
             )
 
+            fun isLiveCategory(name: String): Boolean {
+                val lower = name.lowercase()
+                return lower.contains("livestream") || lower.contains("live tv") || lower.contains("live sports") || lower.contains("live channels") || lower == "live"
+            }
+
             when (tabIndex) {
-                1 -> allCategories.filter { it.name in moviesCategories }
-                2 -> allCategories.filter { it.name in seriesCategories }
-                3 -> allCategories.filter { it.name in kidsCategories }
-                4 -> allCategories.filter { it.name in animeCategories }
-                else -> allCategories.filter { 
-                    (it.name !in moviesCategories &&
-                    it.name !in seriesCategories &&
-                    it.name !in kidsCategories &&
-                    it.name !in animeCategories) || it.name == "Teen Romance"
+                1 -> allCategories.mapNotNull { cat ->
+                    if (isLiveCategory(cat.name)) return@mapNotNull null
+                    if (cat.name in moviesCategories || cat.name.contains("Movie", ignoreCase = true) || cat.name.contains("Cinema", ignoreCase = true) || cat.name.contains("Film", ignoreCase = true)) {
+                        cat
+                    } else if (cat.name == "✨ Recommended For You" || cat.name == "Recommended For You" || cat.name == "Trending Today" || cat.name == Category.FAVORITE_MOVIES) {
+                        val moviesOnly = cat.list.filterIsInstance<Movie>()
+                        if (moviesOnly.isNotEmpty()) cat.copy(list = moviesOnly) else null
+                    } else if (cat.list.isNotEmpty() && cat.list.all { it is Movie }) {
+                        cat
+                    } else null
+                }
+                2 -> allCategories.mapNotNull { cat ->
+                    if (isLiveCategory(cat.name)) return@mapNotNull null
+                    if (cat.name in seriesCategories || cat.name.contains("Series", ignoreCase = true) || cat.name.contains("TV", ignoreCase = true) || cat.name.contains("Show", ignoreCase = true)) {
+                        cat
+                    } else if (cat.name == "✨ Recommended For You" || cat.name == "Recommended For You" || cat.name == "Trending Today" || cat.name == Category.FAVORITE_TV_SHOWS) {
+                        val tvOnly = cat.list.filterIsInstance<TvShow>()
+                        if (tvOnly.isNotEmpty()) cat.copy(list = tvOnly) else null
+                    } else if (cat.list.isNotEmpty() && cat.list.all { it is TvShow }) {
+                        cat
+                    } else null
+                }
+                3 -> allCategories.filter { cat ->
+                    !isLiveCategory(cat.name) && (cat.name in kidsCategories || cat.name.contains("Kids", ignoreCase = true) || cat.name.contains("Cartoon", ignoreCase = true))
+                }
+                4 -> allCategories.filter { cat ->
+                    !isLiveCategory(cat.name) && (cat.name in animeCategories || cat.name.contains("Anime", ignoreCase = true))
+                }
+                else -> allCategories.filter { cat ->
+                    (cat.name !in moviesCategories &&
+                    cat.name !in seriesCategories &&
+                    cat.name !in kidsCategories &&
+                    cat.name !in animeCategories) || cat.name == "Teen Romance" || cat.name == "✨ Recommended For You" || cat.name == Category.FEATURED || cat.name.isEmpty() || isLiveCategory(cat.name)
                 }
             }
         }
@@ -419,7 +464,10 @@ class HomeMobileFragment : Fragment() {
             filtered
                 .filter { it.list.isNotEmpty() }
                 .mapIndexed { index, category ->
-                    val isSwiper = index == 0 && UserPreferences.currentProvider !is com.nexastream.app.providers.IptvProvider // First item in each tab is always a swiper banner unless it's an IPTV provider
+                    val isBannerCategory = category.name == Category.FEATURED || 
+                                            category.name.endsWith("Banner", ignoreCase = true) ||
+                                            category.itemType == AppAdapter.Type.CATEGORY_MOBILE_SWIPER
+                    val isSwiper = index == 0 && isBannerCategory && UserPreferences.currentProvider !is com.nexastream.app.providers.IptvProvider
                     
                     val itemsToProcess = if (isSwiper) category.list.take(4) else category.list
                     val clonedList = itemsToProcess.map { show ->

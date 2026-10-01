@@ -3,9 +3,11 @@ package com.nexastream.app.ui.screens.search
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
@@ -13,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -20,7 +23,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.nexastream.app.models.Genre
+import com.nexastream.app.models.Movie
 import com.nexastream.app.models.Show
+import com.nexastream.app.models.TvShow
 import com.nexastream.app.ui.components.MoviePoster
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -49,7 +54,7 @@ fun SearchScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
-            placeholder = { Text("Search for movies, TV shows...", color = Color.Gray) },
+            placeholder = { Text("Search or ask AI (e.g., '90s sci-fi movies')...", color = Color.Gray) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color.Gray) },
             colors = TextFieldDefaults.colors(
                 focusedContainerColor = Color.DarkGray.copy(alpha = 0.5f),
@@ -64,17 +69,76 @@ fun SearchScreen(
             singleLine = true
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "✨ AI Natural Search",
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium
+            )
+            Switch(
+                checked = uiState.isAiSearchEnabled,
+                onCheckedChange = { viewModel.toggleAiSearch() }
+            )
+        }
+
+        if (uiState.aiExplanation.isNotBlank() && uiState.isAiSearchEnabled) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .background(
+                        brush = Brush.horizontalGradient(
+                            colors = listOf(Color(0xFFD76D77), Color(0xFF3A1C71))
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = uiState.aiExplanation,
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
 
         if (query.isEmpty()) {
             Text(
-                text = "Popular Searches",
+                text = "✨ AI Discovery Prompts",
                 color = Color.White,
-                fontSize = 20.sp,
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
             )
-            // Show some popular/trending items or history
+
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(uiState.aiPrompts) { prompt ->
+                    AssistChip(
+                        onClick = {
+                            query = prompt.query
+                            viewModel.search(prompt.query)
+                        },
+                        label = { Text("${prompt.emoji} ${prompt.title}") },
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = Color.DarkGray.copy(alpha = 0.7f),
+                            labelColor = Color.White
+                        )
+                    )
+                }
+            }
         }
 
         LazyVerticalGrid(
@@ -86,6 +150,18 @@ fun SearchScreen(
         ) {
             items(uiState.results) { item ->
                 when (item) {
+                    is Movie -> {
+                        MoviePoster(
+                            posterUrl = item.poster,
+                            onClick = { onMovieClick(item.id) }
+                        )
+                    }
+                    is TvShow -> {
+                        MoviePoster(
+                            posterUrl = item.poster,
+                            onClick = { onMovieClick(item.id) }
+                        )
+                    }
                     is Show -> {
                         MoviePoster(
                             posterUrl = item.poster,

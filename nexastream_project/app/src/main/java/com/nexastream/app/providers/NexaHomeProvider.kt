@@ -1,5 +1,6 @@
 package com.nexastream.app.providers
 
+import android.util.Log
 import com.nexastream.app.adapters.AppAdapter
 import com.nexastream.app.models.Category
 import com.nexastream.app.models.Episode
@@ -30,83 +31,64 @@ object NexaHomeProvider : Provider {
     override val language: String = "en"
 
     private val tmdb = TmdbProvider("en")
-    private val fetchSemaphore = Semaphore(6)
+    private val fetchSemaphore = Semaphore(8)
 
     private suspend inline fun <T> limited(crossinline block: suspend () -> T): T = fetchSemaphore.withPermit { block() }
 
     override suspend fun getHome(): List<Category> = coroutineScope {
-        val isTv = try {
-            NexastreamApp.instance.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
-        } catch (_: Exception) { false }
-        
-        // 1. Core High-Priority Parallel Fetching
+        val phase1 = getHomePhase1()
+        getHomePhase2(phase1)
+    }
+
+    suspend fun getHomeProgressive(
+        onPhase1: suspend (List<Category>) -> Unit
+    ): List<Category> = coroutineScope {
+        val phase1 = getHomePhase1()
+        onPhase1(phase1)
+        val full = getHomePhase2(phase1)
+        full
+    }
+
+    suspend fun getHomePhase1(): List<Category> = coroutineScope {
+        // Core High-Priority Parallel Fetching (Phase 1)
         val tmdbHomeDeferred = async { limited { runCatching { tmdb.getHome() }.getOrElse { emptyList() } } }
-        val cdnHomeDeferred = async { limited { runCatching { CdnLiveTvProvider.getHome() }.getOrElse { emptyList() } } }
+        
+        val cdnHomeDeferred = async { limited {
+            val cdnList = runCatching { CdnLiveTvProvider.getHome() }.getOrNull().orEmpty()
+            if (cdnList.isNotEmpty() && cdnList.any { it.list.isNotEmpty() }) {
+                cdnList
+            } else {
+                Log.w("NexaHomeProvider", "CDN Live TV empty or failed, falling back to IPTV All World")
+                runCatching { IptvOrgProvider.getHome() }.getOrElse { emptyList() }
+            }
+        } }
+        
         val latestMoviesDeferred = async { limited { runCatching { tmdb.getLatestMovies() }.getOrNull() } }
         val allCinemaDeferred = async { limited { runCatching { tmdb.getAllCinema() }.getOrNull() } }
         val newSeasonDeferred = async { limited { runCatching { tmdb.getNewSeasonsAndEpisodes() }.getOrNull() } }
+        val moviesBannerDef = async { limited { runCatching { tmdb.getFeaturedMovies() }.getOrNull() } }
+        val seriesBannerDef = async { limited { runCatching { tmdb.getFeaturedTvShows() }.getOrNull() } }
 
-        // 2. Secondary Rows with bounded timeout so we never hang the UI
-        val secondaryRowsDeferred = async {
-            kotlinx.coroutines.withTimeoutOrNull(3500L) {
-                coroutineScope {
-                    val kidsContentDef = async { limited { runCatching { tmdb.getKidsContent() }.getOrNull() } }
-                    val animeContentDef = async { limited { runCatching { tmdb.getAnimeContent() }.getOrNull() } }
-                    val trendingTeenRomanceDef = async { limited { runCatching { tmdb.getTeenRomance(isMovie = false, name = "Teen Romance") }.getOrNull() } }
-                    val animeRowsDef = async { fetchAnimeRows() }
-                    val kidsRowsDef = async { fetchKidsRows() }
-                    val seriesRowsDef = async { fetchSeriesMegaRows() }
-                    val movieRowsDef = async { fetchMovieMegaRows() }
-
-                    val topRatedMoviesDef = async { limited { runCatching { 
-                        val results = TMDb3.Discover.movie(language = "en", sortBy = TMDb3.Params.SortBy.Movie.VOTE_AVERAGE_DESC, voteCount = TMDb3.Params.Range(gte = 500)).results.mapNotNull { tmdb.mapMulti(it) }
-                        Category(name = "Top Rated Movies", list = results)
-                    }.getOrNull() } }
-                    val topRatedTvDef = async { limited { runCatching { 
-                        val results = TMDb3.TvSeriesLists.topRated(language = "en").results.mapNotNull { tmdb.mapMulti(it) }
-                        Category(name = "Top Rated TV Shows", list = results)
-                    }.getOrNull() } }
-
-                    val actionDef = async { limited { runCatching { tmdb.getGenre("28") }.getOrNull() } }
-                    val comedyDef = if (!isTv) async { limited { runCatching { tmdb.getGenre("35") }.getOrNull() } } else null
-
-                    SecondaryData(
-                        kidsContent = kidsContentDef.await(),
-                        animeContent = animeContentDef.await(),
-                        trendingTeenRomance = trendingTeenRomanceDef.await(),
-                        animeRows = animeRowsDef.await(),
-                        kidsRows = kidsRowsDef.await(),
-                        seriesRows = seriesRowsDef.await(),
-                        movieRows = movieRowsDef.await(),
-                        topRatedMovies = topRatedMoviesDef.await(),
-                        topRatedTv = topRatedTvDef.await(),
-                        actionGenre = actionDef.await(),
-                        comedyGenre = comedyDef?.await()
-                    )
-                }
-            }
-        }
-
-        // 3. Await Core Results
         val tmdbHome = tmdbHomeDeferred.await()
         val cdnHome = cdnHomeDeferred.await()
         val latestMovies = latestMoviesDeferred.await()
         val allCinema = allCinemaDeferred.await()
         val newSeasonAndEpisodes = newSeasonDeferred.await()
-
-        val secondary = secondaryRowsDeferred.await()
+        val moviesBanner = moviesBannerDef.await()
+        val seriesBanner = seriesBannerDef.await()
 
         val categories = mutableListOf<Category>()
 
-        // 4. Build Final List
-        
         // FEATURED BANNER
         tmdbHome.find { it.name == Category.FEATURED }?.let { categories.add(it) }
+
+        moviesBanner?.let { categories.add(it.copy(name = "Movies Banner", list = it.list.safeSubList(0, 10))) }
+        seriesBanner?.let { categories.add(it.copy(name = "Series Banner", list = it.list.safeSubList(0, 10))) }
 
         // LIVE CHANNELS
         cdnHome.find { it.name == "CDN Live Channels" }?.let { cat ->
             val priorityOrder = listOf(
-                listOf("Sky Sport Premier", "Premier League"),
+                listOf("Sky Sport Premier", "Sky Sports Premier"),
                 listOf("Sky Sport Mix"),
                 listOf("National Geographic"),
                 listOf("Nickelodeon"),
@@ -123,22 +105,29 @@ object NexaHomeProvider : Provider {
                 return if (index != -1) index else Int.MAX_VALUE
             }
 
-            val sortedList = cat.list.sortedWith(compareBy<AppAdapter.Item> { item ->
+            val filteredList = cat.list.filter { item ->
+                val title = (item as? TvShow)?.title ?: ""
+                !(title.contains("Canal Premier", ignoreCase = true) || title.contains("Canal Premier League", ignoreCase = true))
+            }
+
+            val sortedList = filteredList.sortedWith(compareBy<AppAdapter.Item> { item ->
                 val title = (item as? TvShow)?.title ?: ""
                 getPriorityIndex(title)
             })
 
             categories.add(cat.copy(name = "Livestream", list = sortedList))
+        } ?: run {
+            cdnHome.filter { it.name.contains("Sports", ignoreCase = true) || it.name.contains("News", ignoreCase = true) || it.name.contains("Entertainment", ignoreCase = true) }
+                .take(3)
+                .forEach { cat ->
+                    categories.add(cat.copy(name = "Livestream · ${cat.name}"))
+                }
         }
 
         // TRENDING / RECOMMENDED
         tmdbHome.find { it.name == "Trending" || it.name == "Di tendenza" || it.name == "Tendencias" }?.let { 
             categories.add(it.copy(name = "Trending Today")) 
         }
-
-        secondary?.trendingTeenRomance?.let { categories.add(it) }
-        secondary?.topRatedMovies?.let { categories.add(it) }
-        secondary?.topRatedTv?.let { categories.add(it) }
 
         tmdbHome.find { it.name == "Popular Movies" || it.name == "Film popolari" || it.name == "Películas populares" }?.let {
             categories.add(it)
@@ -158,51 +147,102 @@ object NexaHomeProvider : Provider {
             categories.add(it)
         }
 
-        // SECONDARY ROWS
-        secondary?.seriesRows?.let { categories.addAll(it.filterNotNull()) }
-        secondary?.movieRows?.let { categories.addAll(it.filterNotNull()) }
+        val db = runCatching {
+            com.nexastream.app.database.AppDatabase.getInstance(NexastreamApp.instance)
+        }.getOrNull()
+        val profile = com.nexastream.app.utils.RecommendationEngine.buildUserInterestProfile(db)
+        com.nexastream.app.utils.RecommendationEngine.rankCategories(categories, profile)
+    }
 
-        secondary?.kidsContent?.let { categories.add(it.copy(name = "Kids Banner", list = it.list.safeSubList(0, 5))) }
-        secondary?.animeContent?.let { categories.add(it.copy(name = "Anime Banner", list = it.list.safeSubList(0, 4))) }
+    suspend fun getHomePhase2(phase1Categories: List<Category>): List<Category> = coroutineScope {
+        val isTv = try {
+            NexastreamApp.instance.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+        } catch (_: Exception) { false }
 
-        secondary?.animeRows?.let { categories.addAll(it.filterNotNull()) }
-        secondary?.kidsRows?.let { categories.addAll(it.filterNotNull()) }
+        // Secondary Rows Parallel Fetching (Phase 2)
+        val kidsContentDef = async { limited { runCatching { tmdb.getKidsContent() }.getOrNull() } }
+        val animeContentDef = async { limited { runCatching { tmdb.getAnimeContent() }.getOrNull() } }
+        val trendingTeenRomanceDef = async { limited { runCatching { tmdb.getTeenRomance(isMovie = false, name = "Teen Romance") }.getOrNull() } }
+        val animeRowsDef = async { fetchAnimeRows() }
+        val kidsRowsDef = async { fetchKidsRows() }
+        val seriesRowsDef = async { fetchSeriesMegaRows() }
+        val movieRowsDef = async { fetchMovieMegaRows() }
 
-        secondary?.actionGenre?.shows?.takeIf { it.isNotEmpty() }?.let {
+        val topRatedMoviesDef = async { limited { runCatching { 
+            val results = TMDb3.Discover.movie(language = "en", sortBy = TMDb3.Params.SortBy.Movie.VOTE_AVERAGE_DESC, voteCount = TMDb3.Params.Range(gte = 500)).results.mapNotNull { tmdb.mapMulti(it) }
+            Category(name = "Top Rated Movies", list = results)
+        }.getOrNull() } }
+        val topRatedTvDef = async { limited { runCatching { 
+            val results = TMDb3.TvSeriesLists.topRated(language = "en").results.mapNotNull { tmdb.mapMulti(it) }
+            Category(name = "Top Rated TV Shows", list = results)
+        }.getOrNull() } }
+
+        val actionDef = async { limited { runCatching { tmdb.getGenre("28") }.getOrNull() } }
+        val comedyDef = if (!isTv) async { limited { runCatching { tmdb.getGenre("35") }.getOrNull() } } else null
+
+        val kidsContent = kidsContentDef.await()
+        val animeContent = animeContentDef.await()
+        val trendingTeenRomance = trendingTeenRomanceDef.await()
+        val animeRows = animeRowsDef.await()
+        val kidsRows = kidsRowsDef.await()
+        val seriesRows = seriesRowsDef.await()
+        val movieRows = movieRowsDef.await()
+        val topRatedMovies = topRatedMoviesDef.await()
+        val topRatedTv = topRatedTvDef.await()
+        val actionGenre = actionDef.await()
+        val comedyGenre = comedyDef?.await()
+
+        val categories = mutableListOf<Category>()
+        categories.addAll(phase1Categories)
+
+        kidsContent?.let { 
+            if (categories.none { cat -> cat.name == "Kids Banner" }) {
+                categories.add(it.copy(name = "Kids Banner", list = it.list.safeSubList(0, 10))) 
+            }
+        }
+        animeContent?.let { 
+            if (categories.none { cat -> cat.name == "Anime Banner" }) {
+                categories.add(it.copy(name = "Anime Banner", list = it.list.safeSubList(0, 10))) 
+            }
+        }
+
+        trendingTeenRomance?.let { categories.add(it) }
+        topRatedMovies?.let { categories.add(it) }
+        topRatedTv?.let { categories.add(it) }
+
+        seriesRows.let { categories.addAll(it.filterNotNull()) }
+        movieRows.let { categories.addAll(it.filterNotNull()) }
+
+        kidsContent?.let { categories.add(it.copy(name = "Kids Section", list = it.list.safeSubList(0, 5))) }
+        animeContent?.let { categories.add(it.copy(name = "Anime Section", list = it.list.safeSubList(0, 4))) }
+
+        animeRows.let { categories.addAll(it.filterNotNull()) }
+        kidsRows.let { categories.addAll(it.filterNotNull()) }
+
+        actionGenre?.shows?.takeIf { it.isNotEmpty() }?.let {
             categories.add(Category(name = "Action & Adventure", list = it))
         }
-        secondary?.comedyGenre?.shows?.takeIf { it.isNotEmpty() }?.let {
+        comedyGenre?.shows?.takeIf { it.isNotEmpty() }?.let {
             categories.add(Category(name = "Comedy", list = it))
         }
 
-        // Ensure aggregate rows are at the end
-        secondary?.animeRows?.let { rows ->
+        animeRows.let { rows ->
             if (categories.none { it.name == "Anime" }) {
                 categories.add(Category(name = "Anime", list = rows.filterNotNull().flatMap { it.list }.distinct().safeSubList(0, 20)))
             }
         }
-        secondary?.kidsRows?.let { rows ->
+        kidsRows.let { rows ->
             if (categories.none { it.name == "Kids" }) {
                 categories.add(Category(name = "Kids", list = rows.filterNotNull().flatMap { it.list }.distinct().safeSubList(0, 20)))
             }
         }
 
-        categories
+        val db = runCatching {
+            com.nexastream.app.database.AppDatabase.getInstance(NexastreamApp.instance)
+        }.getOrNull()
+        val profile = com.nexastream.app.utils.RecommendationEngine.buildUserInterestProfile(db)
+        com.nexastream.app.utils.RecommendationEngine.rankCategories(categories, profile)
     }
-
-    private data class SecondaryData(
-        val kidsContent: Category?,
-        val animeContent: Category?,
-        val trendingTeenRomance: Category?,
-        val animeRows: List<Category?>,
-        val kidsRows: List<Category?>,
-        val seriesRows: List<Category?>,
-        val movieRows: List<Category?>,
-        val topRatedMovies: Category?,
-        val topRatedTv: Category?,
-        val actionGenre: Genre?,
-        val comedyGenre: Genre?
-    )
 
     private suspend fun fetchAnimeRows(): List<Category?> = coroutineScope {
         listOf(
@@ -310,18 +350,97 @@ object NexaHomeProvider : Provider {
     }
 
     override suspend fun getTvShow(id: String): TvShow {
-        if (id.startsWith("cdn:")) return CdnLiveTvProvider.getTvShow(id)
+        if (id.startsWith("cdn:")) {
+            // First try CDN directly
+            val cdnResult = runCatching { CdnLiveTvProvider.getTvShow(id) }
+            if (cdnResult.isSuccess) return cdnResult.getOrThrow()
+
+            // Fallback: Try to find matching channel in IPTV by name
+            Log.w("NexaHomeProvider", "CDN getTvShow failed for $id, trying IPTV fallback")
+            val cdnChannel = cdnResult.getOrNull() ?: TvShow(id = id, title = "Unknown Channel")
+            val iptvChannels = runCatching { IptvOrgProvider.search(cdnChannel.title, 1, null) }.getOrNull().orEmpty()
+            val matchingIptv = iptvChannels.firstOrNull() as? TvShow
+            return matchingIptv ?: cdnChannel
+        }
         return tmdb.getTvShow(id)
     }
 
     override suspend fun getServers(id: String, videoType: Video.Type): List<Video.Server> {
-        if (id.startsWith("cdn:")) return CdnLiveTvProvider.getServers(id, videoType)
+        if (id.startsWith("cdn:")) {
+            val cdnChannel = runCatching { CdnLiveTvProvider.getTvShow(id) }.getOrNull()
+            val channelTitle = cdnChannel?.title ?: id.removePrefix("cdn:")
+
+            val cdnResult = runCatching { CdnLiveTvProvider.getServers(id, videoType) }
+            val cdnServers = cdnResult.getOrNull().orEmpty().map { srv ->
+                srv.copy(src = channelTitle)
+            }
+
+            // Also fetch IPTV All World fallback servers by matching channel title
+            val iptvChannels = if (channelTitle.isNotBlank()) {
+                runCatching { IptvOrgProvider.search(channelTitle, 1, null) }.getOrNull().orEmpty()
+            } else emptyList()
+
+            val matchingIptv = iptvChannels.firstOrNull() as? TvShow
+            val iptvServers = if (matchingIptv != null) {
+                val dummyType = com.nexastream.app.models.Video.Type.Movie(matchingIptv.id, matchingIptv.title, "", matchingIptv.poster ?: "", null)
+                runCatching { IptvOrgProvider.getServers(matchingIptv.id, dummyType) }.getOrNull().orEmpty().map { srv ->
+                    srv.copy(name = "IPTV All World (${srv.name})", src = channelTitle)
+                }
+            } else emptyList()
+
+            val combined = mutableListOf<Video.Server>()
+            combined.addAll(cdnServers)
+            combined.addAll(iptvServers)
+            if (combined.isNotEmpty()) return combined
+        }
         return tmdb.getServers(id, videoType)
     }
 
     override suspend fun getVideo(server: Video.Server): Video = withContext(Dispatchers.IO) {
-        if (server.name.contains("CDN") || server.id.contains("cdnlivetv.tv")) return@withContext CdnLiveTvProvider.getVideo(server)
-        tmdb.getVideo(server)
+        if (server.name.contains("IPTV All World")) {
+            return@withContext runCatching { IptvOrgProvider.getVideo(server) }.getOrNull() ?: Video(source = server.id)
+        }
+
+        if (server.name.contains("CDN") || server.id.contains("cdnlivetv.tv") || server.id.startsWith("http")) {
+            // First try CDN directly
+            val cdnResult = runCatching { CdnLiveTvProvider.getVideo(server) }
+            val video = cdnResult.getOrNull()
+            if (cdnResult.isSuccess && video != null && video.source.isNotEmpty() &&
+                !video.source.contains("/player/") && !video.source.contains("cdnlivetv.tv/channels/player")) {
+                return@withContext video
+            }
+
+            // Fallback: Try IPTV All World (IptvOrgProvider) using channel title
+            val channelTitle = server.src.ifBlank {
+                runCatching { CdnLiveTvProvider.getTvShow("cdn:${server.id}").title }.getOrNull().orEmpty()
+            }
+
+            Log.w("NexaHomeProvider", "CDN getVideo failed for '${server.id}' (title: '$channelTitle'), attempting IPTV All World fallback")
+
+            if (channelTitle.isNotBlank()) {
+                val iptvVideo = runCatching {
+                    val channels = IptvOrgProvider.search(channelTitle, 1, null).orEmpty()
+                    val matching = channels.firstOrNull() as? TvShow
+                    if (matching != null) {
+                        val dummyType = com.nexastream.app.models.Video.Type.Movie(matching.id, matching.title, "", matching.poster ?: "", null)
+                        val servers = IptvOrgProvider.getServers(matching.id, dummyType)
+                        val srv = servers.firstOrNull()
+                        if (srv != null) {
+                            IptvOrgProvider.getVideo(srv)
+                        } else null
+                    } else null
+                }.getOrNull()
+
+                if (iptvVideo != null && iptvVideo.source.isNotEmpty()) {
+                    Log.d("NexaHomeProvider", "IPTV All World fallback succeeded for '$channelTitle': ${iptvVideo.source}")
+                    return@withContext iptvVideo
+                }
+            }
+
+            return@withContext video ?: Video(source = server.id)
+        } else {
+            tmdb.getVideo(server)
+        }
     }
 
     override suspend fun search(query: String, page: Int, filters: SearchFilters?): List<AppAdapter.Item> = tmdb.search(query, page, filters)
@@ -330,8 +449,37 @@ object NexaHomeProvider : Provider {
     override suspend fun getMovie(id: String): Movie = tmdb.getMovie(id)
     override suspend fun getEpisodesBySeason(seasonId: String): List<Episode> = tmdb.getEpisodesBySeason(seasonId)
     override suspend fun getGenre(id: String, page: Int): Genre = when {
-        id == "cdn_all_channels" -> CdnLiveTvProvider.getGenre(id, page)
-        id == "cdn_sports" -> CdnLiveTvProvider.getGenre(id, page)
+        id == "cdn_all_channels" -> {
+            runCatching { CdnLiveTvProvider.getGenre(id, page) }.getOrElse {
+                Log.w("NexaHomeProvider", "CDN getGenre failed for $id, trying IPTV fallback")
+                // Fallback to IPTV sports/news categories
+                val iptvHome = runCatching { IptvOrgProvider.getHome() }.getOrNull().orEmpty()
+                val allChannels = iptvHome.flatMap { it.list }.filterIsInstance<TvShow>()
+                Genre(id = id, name = "Live Channels", shows = allChannels.take(50))
+            }
+        }
+        id == "cdn_sports" -> {
+            runCatching { CdnLiveTvProvider.getGenre(id, page) }.getOrElse {
+                Log.w("NexaHomeProvider", "CDN getGenre failed for $id, trying IPTV fallback")
+                // Fallback to IPTV sports category
+                runCatching { IptvOrgProvider.getGenre("Sports", page) }.getOrNull() ?: Genre(id = id, name = "Sports", shows = emptyList())
+            }
+        }
+        id == "tmdb_recommended_for_you" || id == "Recommended For You" || id == "✨ Recommended For You" -> {
+            val db = runCatching {
+                com.nexastream.app.database.AppDatabase.getInstance(NexastreamApp.instance)
+            }.getOrNull()
+            val profile = com.nexastream.app.utils.RecommendationEngine.buildUserInterestProfile(db)
+            val topGenres = profile.genreWeights.entries.sortedByDescending { it.value }.take(3).map { it.key }
+
+            val results = if (topGenres.isNotEmpty()) {
+                val aiIntent = com.nexastream.app.utils.AiSearchEngine.parseQuery(topGenres.joinToString(" "))
+                com.nexastream.app.utils.AiSearchEngine.discoverByAiIntent(aiIntent, language = "en", page = page)
+            } else {
+                TMDb3.Trending.all(TMDb3.Params.TimeWindow.WEEK, page = page, language = "en").results.mapNotNull { tmdb.mapMulti(it) }
+            }
+            Genre(id = id, name = "Recommended For You", shows = results.filterIsInstance<com.nexastream.app.models.Show>())
+        }
         id.startsWith("tmdb_movies_genre_") -> {
             val cat = tmdb.getGenreMovies(id.substringAfter("tmdb_movies_genre_").toInt(), "")
             Genre(id = id, name = cat.name, shows = cat.list)
@@ -437,7 +585,21 @@ object NexaHomeProvider : Provider {
         id == "tmdb_japanese_anime" -> tmdb.getJapaneseAnime().let { Genre(id = id, name = it.name, shows = it.list) }
         id == "tmdb_western_anime" -> tmdb.getWesternAnime().let { Genre(id = id, name = it.name, shows = it.list) }
         id == "tmdb_anime_age_7_12" -> tmdb.getAnimeAge7to12().let { Genre(id = id, name = it.name, shows = it.list) }
-        id.startsWith("cdn_") -> CdnLiveTvProvider.getGenre(id, page)
+        id.startsWith("cdn_") -> {
+            runCatching { CdnLiveTvProvider.getGenre(id, page) }.getOrElse {
+                Log.w("NexaHomeProvider", "CDN getGenre failed for $id, trying IPTV fallback")
+                // Fallback to IPTV based on the ID
+                when {
+                    id.contains("sports", ignoreCase = true) -> runCatching { IptvOrgProvider.getGenre("Sports", page) }.getOrNull() ?: Genre(id = id, name = "Sports", shows = emptyList())
+                    id.contains("news", ignoreCase = true) -> runCatching { IptvOrgProvider.getGenre("News", page) }.getOrNull() ?: Genre(id = id, name = "News", shows = emptyList())
+                    else -> {
+                        val iptvHome = runCatching { IptvOrgProvider.getHome() }.getOrNull().orEmpty()
+                        val allChannels = iptvHome.flatMap { it.list }.filterIsInstance<TvShow>()
+                        Genre(id = id, name = "Live Channels", shows = allChannels.take(50))
+                    }
+                }
+            }
+        }
         else -> tmdb.getGenre(id, page)
     }
     override suspend fun getPeople(id: String, page: Int): People = tmdb.getPeople(id, page)

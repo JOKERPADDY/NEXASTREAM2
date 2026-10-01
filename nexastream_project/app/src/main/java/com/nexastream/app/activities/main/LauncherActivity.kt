@@ -11,26 +11,22 @@ class LauncherActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val intent = when {
-            UserPreferences.forceTvUi -> {
-                Intent(this, MainTvActivity::class.java)
-            }
-            BuildConfig.APP_LAYOUT == "tv" -> {
-                Intent(this, MainTvActivity::class.java)
-            }
-            BuildConfig.APP_LAYOUT == "mobile" -> {
-                Intent(this, MainMobileActivity::class.java)
-            }
-            packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK) -> {
-                Intent(this, MainTvActivity::class.java)
-            }
-            else -> {
-                Intent(this, MainMobileActivity::class.java)
-            }
+        val targetClass = when {
+            UserPreferences.forceTvUi -> MainTvActivity::class.java
+            BuildConfig.APP_LAYOUT == "tv" -> MainTvActivity::class.java
+            BuildConfig.APP_LAYOUT == "mobile" -> MainMobileActivity::class.java
+            packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK) -> MainTvActivity::class.java
+            else -> MainMobileActivity::class.java
         }
 
-        intent.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
-        startActivity(intent)
+        val targetIntent = Intent(this, targetClass).apply {
+            action = this@LauncherActivity.intent?.action
+            data = this@LauncherActivity.intent?.data
+            this@LauncherActivity.intent?.extras?.let { putExtras(it) }
+            addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
+        }
+
+        startActivity(targetIntent)
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             overrideActivityTransition(OVERRIDE_TRANSITION_OPEN, 0, 0)
         } else {

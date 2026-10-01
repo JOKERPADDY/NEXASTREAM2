@@ -195,9 +195,14 @@ class HomeViewModel @Inject constructor(
             } else {
                 categories
             }
-            State.SuccessLoading(filtered)
+
+            val profile = _userInterestProfile.value
+            val rankedCategories = com.nexastream.app.utils.RecommendationEngine.rankCategories(filtered, profile)
+            State.SuccessLoading(rankedCategories)
         } else state
     }.flowOn(Dispatchers.IO)
+
+    private val _userInterestProfile = MutableStateFlow(com.nexastream.app.utils.UserInterestProfile())
 
     sealed class State {
         data object Loading : State()
@@ -206,6 +211,7 @@ class HomeViewModel @Inject constructor(
     }
 
     init {
+        updateUserInterestProfile()
         val initialProvider = UserPreferences.currentProvider
         if (initialProvider != null) {
             currentProvider = initialProvider
@@ -222,38 +228,53 @@ class HomeViewModel @Inject constructor(
         getHome()
     }
 
+    private fun updateUserInterestProfile() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val profile = runCatching {
+                com.nexastream.app.utils.RecommendationEngine.buildUserInterestProfile(database)
+            }.getOrDefault(com.nexastream.app.utils.UserInterestProfile())
+            _userInterestProfile.value = profile
+        }
+    }
+
     private var userDataJob: Job? = null
     private fun observeUserData(provider: Provider) {
         userDataJob?.cancel()
         userDataJob = viewModelScope.launch(Dispatchers.IO) {
             repository.getUserDataFlow(provider).collect {
                 _userDataCache.value = it
+                updateUserInterestProfile()
             }
         }
     }
 
-    fun getHome(force: Boolean = false) = viewModelScope.launch(Dispatchers.IO) {
-        val provider = currentProvider ?: return@launch
-        
-        if (!force && _state.value is State.SuccessLoading) {
-            return@launch
-        }
-        
-        val cached = repository.getCachedHome(provider)
-        if (!cached.isNullOrEmpty()) {
-            _state.emit(State.SuccessLoading(cached))
-        } else {
-            _state.emit(State.Loading)
-        }
+    private var getHomeJob: Job? = null
 
-        try {
-            val categories = repository.getHome(provider)
-            _state.emit(State.SuccessLoading(categories))
-            repository.updateUserDataCache(provider, _userDataCache.value)
-        } catch (e: Exception) {
-            Log.e("HomeViewModel", "getHome failed", e)
-            if (_state.value !is State.SuccessLoading) {
-                _state.emit(State.FailedLoading(e))
+    fun getHome(force: Boolean = false) {
+        val provider = currentProvider ?: return
+        if (!force && _state.value is State.SuccessLoading) return
+
+        getHomeJob?.cancel()
+        getHomeJob = viewModelScope.launch(Dispatchers.IO) {
+            val cached = repository.getCachedHome(provider)
+            if (!cached.isNullOrEmpty()) {
+                _state.emit(State.SuccessLoading(cached))
+            } else if (_state.value !is State.SuccessLoading) {
+                _state.emit(State.Loading)
+            }
+
+            try {
+                repository.getHomeFlow(provider).collect { categories ->
+                    if (categories.isNotEmpty()) {
+                        _state.emit(State.SuccessLoading(categories))
+                        repository.updateUserDataCache(provider, _userDataCache.value)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("HomeViewModel", "getHome failed", e)
+                if (_state.value !is State.SuccessLoading) {
+                    _state.emit(State.FailedLoading(e))
+                }
             }
         }
     }

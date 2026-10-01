@@ -10,10 +10,14 @@ class Category(
     var selectedIndex: Int = 0
     var itemSpacing: Int = 0
 
+    private var _itemType: AppAdapter.Type? = null
+    override var itemType: AppAdapter.Type
+        get() = _itemType ?: AppAdapter.Type.CATEGORY_MOBILE_ITEM
+        set(value) {
+            _itemType = value
+        }
 
-    override lateinit var itemType: AppAdapter.Type
     override var isSelected: Boolean = false
-
 
     fun copy(
         name: String = this.name,
@@ -22,7 +26,7 @@ class Category(
         name,
         list,
     ).also {
-        if (::itemType.isInitialized) it.itemType = itemType
+        _itemType?.let { type -> it.itemType = type }
     }
 
     override fun equals(other: Any?): Boolean {
@@ -36,7 +40,6 @@ class Category(
         if (selectedIndex != other.selectedIndex) return false
         if (itemSpacing != other.itemSpacing) return false
         if (isSelected != other.isSelected) return false
-        if (!::itemType.isInitialized || !other::itemType.isInitialized) return false
         return itemType == other.itemType
     }
 
@@ -46,10 +49,9 @@ class Category(
         result = 31 * result + selectedIndex
         result = 31 * result + itemSpacing
         result = 31 * result + isSelected.hashCode()
-        result = 31 * result + (if (::itemType.isInitialized) itemType.hashCode() else 0)
+        result = 31 * result + itemType.hashCode()
         return result
     }
-
 
     companion object {
         const val FEATURED = ""

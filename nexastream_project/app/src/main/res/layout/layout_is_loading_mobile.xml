@@ -10,17 +10,54 @@
     android:visibility="visible"
     tools:visibility="gone">
 
-    <ProgressBar
-        android:id="@+id/pb_is_loading"
+    <!-- Centered Branding Block -->
+    <LinearLayout
+        android:id="@+id/ll_is_loading_branding"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:indeterminate="true"
-        android:indeterminateTint="#C6C6C6"
-        android:indeterminateTintMode="src_atop"
+        android:gravity="center"
+        android:orientation="vertical"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toTopOf="parent">
+
+        <ImageView
+            android:id="@+id/iv_loading_logo"
+            android:layout_width="96dp"
+            android:layout_height="96dp"
+            android:contentDescription="@string/app_name"
+            android:src="@mipmap/ic_launcher" />
+
+        <TextView
+            android:id="@+id/tv_loading_app_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="NEXASTREAM 2"
+            android:textColor="#FFFFFF"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.08" />
+
+        <TextView
+            android:id="@+id/tv_loading_version"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="v1.0.4"
+            android:textColor="#9E9E9E"
+            android:textSize="13sp" />
+
+        <ProgressBar
+            android:id="@+id/pb_is_loading"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginTop="28dp"
+            android:indeterminate="true"
+            android:indeterminateTint="#E50914" />
+
+    </LinearLayout>
 
     <TextView
         android:id="@+id/tv_is_loading_error"

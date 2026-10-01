@@ -37,11 +37,19 @@ class GenreViewModel @Inject constructor(
     }
 
     private fun loadGenre() {
-        val provider = UserPreferences.currentProvider ?: return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
             try {
-                val genre = provider.getGenre(id, 1)
+                val provider = UserPreferences.currentProvider
+                val genre = if (id == "tmdb_recommended_for_you" || id == "Recommended For You" || id == "✨ Recommended For You") {
+                    runCatching {
+                        provider?.getGenre(id, 1) ?: com.nexastream.app.providers.NexaHomeProvider.getGenre("tmdb_recommended_for_you", 1)
+                    }.getOrElse {
+                        com.nexastream.app.providers.NexaHomeProvider.getGenre("tmdb_recommended_for_you", 1)
+                    }
+                } else {
+                    provider?.getGenre(id, 1) ?: Genre(id = id, name = name, shows = emptyList())
+                }
                 _uiState.value = GenreUiState(genre = genre, isLoading = false)
             } catch (e: Exception) {
                 _uiState.value = GenreUiState(error = e.message, isLoading = false)

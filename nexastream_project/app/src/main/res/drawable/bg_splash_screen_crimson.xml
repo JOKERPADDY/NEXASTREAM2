@@ -6,9 +6,4 @@
             <solid android:color="#1C1014" />
         </shape>
     </item>
-    <item
-        android:width="180dp"
-        android:height="180dp"
-        android:drawable="@drawable/ic_launcher_foreground"
-        android:gravity="center" />
 </layer-list>

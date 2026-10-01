@@ -213,6 +213,7 @@ class PlayerTvFragment : Fragment() {
     private var nextEpisodePrefetchTargetId: String? = null
     private var nextEpisodePrefetchJob: Job? = null
     private var nextEpisodeOverlayDismissed = false
+    private var isNavigatingToEpisode = false
 
     private val sessionManagerListener = object : SessionManagerListener<CastSession> {
         override fun onSessionStarted(session: CastSession, sessionId: String) {
@@ -722,6 +723,7 @@ class PlayerTvFragment : Fragment() {
             viewLifecycleOwner.lifecycleScope.launch {
                 viewLifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                     viewModel.playPreviousOrNextEpisode.collect { nextEpisode ->
+                        if (_binding == null || !isAdded) return@collect
                         releasePlayer()
                         isSetupDone = false
 
@@ -736,17 +738,15 @@ class PlayerTvFragment : Fragment() {
                         }
 
                         hideNextEpisodeOverlay()
-                        findNavController().navigate(
-                            R.id.player,
-                            args,
-                            NavOptions.Builder()
-                                .setPopUpTo(
-                                    findNavController().currentDestination?.id ?: return@collect,
-                                    true
-                                )
-                                .setLaunchSingleTop(false)
-                                .build()
-                        )
+                        runCatching {
+                            findNavController().navigate(
+                                R.id.action_playerTvFragment_self,
+                                args
+                            )
+                        }.onFailure { e ->
+                            Log.e("PlayerTvFragment", "Failed to navigate to next episode", e)
+                            isNavigatingToEpisode = false
+                        }
                     }
                 }
             }
@@ -842,7 +842,10 @@ class PlayerTvFragment : Fragment() {
     }
 
     private fun playNextEpisodeAcrossSeasons(autoplay: Boolean = false) {
-        val type = args.videoType as? Video.Type.Episode ?: return
+        val type = args.videoType as? Video.Type.Episode ?: run {
+            isNavigatingToEpisode = false
+            return
+        }
 
         lifecycleScope.launch {
             val hasNextEpisode = withContext(Dispatchers.IO) {
@@ -851,8 +854,14 @@ class PlayerTvFragment : Fragment() {
 
             setupEpisodeNavigationButtons()
 
-            if (!hasNextEpisode) return@launch
-            if (autoplay && !UserPreferences.autoplay) return@launch
+            if (!hasNextEpisode) {
+                isNavigatingToEpisode = false
+                return@launch
+            }
+            if (autoplay && !UserPreferences.autoplay) {
+                isNavigatingToEpisode = false
+                return@launch
+            }
 
             viewModel.playNextEpisode()
         }
@@ -1108,7 +1117,13 @@ class PlayerTvFragment : Fragment() {
 
             button.visibility = View.VISIBLE
             button.setOnClickListener {
-                if (!hasEpisode()) return@setOnClickListener
+                if (!hasEpisode() || isNavigatingToEpisode) return@setOnClickListener
+
+                val currentPos = if (::localPlayer.isInitialized) player.currentPosition else 0L
+                val currentDur = if (::localPlayer.isInitialized) player.duration else 0L
+                val finished = if (::localPlayer.isInitialized) player.hasFinished() else false
+
+                isNavigatingToEpisode = true
 
                 lifecycleScope.launch(Dispatchers.IO) {
                     val videoType = args.videoType
@@ -1122,8 +1137,8 @@ class PlayerTvFragment : Fragment() {
                         watchedDate = null
                         watchHistory = WatchItem.WatchHistory(
                             lastEngagementTimeUtcMillis = System.currentTimeMillis(),
-                            lastPlaybackPositionMillis = player.currentPosition,
-                            durationMillis = player.duration
+                            lastPlaybackPositionMillis = currentPos,
+                            durationMillis = currentDur
                         )
                     }
 
@@ -1137,7 +1152,7 @@ class PlayerTvFragment : Fragment() {
                         is Video.Type.Episode -> {
                             val provider = UserPreferences.currentProvider ?: return@launch
                             (watchItem as? Episode)?.let { episode ->
-                                if (player.hasFinished()) {
+                                if (finished) {
                                     episode.isWatched = true
                                     episode.watchedDate = java.util.Calendar.getInstance()
                                     episode.watchHistory = null
@@ -1146,7 +1161,7 @@ class PlayerTvFragment : Fragment() {
                                 }
 
                                 database.episodeDao().update(episode)
-                                if (!player.hasFinished()) {
+                                if (!finished) {
                                     (watchItem as? Episode)?.let { UserDataCache.addEpisodeToContinueWatching(requireContext(), provider, it) }
                                 }
 
@@ -1154,7 +1169,7 @@ class PlayerTvFragment : Fragment() {
                                     database.tvShowDao().getById(tvShow.id)
                                 }?.let { tvShow ->
 
-                                    val isWatchingValue = if (player.hasFinished()) {
+                                    val isWatchingValue = if (finished) {
                                         database.episodeDao().hasAnyWatchHistoryForTvShow(tvShow.id)
                                     } else {
                                         true
@@ -1324,6 +1339,18 @@ class PlayerTvFragment : Fragment() {
         reportedReadyServerId = null
         updatePlayerHeader()
         updateCastAvailability(video)
+
+        if (server.name.contains("480p", ignoreCase = true) || server.id.contains("480p", ignoreCase = true)) {
+            player.trackSelectionParameters = player.trackSelectionParameters
+                .buildUpon()
+                .setMaxVideoSize(854, 480)
+                .build()
+        } else {
+            player.trackSelectionParameters = player.trackSelectionParameters
+                .buildUpon()
+                .setMaxVideoSize(Int.MAX_VALUE, Int.MAX_VALUE)
+                .build()
+        }
 
         if (UserPreferences.autoDownloadSubtitles && !isPlayingOfflineDownload) {
             viewModel.autoDownloadSubtitles(args.videoType)
@@ -1858,6 +1885,7 @@ class PlayerTvFragment : Fragment() {
 
         episodeDao.save(persistedNextEpisode)
         UserDataCache.syncEpisodeToCache(requireContext(), provider, persistedNextEpisode)
+        WatchNextUtils.updateWatchNext(requireContext(), persistedNextEpisode)
     }
 
     private var secondarySubtitleJob: Job? = null

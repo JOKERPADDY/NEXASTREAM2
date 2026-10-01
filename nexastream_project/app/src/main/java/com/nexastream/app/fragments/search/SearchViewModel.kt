@@ -65,6 +65,19 @@ class SearchViewModel @Inject constructor(
     private val _airingToday = MutableStateFlow<List<AppAdapter.Item>>(emptyList())
     val airingToday: StateFlow<List<AppAdapter.Item>> = _airingToday.asStateFlow()
 
+    private val _isAiSearchEnabled = MutableStateFlow(true)
+    val isAiSearchEnabled: StateFlow<Boolean> = _isAiSearchEnabled.asStateFlow()
+
+    private val _aiExplanation = MutableStateFlow("")
+    val aiExplanation: StateFlow<String> = _aiExplanation.asStateFlow()
+
+    fun toggleAiSearch() {
+        _isAiSearchEnabled.value = !_isAiSearchEnabled.value
+        viewModelScope.launch {
+            performSearch(query, force = true)
+        }
+    }
+
     private val _suggestions = MutableStateFlow<List<String>>(emptyList())
     val suggestions: StateFlow<List<String>> = _suggestions.asStateFlow()
 
@@ -236,11 +249,11 @@ class SearchViewModel @Inject constructor(
 
     fun searchImmediate(query: String) {
         viewModelScope.launch {
-            performSearch(query)
+            performSearch(query, force = true)
         }
     }
 
-    private fun performSearch(query: String) = viewModelScope.launch(Dispatchers.IO) {
+    private fun performSearch(query: String, force: Boolean = false) = viewModelScope.launch(Dispatchers.IO) {
         if (query.isBlank() && _filters.value.isDefault()) {
             this@SearchViewModel.query = ""
             page = 1
@@ -248,20 +261,53 @@ class SearchViewModel @Inject constructor(
             return@launch
         }
 
-        if (this@SearchViewModel.query == query && query.isNotEmpty()) return@launch
+        if (!force && this@SearchViewModel.query == query && query.isNotEmpty()) return@launch
         
         this@SearchViewModel.query = query
         _state.emit(SearchState.Searching)
         try {
             if (query.isNotEmpty()) {
-                val provider = UserPreferences.currentProvider ?: run {
-                    _state.emit(SearchState.SuccessSearching(emptyList(), false))
-                    return@launch
+                val provider = UserPreferences.currentProvider
+
+                val finalResults = if (_isAiSearchEnabled.value) {
+                    val aiIntent = com.nexastream.app.utils.AiSearchEngine.parseQuery(query)
+                    _aiExplanation.value = aiIntent.explanation
+
+                    val lang = UserPreferences.currentLanguage ?: "en"
+                    val aiDiscovered = com.nexastream.app.utils.AiSearchEngine.discoverByAiIntent(
+                        intent = aiIntent,
+                        language = lang,
+                        page = 1
+                    )
+
+                    val providerResults = provider?.let { p ->
+                        if (aiIntent.cleanedQuery.isNotBlank()) {
+                            runCatching {
+                                p.search(aiIntent.cleanedQuery, filters = _filters.value)
+                            }.getOrDefault(emptyList())
+                        } else emptyList()
+                    } ?: emptyList()
+
+                    val combined = (aiDiscovered + providerResults).distinctBy { item ->
+                        when (item) {
+                            is Movie -> "movie:${item.id}"
+                            is TvShow -> "tv:${item.id}"
+                            else -> item.hashCode().toString()
+                        }
+                    }
+                    ParentalControlUtils.filterItems(combined)
+                } else {
+                    _aiExplanation.value = ""
+                    val p = provider ?: run {
+                        _state.emit(SearchState.SuccessSearching(emptyList(), false))
+                        return@launch
+                    }
+                    ParentalControlUtils.filterItems(
+                        p.search(query, filters = _filters.value)
+                    )
                 }
-                val results = ParentalControlUtils.filterItems(
-                    provider.search(query, filters = _filters.value)
-                )
-                val topMatch = results.firstOrNull { it is Movie || it is TvShow }
+
+                val topMatch = finalResults.firstOrNull { it is Movie || it is TvShow }
                 val poster = when (topMatch) {
                     is Movie -> topMatch.poster
                     is TvShow -> topMatch.poster
@@ -287,7 +333,7 @@ class SearchViewModel @Inject constructor(
                     )
                 )
                 page = 1
-                _state.emit(SearchState.SuccessSearching(results, results.isNotEmpty()))
+                _state.emit(SearchState.SuccessSearching(finalResults, finalResults.isNotEmpty()))
             } else {
                 page = 1
                 _state.emit(SearchState.SuccessSearching(emptyList(), false))

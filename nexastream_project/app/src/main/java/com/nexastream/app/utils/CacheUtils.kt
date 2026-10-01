@@ -11,26 +11,28 @@ object CacheUtils {
 
     fun clearAppCache(context: Context) {
         Log.d(TAG, "Inizio pulizia cache completa...")
-        try {
-            context.cacheDir?.deleteRecursively()
-            Log.d(TAG, "Cache interna eliminata.")
-        } catch (e: Exception) {
-            Log.e(TAG, "Errore eliminazione cache interna: ${e.message}")
-        }
-
+        
         try {
             Glide.get(context).clearMemory()
-            Thread {
-                try {
-                    Glide.get(context).clearDiskCache()
-                    Log.d(TAG, "Cache Glide eliminata.")
-                } catch (e: Exception) {
-                    Log.e(TAG, "Errore eliminazione cache Glide: ${e.message}")
-                }
-            }.start()
         } catch (e: Exception) {
-            Log.e(TAG, "Errore Glide: ${e.message}")
+            Log.e(TAG, "Errore Glide clearMemory: ${e.message}")
         }
+
+        Thread {
+            try {
+                context.cacheDir?.deleteRecursively()
+                Log.d(TAG, "Cache interna eliminata.")
+            } catch (e: Exception) {
+                Log.e(TAG, "Errore eliminazione cache interna: ${e.message}")
+            }
+
+            try {
+                Glide.get(context).clearDiskCache()
+                Log.d(TAG, "Cache Glide eliminata.")
+            } catch (e: Exception) {
+                Log.e(TAG, "Errore eliminazione cache Glide: ${e.message}")
+            }
+        }.start()
 
         try {
             WebView(context).apply {

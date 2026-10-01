@@ -58,12 +58,7 @@ class MainTvActivity : FragmentActivity() {
         setContentView(binding.root)
         applyThemeNavigationChrome()
 
-        binding.ivSplashOverlay.animate()
-            .alpha(0f)
-            .setDuration(150)
-            .withEndAction {
-                binding.ivSplashOverlay.visibility = View.GONE
-            }
+        binding.ivSplashOverlay.visibility = View.GONE
 
         try {
             val navHostFragment = this.supportFragmentManager
@@ -231,10 +226,19 @@ class MainTvActivity : FragmentActivity() {
                 if (data.scheme == "nexastream" && data.host == "resolve") {
                     val id = data.getQueryParameter("id")
                     val type = data.getQueryParameter("type")
+                    val episodeId = data.getQueryParameter("episodeId")
                     if (id != null) {
                         when (type) {
                             "movie" -> navController.navigate(R.id.movie, Bundle().apply { putString("id", id) })
-                            "tv_show" -> navController.navigate(R.id.tv_show, Bundle().apply { putString("id", id) })
+                            "tv_show" -> {
+                                val args = Bundle().apply {
+                                    putString("id", id)
+                                    if (episodeId != null) {
+                                        putString("episodeId", episodeId)
+                                    }
+                                }
+                                navController.navigate(R.id.tv_show, args)
+                            }
                         }
                     }
                 }

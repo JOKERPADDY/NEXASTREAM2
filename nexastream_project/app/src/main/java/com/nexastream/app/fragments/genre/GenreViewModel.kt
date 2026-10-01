@@ -83,7 +83,15 @@ class GenreViewModel @Inject constructor(
         _state.emit(State.Loading)
 
         try {
-            val genre = UserPreferences.currentProvider!!.getGenre(id, 1)
+            val genre = if (id == "tmdb_recommended_for_you" || id == "Recommended For You" || id == "✨ Recommended For You") {
+                runCatching {
+                    UserPreferences.currentProvider!!.getGenre(id, 1)
+                }.getOrElse {
+                    com.nexastream.app.providers.NexaHomeProvider.getGenre("tmdb_recommended_for_you", 1)
+                }
+            } else {
+                UserPreferences.currentProvider!!.getGenre(id, 1)
+            }
 
             page = 1
 
@@ -100,7 +108,15 @@ class GenreViewModel @Inject constructor(
             _state.emit(State.LoadingMore)
 
             try {
-                val genre = UserPreferences.currentProvider!!.getGenre(id, page + 1)
+                val genre = if (id == "tmdb_recommended_for_you" || id == "Recommended For You" || id == "✨ Recommended For You") {
+                    runCatching {
+                        UserPreferences.currentProvider!!.getGenre(id, page + 1)
+                    }.getOrElse {
+                        com.nexastream.app.providers.NexaHomeProvider.getGenre("tmdb_recommended_for_you", page + 1)
+                    }
+                } else {
+                    UserPreferences.currentProvider!!.getGenre(id, page + 1)
+                }
 
                 page += 1
 

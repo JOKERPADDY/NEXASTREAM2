@@ -15,6 +15,10 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import com.nexastream.app.ui.components.TrailerPlayer
+import kotlinx.coroutines.delay
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -64,7 +68,10 @@ fun DetailScreen(
         }
 
         ModalBottomSheet(
-            onDismissRequest = { showDownloadDialog = false },
+            onDismissRequest = { 
+                showDownloadDialog = false
+                selectedVideoType = null
+            },
             sheetState = sheetState,
             containerColor = Color(0xFF141416),
             scrimColor = Color.Black.copy(alpha = 0.7f)
@@ -234,23 +241,89 @@ fun DetailScreen(
             }
         } else if (uiState.show != null) {
             val show = uiState.show!!
+            val context = androidx.compose.ui.platform.LocalContext.current
             
-            var selectedSeason by remember { 
-                mutableStateOf(if (show is TvShow) show.seasons.firstOrNull() else null) 
+            val isTv = remember(context) {
+                context.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK) || UserPreferences.forceTvUi
+            }
+            val autoPlayEnabled = UserPreferences.autoPlayTrailers && !isTv
+            var isPlayingTrailer by remember { mutableStateOf(false) }
+            var isMuted by remember { mutableStateOf(true) }
+
+            val trailerUrl = show.trailer
+            if (autoPlayEnabled && !trailerUrl.isNullOrBlank()) {
+                LaunchedEffect(show.id) {
+                    delay(2000L)
+                    isPlayingTrailer = true
+                }
+            }
+
+            var selectedSeason by remember(show) { 
+                mutableStateOf((show as? TvShow)?.let { tvShow ->
+                    tvShow.episodeToWatch?.season?.let { targetSeason ->
+                        tvShow.seasons.find { it.number == targetSeason.number }
+                    } ?: tvShow.seasons.firstOrNull()
+                }) 
             }
 
             LazyColumn(
                 modifier = Modifier.fillMaxSize()
             ) {
                 item {
-                    AsyncImage(
-                        model = show.banner ?: show.poster,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(250.dp)
-                    )
+                    ) {
+                        if (isPlayingTrailer) {
+                            TrailerPlayer(
+                                trailerUrl = trailerUrl,
+                                movieTitle = show.title,
+                                isMuted = isMuted,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            AsyncImage(
+                                model = show.banner ?: show.poster,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+
+                        // Gradient Scrim overlay
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color.Transparent,
+                                            Color.Black.copy(alpha = 0.7f),
+                                            Color.Black
+                                        )
+                                    )
+                                )
+                        )
+
+                        // Mute/Unmute toggle button if playing trailer
+                        if (isPlayingTrailer) {
+                            IconButton(
+                                onClick = { isMuted = !isMuted },
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(12.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.6f))
+                            ) {
+                                Icon(
+                                    imageVector = if (isMuted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                                    contentDescription = if (isMuted) "Unmute" else "Mute",
+                                    tint = Color.White
+                                )
+                            }
+                        }
+                    }
                 }
 
                 item {
@@ -303,8 +376,15 @@ fun DetailScreen(
                         Row(modifier = Modifier.fillMaxWidth()) {
                             val downloadsSupported = Provider.supportsDownloads(UserPreferences.currentProvider)
 
+                            val playTargetId = when (show) {
+                                is Movie -> show.id
+                                is TvShow -> show.episodeToWatch?.id
+                                    ?: show.seasons.firstOrNull()?.episodes?.firstOrNull()?.id
+                                    ?: show.id
+                            }
+
                             Button(
-                                onClick = { onPlayClick(show.id) },
+                                onClick = { onPlayClick(playTargetId) },
                                 modifier = Modifier.weight(1f),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color.White),
                                 shape = RoundedCornerShape(4.dp)

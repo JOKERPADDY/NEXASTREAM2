@@ -59,6 +59,7 @@ fun NavGraph(navController: NavHostController) {
                 "Top Rated Movies" -> "tmdb_movies_popular" to category.name
                 "Top Rated TV Shows" -> "tmdb_tv_popular" to category.name
                 "Trending Today" -> "tmdb_movies_popular" to "Trending"
+                "✨ Recommended For You", "Recommended For You", "Recommended for you" -> "tmdb_recommended_for_you" to "Recommended For You"
                 "Movies", "Sports", "News", "Entertainment", "Series", "Animation", "Comedy" -> category.name to category.name
                 else -> {
                     val name = category.name

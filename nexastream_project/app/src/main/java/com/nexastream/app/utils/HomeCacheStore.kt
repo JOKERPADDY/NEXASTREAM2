@@ -2,7 +2,6 @@ package com.nexastream.app.utils
 
 import android.content.Context
 import com.google.gson.Gson
-import com.google.gson.JsonSyntaxException
 import com.google.gson.reflect.TypeToken
 import com.nexastream.app.adapters.AppAdapter
 import com.nexastream.app.models.Category
@@ -34,10 +33,8 @@ object HomeCacheStore {
             memoryCache[cacheKey] = payload
             payload.toCategories()
         }.recoverCatching {
-            if (it is JsonSyntaxException) {
-                memoryCache.remove(cacheKey)
-                file.delete()
-            }
+            memoryCache.remove(cacheKey)
+            runCatching { file.delete() }
             null
         }.getOrNull()
     }

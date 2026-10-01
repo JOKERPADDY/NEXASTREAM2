@@ -96,6 +96,13 @@
                 android:summaryOff="@string/settings_autoplay_off"
                 app:iconSpaceReserved="false" />
 
+            <SwitchPreference
+                android:key="AUTOPLAY_TRAILERS"
+                android:title="Auto-play Trailers"
+                android:summary="Automatically play trailer in background after 2 seconds (Mobile only)"
+                android:defaultValue="true"
+                app:iconSpaceReserved="false" />
+
             <EditTextPreference
                 android:key="p_settings_autoplay_buffer"
                 android:title="@string/settings_autoplay_buffer_title"

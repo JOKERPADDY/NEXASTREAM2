@@ -81,6 +81,31 @@ class SearchMobileFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         initializeSearch()
 
+        binding.swAiSearch.setOnCheckedChangeListener { _, isChecked ->
+            if (isChecked != viewModel.isAiSearchEnabled.value) {
+                viewModel.toggleAiSearch()
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.isAiSearchEnabled.flowWithLifecycle(lifecycle, Lifecycle.State.STARTED).collect { isEnabled ->
+                if (binding.swAiSearch.isChecked != isEnabled) {
+                    binding.swAiSearch.isChecked = isEnabled
+                }
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.aiExplanation.flowWithLifecycle(lifecycle, Lifecycle.State.STARTED).collect { explanation ->
+                if (explanation.isNotBlank() && viewModel.isAiSearchEnabled.value) {
+                    binding.tvAiExplanation.text = explanation
+                    binding.tvAiExplanation.visibility = View.VISIBLE
+                } else {
+                    binding.tvAiExplanation.visibility = View.GONE
+                }
+            }
+        }
+
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.filters.flowWithLifecycle(lifecycle, Lifecycle.State.STARTED).collect { filters ->
                 val isActive = !filters.isDefault()

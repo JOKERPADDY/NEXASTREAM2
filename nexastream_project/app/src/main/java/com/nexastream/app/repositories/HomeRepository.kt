@@ -64,6 +64,31 @@ class HomeRepository(
         return categories
     }
 
+    fun getHomeFlow(provider: Provider): Flow<List<Category>> = kotlinx.coroutines.flow.flow {
+        val cached = HomeCacheStore.read(context, provider)
+        if (!cached.isNullOrEmpty()) {
+            emit(cached)
+        }
+
+        if (provider is com.nexastream.app.providers.NexaHomeProvider) {
+            val fullCategories = com.nexastream.app.providers.NexaHomeProvider.getHomeProgressive { phase1Categories ->
+                if (phase1Categories.isNotEmpty()) {
+                    emit(phase1Categories)
+                }
+            }
+            if (fullCategories.isNotEmpty()) {
+                emit(fullCategories)
+                HomeCacheStore.write(context, provider, fullCategories)
+            }
+        } else {
+            val categories = provider.getHome()
+            if (categories.isNotEmpty()) {
+                emit(categories)
+                HomeCacheStore.write(context, provider, categories)
+            }
+        }
+    }.flowOn(Dispatchers.IO)
+
     fun getCachedHome(provider: Provider): List<Category>? {
         return HomeCacheStore.read(context, provider)
     }

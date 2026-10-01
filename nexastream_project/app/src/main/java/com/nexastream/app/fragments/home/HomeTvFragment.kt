@@ -91,16 +91,28 @@ class HomeTvFragment : Fragment() {
                     HomeViewModel.State.Loading -> {
                         if (appAdapter.items.isEmpty()) {
                             binding.isLoading.apply {
+                                root.alpha = 1f
                                 root.visibility = View.VISIBLE
                                 pbIsLoading.visibility = View.VISIBLE
                                 gIsLoadingRetry.visibility = View.GONE
+                                tvLoadingVersion.text = "v${com.nexastream.app.BuildConfig.VERSION_NAME}"
                             }
                         }
                     }
                     is HomeViewModel.State.SuccessLoading -> {
                         displayHome(state.categories)
                         binding.vgvHome.visibility = View.VISIBLE
-                        binding.isLoading.root.visibility = View.GONE
+                        if (binding.isLoading.root.visibility == View.VISIBLE) {
+                            binding.isLoading.root.animate()
+                                .alpha(0f)
+                                .setDuration(250)
+                                .withEndAction {
+                                    _binding?.isLoading?.root?.visibility = View.GONE
+                                    _binding?.isLoading?.root?.alpha = 1f
+                                }
+                        } else {
+                            binding.isLoading.root.visibility = View.GONE
+                        }
                     }
                     is HomeViewModel.State.FailedLoading -> {
                         val code = (state.error as? retrofit2.HttpException)?.code()
@@ -381,6 +393,7 @@ class HomeTvFragment : Fragment() {
                         "Kids Banner" -> "tmdb_kids_family" to "Kids & Family"
                         "Anime Banner" -> "tmdb_anime_universe" to "Anime Universe"
                         "Trending Today" -> "tmdb_movies_popular" to "Trending"
+                        "✨ Recommended For You", "Recommended For You", "Recommended for you" -> "tmdb_recommended_for_you" to "Recommended For You"
 
                         else -> {
                             val name = category.name

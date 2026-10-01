@@ -1,6 +1,8 @@
 package com.nexastream.app.ui.screens.details
 
 import android.content.Context
+import androidx.annotation.OptIn
+import androidx.media3.common.util.UnstableApi
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -32,6 +34,7 @@ data class DetailUiState(
     val error: String? = null
 )
 
+@OptIn(UnstableApi::class)
 @HiltViewModel
 class DetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
@@ -40,7 +43,8 @@ class DetailViewModel @Inject constructor(
     private val downloadManager: DownloadManager
 ) : ViewModel() {
 
-    private val id: String = URLDecoder.decode(checkNotNull(savedStateHandle["id"]), "UTF-8")
+    private val rawId: String = savedStateHandle.get<String>("id") ?: ""
+    private val id: String = runCatching { URLDecoder.decode(rawId, "UTF-8") }.getOrDefault(rawId)
     
     private val _uiState = MutableStateFlow(DetailUiState())
     val uiState: StateFlow<DetailUiState> = _uiState
@@ -58,24 +62,17 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
-                // Try to get from DB first to check type and favorite status
+                // Try to get from DB first to check type and favorite/watch status
                 val dbMovie = withContext(Dispatchers.IO) { database.movieDao().getById(id) }
                 val dbTvShow = withContext(Dispatchers.IO) { database.tvShowDao().getById(id) }
 
-                val show = if (dbMovie != null) {
-                    withContext(Dispatchers.IO) { provider.getMovie(id) }.apply {
-                        isFavorite = dbMovie.isFavorite
-                        favoritedAtMillis = dbMovie.favoritedAtMillis
-                    }
-                } else if (dbTvShow != null) {
-                    withContext(Dispatchers.IO) { provider.getTvShow(id) }.apply {
-                        isFavorite = dbTvShow.isFavorite
-                        favoritedAtMillis = dbTvShow.favoritedAtMillis
-                    }
-                } else {
-                    // Try to fetch as Movie first, then TvShow
+                val show: Show? = try {
                     withContext(Dispatchers.IO) {
-                        if (id.contains("/movie/")) {
+                        if (dbMovie != null) {
+                            provider.getMovie(id).apply { merge(dbMovie) }
+                        } else if (dbTvShow != null) {
+                            provider.getTvShow(id).apply { merge(dbTvShow) }
+                        } else if (id.contains("/movie/")) {
                             provider.getMovie(id)
                         } else if (id.contains("/series/") || id.contains("/tv/")) {
                             provider.getTvShow(id)
@@ -84,6 +81,9 @@ class DetailViewModel @Inject constructor(
                                 ?: provider.getTvShow(id)
                         }
                     }
+                } catch (e: Exception) {
+                    // Fallback to local DB if network request failed
+                    dbMovie ?: dbTvShow ?: throw e
                 }
 
                 _uiState.value = DetailUiState(show = show, isLoading = false)
@@ -99,37 +99,43 @@ class DetailViewModel @Inject constructor(
         
         viewModelScope.launch {
             val isFavorite = !currentShow.isFavorite
-            currentShow.isFavorite = isFavorite
             
-            if (currentShow is Movie) {
-                if (isFavorite) {
-                    currentShow.favoritedAtMillis = System.currentTimeMillis()
-                    withContext(Dispatchers.IO) {
-                        database.movieDao().insert(currentShow)
-                        UserDataCache.addMovieToFavorites(context, provider, currentShow)
+            val updatedShow: Show = when (currentShow) {
+                is Movie -> {
+                    val newMovie = currentShow.copy(isFavorite = isFavorite)
+                    if (isFavorite) {
+                        newMovie.favoritedAtMillis = System.currentTimeMillis()
+                        withContext(Dispatchers.IO) {
+                            database.movieDao().insert(newMovie)
+                            UserDataCache.addMovieToFavorites(context, provider, newMovie)
+                        }
+                    } else {
+                        withContext(Dispatchers.IO) {
+                            database.movieDao().delete(newMovie)
+                            UserDataCache.removeMovieFromFavorites(context, provider, newMovie.id)
+                        }
                     }
-                } else {
-                    withContext(Dispatchers.IO) {
-                        database.movieDao().delete(currentShow)
-                        UserDataCache.removeMovieFromFavorites(context, provider, currentShow.id)
-                    }
+                    newMovie
                 }
-            } else if (currentShow is TvShow) {
-                if (isFavorite) {
-                    currentShow.favoritedAtMillis = System.currentTimeMillis()
-                    withContext(Dispatchers.IO) {
-                        database.tvShowDao().insert(currentShow)
-                        UserDataCache.addTvShowToFavorites(context, provider, currentShow)
+                is TvShow -> {
+                    val newTvShow = currentShow.copy(isFavorite = isFavorite)
+                    if (isFavorite) {
+                        newTvShow.favoritedAtMillis = System.currentTimeMillis()
+                        withContext(Dispatchers.IO) {
+                            database.tvShowDao().insert(newTvShow)
+                            UserDataCache.addTvShowToFavorites(context, provider, newTvShow)
+                        }
+                    } else {
+                        withContext(Dispatchers.IO) {
+                            database.tvShowDao().delete(newTvShow)
+                            UserDataCache.removeTvShowFromFavorites(context, provider, newTvShow.id)
+                        }
                     }
-                } else {
-                    withContext(Dispatchers.IO) {
-                        database.tvShowDao().delete(currentShow)
-                        UserDataCache.removeTvShowFromFavorites(context, provider, currentShow.id)
-                    }
+                    newTvShow
                 }
             }
             
-            _uiState.value = _uiState.value.copy(show = currentShow)
+            _uiState.value = _uiState.value.copy(show = updatedShow)
         }
     }
 

@@ -319,9 +319,18 @@ class MainMobileActivity : AppCompatActivity() {
         updateAppDialog = null
     }
 
-    private fun updateBottomNavigationVisibility(destinationId: Int?) {
+    private var isHomeLoading: Boolean = false
+
+    fun setHomeLoadingState(isLoading: Boolean) {
+        if (isHomeLoading == isLoading) return
+        isHomeLoading = isLoading
+        _binding?.let { updateBottomNavigationVisibility() }
+    }
+
+    private fun updateBottomNavigationVisibility(destinationId: Int? = null) {
+        val currentDest = destinationId ?: (supportFragmentManager.findFragmentById(R.id.nav_main_fragment) as? NavHostFragment)?.navController?.currentDestination?.id
         val showBottomNav =
-            UserPreferences.currentProvider != null && isTopLevelProviderDestination(destinationId)
+            UserPreferences.currentProvider != null && isTopLevelProviderDestination(currentDest) && !isHomeLoading
         binding.bnvMain.visibility = if (showBottomNav) View.VISIBLE else View.GONE
     }
 

@@ -111,23 +111,46 @@ object CdnLiveTvProvider : Provider {
         return categories
     }
 
-    private suspend fun CDNChannel.toTvShow() = TvShow(
-        id = if (url.isNotBlank()) "cdn:$url" else "cdn:$name:$code",
-        title = name,
-        poster = com.nexastream.app.utils.ChannelLogoRepository.getLogoUrl(name) ?: com.nexastream.app.utils.ArtworkRequestHeaders.run {
-            val urlWithParams = appendQueryParams(image, mapOf("user" to USER, "plan" to PLAN))
-            withHeaders(
-                urlWithParams,
-                referer = "https://cdnlivetv.tv/",
-                origin = "https://cdnlivetv.tv",
-                userAgent = NetworkClient.USER_AGENT
-            )
-        } ?: image,
-        banner = image,
-        quality = "LIVE",
-        providerName = "CDN Live TV"
-    ).apply { 
-        itemType = AppAdapter.Type.TV_SHOW_MOBILE_ITEM 
+    private fun CDNChannel.toTvShow(): TvShow {
+        val lowerName = name.lowercase().trim()
+        val packageName = com.nexastream.app.NexastreamApp.instance.packageName
+
+        val posterUrl = when {
+            lowerName.contains("sky") && (lowerName.contains("premier") || lowerName.contains("league")) -> {
+                "android.resource://$packageName/drawable/skysport2"
+            }
+            lowerName.contains("sky") && lowerName.contains("sport") && lowerName.contains("mix") -> {
+                "android.resource://$packageName/drawable/skysport"
+            }
+            lowerName.contains("sky") && lowerName.contains("sport") -> {
+                "android.resource://$packageName/drawable/skysport"
+            }
+            lowerName.contains("canal") && (lowerName.contains("premier") || lowerName.contains("league")) -> {
+                "android.resource://$packageName/drawable/canal"
+            }
+            else -> {
+                com.nexastream.app.utils.ArtworkRequestHeaders.run {
+                    val urlWithParams = appendQueryParams(image, mapOf("user" to USER, "plan" to PLAN))
+                    withHeaders(
+                        urlWithParams,
+                        referer = "https://cdnlivetv.tv/",
+                        origin = "https://cdnlivetv.tv",
+                        userAgent = NetworkClient.USER_AGENT
+                    )
+                } ?: image
+            }
+        }
+
+        return TvShow(
+            id = if (url.isNotBlank()) "cdn:$url" else "cdn:$name:$code",
+            title = name,
+            poster = posterUrl,
+            banner = image,
+            quality = "LIVE",
+            providerName = "CDN Live TV"
+        ).apply { 
+            itemType = AppAdapter.Type.TV_SHOW_MOBILE_ITEM 
+        }
     }
 
     override suspend fun getServers(id: String, videoType: Video.Type): List<Video.Server> {
@@ -135,7 +158,10 @@ object CdnLiveTvProvider : Provider {
             val target = id.removePrefix("cdn:")
             
             if (target.startsWith("http://") || target.startsWith("https://")) {
-                return listOf(Video.Server(id = target, name = "CDN Direct"))
+                return listOf(
+                    Video.Server(id = target, name = "CDN 1080p (Default)"),
+                    Video.Server(id = "$target#480p", name = "CDN 480p")
+                )
             }
 
             val channels = if (cachedChannels.isNotEmpty()) cachedChannels else runCatching { service.getChannels().channels }.getOrNull() ?: emptyList()
@@ -146,7 +172,10 @@ object CdnLiveTvProvider : Provider {
                 ch.code.equals(target, ignoreCase = true)
             }
             if (channel != null) {
-                return listOf(Video.Server(id = channel.url, name = "CDN Direct"))
+                return listOf(
+                    Video.Server(id = channel.url, name = "CDN 1080p (Default)"),
+                    Video.Server(id = "${channel.url}#480p", name = "CDN 480p")
+                )
             }
         }
 
@@ -154,7 +183,7 @@ object CdnLiveTvProvider : Provider {
     }
 
     override suspend fun getVideo(server: Video.Server): Video = withContext(Dispatchers.IO) {
-        val url = server.id
+        val url = server.id.substringBefore("#480p")
         Log.e("CdnLiveTv", "getVideo(url=$url)")
         
         if (url.contains("/player/") || url.contains("/channels/player/")) {

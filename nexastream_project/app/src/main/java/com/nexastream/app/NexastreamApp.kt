@@ -89,6 +89,7 @@ class NexastreamApp : Application() {
             CacheUtils.autoClearIfNeeded(appContext, thresholdMb = threshold)
             if (isTv) {
                 com.nexastream.app.utils.TvChannelManager.updateDefaultChannel(appContext)
+                com.nexastream.app.utils.WatchNextUtils.syncWatchNext(appContext)
             }
         }
     }
