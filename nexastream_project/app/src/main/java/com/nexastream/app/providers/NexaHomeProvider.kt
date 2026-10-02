@@ -36,23 +36,29 @@ object NexaHomeProvider : Provider {
     private suspend inline fun <T> limited(crossinline block: suspend () -> T): T = fetchSemaphore.withPermit { block() }
 
     override suspend fun getHome(): List<Category> = coroutineScope {
-        val phase1 = getHomePhase1()
+        val phase0 = getHomePhase0()
+        val phase1 = getHomePhase1(phase0)
         getHomePhase2(phase1)
     }
 
     suspend fun getHomeProgressive(
+        onPhase0: suspend (List<Category>) -> Unit,
         onPhase1: suspend (List<Category>) -> Unit
     ): List<Category> = coroutineScope {
-        val phase1 = getHomePhase1()
+        val phase0 = getHomePhase0()
+        onPhase0(phase0)
+        val phase1 = getHomePhase1(phase0)
         onPhase1(phase1)
         val full = getHomePhase2(phase1)
         full
     }
 
-    suspend fun getHomePhase1(): List<Category> = coroutineScope {
-        // Core High-Priority Parallel Fetching (Phase 1)
-        val tmdbHomeDeferred = async { limited { runCatching { tmdb.getHome() }.getOrElse { emptyList() } } }
-        
+    suspend fun getHomeProgressive(
+        onPhase1: suspend (List<Category>) -> Unit
+    ): List<Category> = getHomeProgressive(onPhase0 = onPhase1, onPhase1 = onPhase1)
+
+    suspend fun getHomePhase0(): List<Category> = coroutineScope {
+        // Phase 0: Fast Hero Banner + CDN Live Channels (~1s)
         val cdnHomeDeferred = async { limited {
             val cdnList = runCatching { CdnLiveTvProvider.getHome() }.getOrNull().orEmpty()
             if (cdnList.isNotEmpty() && cdnList.any { it.list.isNotEmpty() }) {
@@ -62,25 +68,15 @@ object NexaHomeProvider : Provider {
                 runCatching { IptvOrgProvider.getHome() }.getOrElse { emptyList() }
             }
         } }
-        
-        val latestMoviesDeferred = async { limited { runCatching { tmdb.getLatestMovies() }.getOrNull() } }
-        val allCinemaDeferred = async { limited { runCatching { tmdb.getAllCinema() }.getOrNull() } }
-        val newSeasonDeferred = async { limited { runCatching { tmdb.getNewSeasonsAndEpisodes() }.getOrNull() } }
+
         val moviesBannerDef = async { limited { runCatching { tmdb.getFeaturedMovies() }.getOrNull() } }
         val seriesBannerDef = async { limited { runCatching { tmdb.getFeaturedTvShows() }.getOrNull() } }
 
-        val tmdbHome = tmdbHomeDeferred.await()
         val cdnHome = cdnHomeDeferred.await()
-        val latestMovies = latestMoviesDeferred.await()
-        val allCinema = allCinemaDeferred.await()
-        val newSeasonAndEpisodes = newSeasonDeferred.await()
         val moviesBanner = moviesBannerDef.await()
         val seriesBanner = seriesBannerDef.await()
 
         val categories = mutableListOf<Category>()
-
-        // FEATURED BANNER
-        tmdbHome.find { it.name == Category.FEATURED }?.let { categories.add(it) }
 
         moviesBanner?.let { categories.add(it.copy(name = "Movies Banner", list = it.list.safeSubList(0, 10))) }
         seriesBanner?.let { categories.add(it.copy(name = "Series Banner", list = it.list.safeSubList(0, 10))) }
@@ -122,6 +118,31 @@ object NexaHomeProvider : Provider {
                 .forEach { cat ->
                     categories.add(cat.copy(name = "Livestream · ${cat.name}"))
                 }
+        }
+
+        categories
+    }
+
+    suspend fun getHomePhase1(phase0Categories: List<Category>): List<Category> = coroutineScope {
+        // Phase 1: Core Content (Trending, Popular, Cinema, New Seasons)
+        val tmdbHomeDeferred = async { limited { runCatching { tmdb.getHome() }.getOrElse { emptyList() } } }
+        val latestMoviesDeferred = async { limited { runCatching { tmdb.getLatestMovies() }.getOrNull() } }
+        val allCinemaDeferred = async { limited { runCatching { tmdb.getAllCinema() }.getOrNull() } }
+        val newSeasonDeferred = async { limited { runCatching { tmdb.getNewSeasonsAndEpisodes() }.getOrNull() } }
+
+        val tmdbHome = tmdbHomeDeferred.await()
+        val latestMovies = latestMoviesDeferred.await()
+        val allCinema = allCinemaDeferred.await()
+        val newSeasonAndEpisodes = newSeasonDeferred.await()
+
+        val categories = mutableListOf<Category>()
+        categories.addAll(phase0Categories)
+
+        // FEATURED BANNER from tmdbHome if not present
+        tmdbHome.find { it.name == Category.FEATURED }?.let {
+            if (categories.none { cat -> cat.name == Category.FEATURED }) {
+                categories.add(0, it)
+            }
         }
 
         // TRENDING / RECOMMENDED

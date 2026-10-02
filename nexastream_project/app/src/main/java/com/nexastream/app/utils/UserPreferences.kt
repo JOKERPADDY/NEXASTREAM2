@@ -63,9 +63,11 @@ object UserPreferences {
         val jsonString = Key.PROVIDER_CACHE.getString() ?: "{}"
         providerCache = runCatching { JSONObject(jsonString) }.getOrDefault(JSONObject())
         
-        // Force home provider as default provider every time app opens
-        Key.CURRENT_PROVIDER.setString(NexaHomeProvider.name)
-        cachedProvider = NexaHomeProvider
+        // Default to home provider if no provider set yet
+        if (Key.CURRENT_PROVIDER.getString().isNullOrEmpty()) {
+            Key.CURRENT_PROVIDER.setString(NexaHomeProvider.name)
+            cachedProvider = NexaHomeProvider
+        }
     }
 
     @Volatile

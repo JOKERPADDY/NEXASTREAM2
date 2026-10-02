@@ -71,11 +71,18 @@ class HomeRepository(
         }
 
         if (provider is com.nexastream.app.providers.NexaHomeProvider) {
-            val fullCategories = com.nexastream.app.providers.NexaHomeProvider.getHomeProgressive { phase1Categories ->
-                if (phase1Categories.isNotEmpty()) {
-                    emit(phase1Categories)
+            val fullCategories = com.nexastream.app.providers.NexaHomeProvider.getHomeProgressive(
+                onPhase0 = { phase0Categories ->
+                    if (phase0Categories.isNotEmpty()) {
+                        emit(phase0Categories)
+                    }
+                },
+                onPhase1 = { phase1Categories ->
+                    if (phase1Categories.isNotEmpty()) {
+                        emit(phase1Categories)
+                    }
                 }
-            }
+            )
             if (fullCategories.isNotEmpty()) {
                 emit(fullCategories)
                 HomeCacheStore.write(context, provider, fullCategories)
