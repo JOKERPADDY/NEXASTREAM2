@@ -95,7 +95,6 @@ class HomeTvFragment : Fragment() {
                                 root.visibility = View.VISIBLE
                                 pbIsLoading.visibility = View.VISIBLE
                                 gIsLoadingRetry.visibility = View.GONE
-                                tvLoadingVersion.text = "v${com.nexastream.app.BuildConfig.VERSION_NAME}"
                             }
                         }
                     }
