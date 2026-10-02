@@ -728,15 +728,16 @@ class TvShowViewHolder(
         binding.btnTvShowWatchNow.apply {
             isVisible = episodeToWatch != null
             setOnClickListener {
+                val targetEpisode = episodeToWatch ?: return@setOnClickListener
                 if (isIptvProvider()) {
                     handleDirectPlay(findNavController())
                 } else {
                     val videoType = Video.Type.Episode(
-                        id = episodeToWatch!!.id,
-                        number = episodeToWatch.number,
-                        title = episodeToWatch.title,
-                        poster = episodeToWatch.poster,
-                        overview = episodeToWatch.overview,
+                        id = targetEpisode.id,
+                        number = targetEpisode.number,
+                        title = targetEpisode.title,
+                        poster = targetEpisode.poster,
+                        overview = targetEpisode.overview,
                         tvShow = Video.Type.Episode.TvShow(
                             id = tvShow.id,
                             title = tvShow.title,
@@ -751,7 +752,7 @@ class TvShowViewHolder(
                         ),
                     )
                     val args = Bundle().apply {
-                        putString("id", episodeToWatch.id)
+                        putString("id", targetEpisode.id)
                         putString("title", tvShow.title)
                         putString("subtitle", "S${videoType.season.number} E${videoType.number}  •  ${videoType.title}")
                         putSerializable("videoType", videoType)
@@ -862,15 +863,16 @@ class TvShowViewHolder(
         binding.btnTvShowWatchNow.apply {
             isVisible = episodeToWatch != null
             setOnClickListener {
+                val targetEpisode = episodeToWatch ?: return@setOnClickListener
                 if (isIptvProvider()) {
                     handleDirectPlay(findNavController())
                 } else {
                     val videoType = Video.Type.Episode(
-                        id = episodeToWatch!!.id,
-                        number = episodeToWatch.number,
-                        title = episodeToWatch.title,
-                        poster = episodeToWatch.poster,
-                        overview = episodeToWatch.overview,
+                        id = targetEpisode.id,
+                        number = targetEpisode.number,
+                        title = targetEpisode.title,
+                        poster = targetEpisode.poster,
+                        overview = targetEpisode.overview,
                         tvShow = Video.Type.Episode.TvShow(
                             id = tvShow.id,
                             title = tvShow.title,
@@ -885,7 +887,7 @@ class TvShowViewHolder(
                         ),
                     )
                     val args = Bundle().apply {
-                        putString("id", episodeToWatch.id)
+                        putString("id", targetEpisode.id)
                         putString("title", tvShow.title)
                         putString("subtitle", "S${videoType.season.number} E${videoType.number}  •  ${videoType.title}")
                         putSerializable("videoType", videoType)

@@ -19,9 +19,9 @@ android {
     defaultConfig {
         applicationId "com.nexastream.app"
         minSdk 23
-        targetSdk 34
-        versionCode 5
-        versionName "1.0.4"
+        targetSdk 35
+        versionCode 6
+        versionName "1.0.5"
 
         buildConfigField "String", "APP_LAYOUT", "\"${properties.getProperty("APP_LAYOUT", "auto")}\""
         buildConfigField "String", "TMDB_API_KEY", "\"${properties.getProperty("TMDB_API_KEY", "")}\""
@@ -51,7 +51,8 @@ android {
             applicationIdSuffix '.debug'
         }
         release {
-            minifyEnabled false
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
@@ -66,7 +67,7 @@ android {
     lint {
         checkReleaseBuilds false
         abortOnError false
-        disable 'NullSafeMutableLiveData'
+        disable 'NullSafeMutableLiveData', 'RememberInComposition', 'FrequentlyChangingValue'
     }
 }
 

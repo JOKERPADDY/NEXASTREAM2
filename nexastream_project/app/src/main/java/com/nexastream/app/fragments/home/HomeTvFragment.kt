@@ -428,7 +428,11 @@ class HomeTvFragment : Fragment() {
             setItemSpacing(resources.getDimension(R.dimen.home_spacing).toInt() * 2)
         }
 
-        binding.root.requestFocus()
+        if (binding.vgvHome.visibility == View.VISIBLE) {
+            binding.vgvHome.requestFocus()
+        } else {
+            binding.root.requestFocus()
+        }
     }
 
     private fun displayHome(categories: List<Category>) {

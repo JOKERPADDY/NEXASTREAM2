@@ -70,7 +70,12 @@ class MainTvActivity : FragmentActivity() {
             if (savedInstanceState == null) {
                 UserPreferences.currentProvider?.let {
                     if (navController?.currentDestination?.id != R.id.home) {
-                        runCatching { navController?.navigate(R.id.home) }
+                        runCatching {
+                            val navOptions = androidx.navigation.NavOptions.Builder()
+                                .setPopUpTo(R.id.providers, true)
+                                .build()
+                            navController?.navigate(R.id.home, null, navOptions)
+                        }
                     }
                 }
             }
@@ -157,6 +162,7 @@ class MainTvActivity : FragmentActivity() {
         }
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            @androidx.media3.common.util.UnstableApi
             override fun handleOnBackPressed() {
                 val controller = navController ?: return
                 when (controller.currentDestination?.id) {

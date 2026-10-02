@@ -61,6 +61,9 @@
         <action
             android:id="@+id/action_search_to_people"
             app:destination="@id/people" />
+        <action
+            android:id="@+id/action_search_to_genre"
+            app:destination="@id/genre" />
     </fragment>
     <fragment
         android:id="@+id/movies"

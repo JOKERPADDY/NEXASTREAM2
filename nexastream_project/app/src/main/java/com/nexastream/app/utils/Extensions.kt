@@ -124,10 +124,11 @@ suspend fun <T> retry(retries: Int, predicate: suspend (attempt: Int) -> T): T {
 
 fun <T> Cursor.map(transform: (Cursor) -> T): List<T> {
     val items = mutableListOf<T>()
-    while (!this.isClosed && this.moveToNext()) {
-        items.add(transform(this))
+    this.use { cursor ->
+        while (!cursor.isClosed && cursor.moveToNext()) {
+            items.add(transform(cursor))
+        }
     }
-    this.close()
     return items.toList()
 }
 

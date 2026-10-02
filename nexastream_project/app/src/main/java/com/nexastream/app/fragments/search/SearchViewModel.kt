@@ -372,8 +372,9 @@ class SearchViewModel @Inject constructor(
         if (currentState is SearchState.SuccessSearching) {
             _state.emit(SearchState.SearchingMore)
             try {
+                val provider = UserPreferences.currentProvider ?: return@launch
                 val results = ParentalControlUtils.filterItems(
-                    UserPreferences.currentProvider!!.search(query, page + 1, filters = _filters.value)
+                    provider.search(query, page + 1, filters = _filters.value)
                 )
                 val existingKeys = currentState.results.asSequence().map { it.searchIdentityKey() }.toHashSet()
                 val newUniqueResults = results.filterNot { it.searchIdentityKey() in existingKeys }
@@ -421,18 +422,23 @@ class SearchViewModel @Inject constructor(
 
         targetProviders.forEachIndexed { index, provider ->
             launch {
-                try {
+                val resultState = try {
                     val results = ParentalControlUtils.filterItems(provider.search(query).onEach {
                         when (it) {
                             is Movie -> it.providerName = provider.name
                             is TvShow -> it.providerName = provider.name
                         }
                     })
-                    mutableResults[index] = SearchProviderResult(provider, SearchProviderResult.State.Success(results))
+                    SearchProviderResult(provider, SearchProviderResult.State.Success(results))
                 } catch (e: Exception) {
-                    mutableResults[index] = SearchProviderResult(provider, SearchProviderResult.State.Error(e))
+                    SearchProviderResult(provider, SearchProviderResult.State.Error(e))
                 }
-                _state.emit(SearchState.SuccessGlobalSearching(mutableResults.sortedWith(stateComparator)))
+
+                val snapshot = synchronized(mutableResults) {
+                    mutableResults[index] = resultState
+                    ArrayList(mutableResults)
+                }
+                _state.emit(SearchState.SuccessGlobalSearching(snapshot.sortedWith(stateComparator)))
             }
         }
     }

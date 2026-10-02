@@ -375,7 +375,11 @@ class SearchTvFragment : Fragment() {
             })
         }
 
-        binding.root.requestFocus()
+        if (binding.etSearch.visibility == View.VISIBLE) {
+            binding.etSearch.requestFocus()
+        } else {
+            binding.root.requestFocus()
+        }
     }
 
     private fun focusSearchContent(): Boolean {
