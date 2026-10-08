@@ -13,15 +13,16 @@ import com.nexastream.app.models.WatchItem
 import com.nexastream.app.providers.Provider
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.launch
 
 object HomeCacheStore {
     private val gson = Gson()
-    private val memoryCache = ConcurrentHashMap<String, List<CachedCategory>>()
+    private val memoryCache = ConcurrentHashMap<String, List<Category>>()
 
     fun read(context: Context, provider: Provider): List<Category>? {
         val cacheKey = cacheKey(provider)
-        memoryCache[cacheKey]?.let { payload ->
-            return payload.toCategories()
+        memoryCache[cacheKey]?.let { categories ->
+            return categories
         }
 
         val file = cacheFile(context, cacheKey)
@@ -30,8 +31,9 @@ object HomeCacheStore {
         return runCatching {
             val type = object : TypeToken<List<CachedCategory>>() {}.type
             val payload: List<CachedCategory> = gson.fromJson(file.readText(), type)
-            memoryCache[cacheKey] = payload
-            payload.toCategories()
+            val categories = payload.toCategories()
+            memoryCache[cacheKey] = categories
+            categories
         }.recoverCatching {
             memoryCache.remove(cacheKey)
             runCatching { file.delete() }
@@ -39,14 +41,20 @@ object HomeCacheStore {
         }.getOrNull()
     }
 
+    private val ioScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
+
     fun write(context: Context, provider: Provider, categories: List<Category>) {
         runCatching {
-            val payload = categories.map { CachedCategory.from(it) }
             val cacheKey = cacheKey(provider)
-            memoryCache[cacheKey] = payload
-            cacheFile(context, cacheKey).apply {
-                parentFile?.mkdirs()
-                writeText(gson.toJson(payload))
+            memoryCache[cacheKey] = categories
+            val payload = categories.map { CachedCategory.from(it) }
+            ioScope.launch {
+                runCatching {
+                    cacheFile(context, cacheKey).apply {
+                        parentFile?.mkdirs()
+                        writeText(gson.toJson(payload))
+                    }
+                }
             }
         }
     }
