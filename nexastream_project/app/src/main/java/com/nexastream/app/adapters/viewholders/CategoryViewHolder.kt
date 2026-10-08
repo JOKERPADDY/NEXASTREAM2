@@ -14,6 +14,7 @@ import androidx.viewbinding.ViewBinding
 import androidx.viewpager2.widget.ViewPager2
 import com.nexastream.app.R
 import com.nexastream.app.adapters.AppAdapter
+import com.nexastream.app.adapters.FeaturedMiniCardAdapter
 import com.nexastream.app.databinding.ContentCategorySwiperMobileBinding
 import com.nexastream.app.databinding.ContentCategorySwiperTvBinding
 import com.nexastream.app.databinding.ItemCategoryMobileBinding
@@ -234,37 +235,83 @@ class CategoryViewHolder(
     private fun displayTvSwiper(binding: ContentCategorySwiperTvBinding) {
         binding.tvCategoryTitle.text = category.name
         binding.tvCategoryTitle.visibility = if (category.name.contains("Banner", ignoreCase = true) || category.name == Category.FEATURED) View.GONE else View.VISIBLE
-        
-        val selected = category.list.getOrNull(category.selectedIndex) as? Show ?: return
 
-        fun checkProviderAndRun(show: Show, action: () -> Unit) {
-            action()
-        }
-        
-        // Aggiornamento dello sfondo forzato per TV all'inizio o al cambio indice
-        val poster = when (selected) {
-            is Movie -> selected.banner
-            is TvShow -> selected.banner
-            else -> null
-        }
-        
+        val showsList = category.list.filterIsInstance<Show>()
+        if (showsList.isEmpty()) return
+
+        val initialSelected = showsList.getOrNull(category.selectedIndex) ?: showsList.first()
+        bindSpotlightDetails(binding, initialSelected)
+
+        // Force background update
+        val backdrop = initialSelected.banner ?: initialSelected.poster
         when (val fragment = context.toActivity()?.getCurrentFragment()) {
             is HomeTvFragment -> {
-                if (poster != null) {
-                    fragment.updateBackground(poster, false) // Imposta lo sfondo senza marcare come focalizzato
-                }
-                
-                // Se l'elemento è stato appena selezionato (indice cambiato), assicura che l'aggiornamento sia visibile
-                if (category.selectedIndex == category.list.indexOf(selected)) {
-                    fragment.resetSwiperSchedule() // Riavvia lo scheduler per assicurarsi che continui
+                if (backdrop != null) {
+                    fragment.updateBackground(backdrop, false)
                 }
             }
         }
 
-        binding.tvSwiperTitle.text = when (selected) {
-            is Movie -> selected.title
-            is TvShow -> selected.title
+        binding.btnSwiperWatchNow.apply {
+            setOnClickListener {
+                val currentShow = showsList.getOrNull(category.selectedIndex) ?: initialSelected
+                binding.root.findNavController().navigate(
+                    when (currentShow) {
+                        is Movie -> HomeTvFragmentDirections.actionHomeToMovie(currentShow.id)
+                        is TvShow -> HomeTvFragmentDirections.actionHomeToTvShow(
+                            id = currentShow.id,
+                            poster = currentShow.poster,
+                            banner = currentShow.banner,
+                        )
+                        else -> return@setOnClickListener
+                    }
+                )
+            }
         }
+
+        // Setup Mini Cards HorizontalGridView
+        val miniCardAdapter = (binding.hgvFeaturedMiniCards.adapter as? FeaturedMiniCardAdapter)
+            ?: FeaturedMiniCardAdapter().also { adapter ->
+                binding.hgvFeaturedMiniCards.adapter = adapter
+            }
+
+        miniCardAdapter.items = showsList
+        miniCardAdapter.selectedIndex = category.selectedIndex.coerceIn(0, showsList.lastIndex)
+        miniCardAdapter.onItemSelected = { show, index ->
+            if (category.selectedIndex != index) {
+                category.selectedIndex = index
+                bindSpotlightDetails(binding, show)
+                val poster = show.banner ?: show.poster
+                when (val fragment = context.toActivity()?.getCurrentFragment()) {
+                    is HomeTvFragment -> {
+                        if (poster != null) {
+                            fragment.updateBackground(poster, true)
+                        }
+                        fragment.resetSwiperSchedule()
+                    }
+                }
+            }
+        }
+        miniCardAdapter.onItemClicked = { show ->
+            when (show) {
+                is Movie -> binding.root.findNavController().navigate(
+                    HomeTvFragmentDirections.actionHomeToMovie(show.id)
+                )
+                is TvShow -> binding.root.findNavController().navigate(
+                    HomeTvFragmentDirections.actionHomeToTvShow(
+                        id = show.id,
+                        poster = show.poster,
+                        banner = show.banner,
+                    )
+                )
+            }
+        }
+        miniCardAdapter.notifyDataSetChanged()
+        binding.hgvFeaturedMiniCards.setSelectedPositionSmooth(category.selectedIndex)
+    }
+
+    private fun bindSpotlightDetails(binding: ContentCategorySwiperTvBinding, selected: Show) {
+        binding.tvSwiperTitle.text = selected.title
 
         binding.tvSwiperTvShowLastEpisode.apply {
             text = when (selected) {
@@ -289,115 +336,45 @@ class CategoryViewHolder(
         }
 
         binding.tvSwiperQuality.apply {
-            text = when (selected) {
-                is Movie -> selected.quality
-                is TvShow -> selected.quality
-            }
-            visibility = when {
-                text.isNullOrEmpty() -> View.GONE
-                else -> View.VISIBLE
-            }
+            text = selected.quality
+            visibility = if (text.isNullOrEmpty()) View.GONE else View.VISIBLE
         }
 
         binding.tvSwiperReleased.apply {
-            text = when (selected) {
-                is Movie -> selected.released?.format("yyyy")
-                is TvShow -> selected.released?.format("yyyy")
-            }
-            visibility = when {
-                text.isNullOrEmpty() -> View.GONE
-                else -> View.VISIBLE
-            }
+            text = selected.released?.format("yyyy")
+            visibility = if (text.isNullOrEmpty()) View.GONE else View.VISIBLE
         }
 
         binding.tvSwiperRating.apply {
-            text = when (selected) {
-                is Movie -> selected.rating?.let { String.format(Locale.ROOT, "%.1f", it) }
-                is TvShow -> selected.rating?.let { String.format(Locale.ROOT, "%.1f", it) }
-            }
-            visibility = when {
-                text.isNullOrEmpty() -> View.GONE
-                else -> View.VISIBLE
-            }
+            text = selected.rating?.let { String.format(Locale.ROOT, "%.1f", it) }
+            visibility = if (text.isNullOrEmpty()) View.GONE else View.VISIBLE
         }
-
         binding.ivSwiperRatingIcon.visibility = binding.tvSwiperRating.visibility
 
-        binding.tvSwiperOverview.text = when (selected) {
-            is Movie -> selected.overview
-            is TvShow -> selected.overview
+        binding.tvSwiperGenres.apply {
+            val genresList = when (selected) {
+                is Movie -> selected.genres
+                is TvShow -> selected.genres
+                else -> emptyList()
+            }
+            val genresStr = genresList.joinToString(", ") { it.name }
+            text = genresStr
+            visibility = if (genresStr.isEmpty()) View.GONE else View.VISIBLE
         }
 
-
-        binding.btnSwiperWatchNow.apply {
-            setOnClickListener {
-                checkProviderAndRun(selected) {
-                    findNavController().navigate(
-                        when (selected) {
-                            is Movie -> HomeTvFragmentDirections.actionHomeToMovie(selected.id)
-                            is TvShow -> HomeTvFragmentDirections.actionHomeToTvShow(
-                                id = selected.id,
-                                poster = selected.poster,
-                                banner = selected.banner,
-                            )
-                        }
-                    )
-                }
-            }
-            setOnKeyListener { _, _, event ->
-                if (event.action == KeyEvent.ACTION_DOWN) {
-                    when (event.keyCode) {
-                        KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                            when (val fragment = context.toActivity()?.getCurrentFragment()) {
-                                is HomeTvFragment -> fragment.resetSwiperSchedule()
-                            }
-                            if (category.list.isNotEmpty()) {
-                                category.selectedIndex = (category.selectedIndex + 1) % category.list.size
-                                when (val fragment = context.toActivity()?.getCurrentFragment()) {
-                                    is HomeTvFragment -> when (val it = category.list.getOrNull(category.selectedIndex)) {
-                                        is Movie -> fragment.updateBackground(it.banner, true)
-                                        is TvShow -> fragment.updateBackground(it.banner, true)
-                                        else -> {}
-                                    }
-                                }
-                            }
-                            bindingAdapter?.notifyItemChanged(bindingAdapterPosition)
-                            return@setOnKeyListener true
-                        }
-                    }
-                }
-                false
-            }
-        }
+        binding.tvSwiperOverview.text = selected.overview
 
         binding.pbSwiperProgress.apply {
             val watchHistory = when (selected) {
                 is Movie -> selected.watchHistory
                 is TvShow -> null
+                else -> null
             }
-
             progress = when {
                 watchHistory != null -> (watchHistory.lastPlaybackPositionMillis * 100 / watchHistory.durationMillis.toDouble()).toInt()
                 else -> 0
             }
-            visibility = when {
-                watchHistory != null -> View.VISIBLE
-                else -> View.GONE
-            }
-        }
-
-        binding.llDotsIndicator.apply {
-            removeAllViews()
-            repeat(category.list.size) { index ->
-                val view = View(context).apply {
-                    layoutParams = LinearLayout.LayoutParams(15, 15).apply {
-                        setMargins(10, 0, 10, 0)
-                    }
-                    setBackgroundResource(R.drawable.bg_dot_indicator)
-                    isSelected = (category.selectedIndex == index)
-                }
-                addView(view)
-            }
+            visibility = if (watchHistory != null) View.VISIBLE else View.GONE
         }
     }
 }

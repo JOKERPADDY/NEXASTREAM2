@@ -60,19 +60,27 @@ object NexaHomeProvider : Provider {
     suspend fun getHomePhase0(): List<Category> = coroutineScope {
         // Phase 0: Fast Hero Banner + CDN Live Channels (~1s)
         val cdnHomeDeferred = async { limited {
-            val cdnList = runCatching { CdnLiveTvProvider.getHome() }.getOrNull().orEmpty()
+            val cdnList = runCatching {
+                kotlinx.coroutines.withTimeoutOrNull(4000L) {
+                    CdnLiveTvProvider.getHome()
+                }
+            }.getOrNull().orEmpty()
             if (cdnList.isNotEmpty() && cdnList.any { it.list.isNotEmpty() }) {
                 cdnList
             } else {
                 Log.w("NexaHomeProvider", "CDN Live TV empty or failed, falling back to IPTV All World")
-                runCatching { IptvOrgProvider.getHome() }.getOrElse { emptyList() }
+                runCatching {
+                    kotlinx.coroutines.withTimeoutOrNull(3000L) {
+                        IptvOrgProvider.getHome()
+                    }
+                }.getOrElse { emptyList() } ?: emptyList()
             }
         } }
 
-        val moviesBannerDef = async { limited { runCatching { tmdb.getFeaturedMovies() }.getOrNull() } }
-        val seriesBannerDef = async { limited { runCatching { tmdb.getFeaturedTvShows() }.getOrNull() } }
+        val moviesBannerDef = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(4000L) { tmdb.getFeaturedMovies() } }.getOrNull() } }
+        val seriesBannerDef = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(4000L) { tmdb.getFeaturedTvShows() } }.getOrNull() } }
 
-        val cdnHome = cdnHomeDeferred.await()
+        val cdnHome: List<Category> = cdnHomeDeferred.await() ?: emptyList()
         val moviesBanner = moviesBannerDef.await()
         val seriesBanner = seriesBannerDef.await()
 

@@ -25,12 +25,12 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginTop="20dp"
-        android:layout_marginEnd="50dp"
         android:ellipsize="end"
         android:lines="1"
         android:textColor="#FFFFFF"
         android:textSize="40sp"
-        app:layout_constraintEnd_toEndOf="parent"
+        android:textStyle="bold"
+        app:layout_constraintEnd_toStartOf="@id/guideline1"
         app:layout_constraintStart_toStartOf="@id/tv_category_title"
         app:layout_constraintTop_toBottomOf="@id/tv_category_title"
         tools:text="Title" />
@@ -104,33 +104,50 @@
         app:layout_constraintTop_toBottomOf="@id/tv_swiper_title"
         tools:text="#.#" />
 
+    <TextView
+        android:id="@+id/tv_swiper_genres"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        android:layout_marginTop="10dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="#CCCCCC"
+        android:textSize="13sp"
+        app:layout_constraintBottom_toTopOf="@id/barrier1"
+        app:layout_constraintEnd_toStartOf="@id/guideline1"
+        app:layout_constraintStart_toEndOf="@id/tv_swiper_rating"
+        app:layout_constraintTop_toBottomOf="@id/tv_swiper_title"
+        tools:text="Action, Comedy, Thriller" />
+
     <androidx.constraintlayout.widget.Barrier
         android:id="@+id/barrier1"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         app:barrierDirection="bottom"
-        app:constraint_referenced_ids="tv_swiper_rating,tv_swiper_quality,tv_swiper_released,tv_swiper_tv_show_last_episode" />
+        app:constraint_referenced_ids="tv_swiper_rating,tv_swiper_quality,tv_swiper_released,tv_swiper_tv_show_last_episode,tv_swiper_genres" />
 
     <TextView
         android:id="@+id/tv_swiper_overview"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="30dp"
+        android:layout_marginTop="20dp"
         android:ellipsize="end"
-        android:lines="5"
-        android:textColor="#FFFFFF"
+        android:lines="4"
+        android:textColor="#DDFFFFFF"
+        android:textSize="14sp"
         app:layout_constraintEnd_toStartOf="@id/guideline1"
         app:layout_constraintStart_toStartOf="@id/tv_category_title"
         app:layout_constraintTop_toBottomOf="@id/barrier1"
-        tools:text="Overview" />
+        tools:text="Overview description goes here..." />
 
     <TextView
         android:id="@+id/btn_swiper_watch_now"
         style="@style/AppTheme.Widget.Tv.Button"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="30dp"
-        android:layout_marginBottom="50dp"
+        android:layout_marginTop="24dp"
+        android:layout_marginBottom="40dp"
         android:focusable="true"
         android:focusableInTouchMode="true"
         android:text="@string/home_swiper_watch_now"
@@ -161,11 +178,28 @@
         android:orientation="vertical"
         app:layout_constraintGuide_percent="0.45" />
 
+    <androidx.leanback.widget.HorizontalGridView
+        android:id="@+id/hgv_featured_mini_cards"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="20dp"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        android:focusable="true"
+        android:descendantFocusability="afterDescendants"
+        app:layout_constraintBottom_toBottomOf="@id/btn_swiper_watch_now"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@id/guideline1"
+        app:layout_constraintTop_toTopOf="@id/tv_swiper_title" />
+
     <LinearLayout
         android:id="@+id/ll_dots_indicator"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
+        android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="@id/btn_swiper_watch_now"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent" />

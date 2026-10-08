@@ -85,6 +85,9 @@ class NexastreamApp : Application() {
             @OptIn(UnstableApi::class)
             Log.d("NexastreamApp", "DownloadManager initialized: ${downloadManager.hashCode()}")
             downloadManager.recoverDownloads()
+
+            // Defer non-critical maintenance tasks to allow instant initial UI rendering
+            kotlinx.coroutines.delay(3000)
             ArtworkRepairScheduler.schedule(appContext, UserPreferences.currentProvider)
             CacheUtils.autoClearIfNeeded(appContext, thresholdMb = threshold)
             if (isTv) {

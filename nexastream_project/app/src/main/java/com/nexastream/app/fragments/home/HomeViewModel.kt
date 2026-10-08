@@ -44,22 +44,22 @@ class HomeViewModel @Inject constructor(
             } else {
                 emitAll(database.movieDao().getWatchingMovies())
             }
-        },
+        }.onStart { emit(emptyList()) },
         _userDataCache.transformLatest { cache ->
             if (cache != null && cache.continueWatchingEpisodes.isNotEmpty()) {
                 emit(cache.continueWatchingEpisodes.map { it.toEpisode() })
             } else {
                 emitAll(database.episodeDao().getWatchingEpisodes())
             }
-        },
+        }.onStart { emit(emptyList()) },
         _userDataCache.transformLatest { cache ->
             if (cache != null && cache.continueWatchingEpisodes.isNotEmpty()) {
                 emit(cache.continueWatchingEpisodes.map { it.toEpisode() })
             } else {
                 emitAll(database.episodeDao().getNextEpisodesToWatch())
             }
-        },
-        database.tvShowDao().getAll(),
+        }.onStart { emit(emptyList()) },
+        database.tvShowDao().getAll().onStart { emit(emptyList()) },
     ) { watchingMovies: List<Movie>, watchingEpisodes: List<Episode>, watchNextEpisodes: List<Episode>, tvShows: List<TvShow> ->
         val allEpisodes = (watchingEpisodes + watchNextEpisodes).distinctBy { e -> e.id }
         Triple(watchingMovies, allEpisodes, tvShows)
@@ -90,7 +90,7 @@ class HomeViewModel @Inject constructor(
                     }
                 } as List<AppAdapter.Item>
         }
-    }.flowOn(Dispatchers.IO)
+    }.onStart { emit(emptyList()) }.flowOn(Dispatchers.IO)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val state: Flow<State> = combine6(
@@ -103,14 +103,14 @@ class HomeViewModel @Inject constructor(
             } else {
                 emitAll(database.movieDao().getFavorites())
             }
-        }.flowOn(Dispatchers.IO),
+        }.onStart { emit(emptyList()) }.flowOn(Dispatchers.IO),
         _userDataCache.transformLatest { cache ->
             if (cache != null && cache.favoritesTvShows.isNotEmpty()) {
                 emit(cache.favoritesTvShows.map { it.toTvShow() })
             } else {
                 emitAll(database.tvShowDao().getFavorites())
             }
-        }.flowOn(Dispatchers.IO),
+        }.onStart { emit(emptyList()) }.flowOn(Dispatchers.IO),
 
         // MOVIES DB
         _state.transformLatest { state ->
@@ -118,7 +118,7 @@ class HomeViewModel @Inject constructor(
                 val ids = state.categories.flatMap { it.list }.filterIsInstance<Movie>().map { it.id }
                 if (ids.isEmpty()) emit(emptyList()) else emitAll(database.movieDao().getByIds(ids))
             } else emit(emptyList<Movie>())
-        }.flowOn(Dispatchers.IO),
+        }.onStart { emit(emptyList()) }.flowOn(Dispatchers.IO),
 
         // TV SHOWS DB
         _state.transformLatest { state ->
@@ -126,7 +126,7 @@ class HomeViewModel @Inject constructor(
                 val ids = state.categories.flatMap { it.list }.filterIsInstance<TvShow>().map { it.id }
                 if (ids.isEmpty()) emit(emptyList()) else emitAll(database.tvShowDao().getByIds(ids))
             } else emit(emptyList<TvShow>())
-        }.flowOn(Dispatchers.IO),
+        }.onStart { emit(emptyList()) }.flowOn(Dispatchers.IO),
 
     ) { state: State, continueWatching: List<AppAdapter.Item>, favoritesMovies: List<Movie>, favoriteTvShows: List<TvShow>, moviesDb: List<Movie>, tvShowsDb: List<TvShow> ->
         if (state is State.SuccessLoading) {
@@ -259,8 +259,8 @@ class HomeViewModel @Inject constructor(
             val cached = repository.getCachedHome(provider)
             if (!cached.isNullOrEmpty()) {
                 _state.emit(State.SuccessLoading(cached))
-            } else if (_state.value !is State.SuccessLoading) {
-                _state.emit(State.Loading)
+            } else {
+                _state.emit(State.SuccessLoading(emptyList()))
             }
 
             try {
