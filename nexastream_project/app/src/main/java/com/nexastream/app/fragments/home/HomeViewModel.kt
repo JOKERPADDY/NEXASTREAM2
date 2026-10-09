@@ -230,6 +230,7 @@ class HomeViewModel @Inject constructor(
 
     private fun updateUserInterestProfile() {
         viewModelScope.launch(Dispatchers.IO) {
+            kotlinx.coroutines.delay(2500)
             val profile = runCatching {
                 com.nexastream.app.utils.RecommendationEngine.buildUserInterestProfile(database)
             }.getOrDefault(com.nexastream.app.utils.UserInterestProfile())

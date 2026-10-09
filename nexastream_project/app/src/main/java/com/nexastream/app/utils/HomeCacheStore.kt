@@ -13,16 +13,20 @@ import com.nexastream.app.models.WatchItem
 import com.nexastream.app.providers.Provider
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 object HomeCacheStore {
     private val gson = Gson()
-    private val memoryCache = ConcurrentHashMap<String, List<Category>>()
+    private val memoryCache = ConcurrentHashMap<String, List<CachedCategory>>()
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun read(context: Context, provider: Provider): List<Category>? {
         val cacheKey = cacheKey(provider)
-        memoryCache[cacheKey]?.let { categories ->
-            return categories
+        memoryCache[cacheKey]?.let { payload ->
+            return payload.toCategories()
         }
 
         val file = cacheFile(context, cacheKey)
@@ -31,9 +35,8 @@ object HomeCacheStore {
         return runCatching {
             val type = object : TypeToken<List<CachedCategory>>() {}.type
             val payload: List<CachedCategory> = gson.fromJson(file.readText(), type)
-            val categories = payload.toCategories()
-            memoryCache[cacheKey] = categories
-            categories
+            memoryCache[cacheKey] = payload
+            payload.toCategories()
         }.recoverCatching {
             memoryCache.remove(cacheKey)
             runCatching { file.delete() }
@@ -41,13 +44,13 @@ object HomeCacheStore {
         }.getOrNull()
     }
 
-    private val ioScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
-
     fun write(context: Context, provider: Provider, categories: List<Category>) {
         runCatching {
             val cacheKey = cacheKey(provider)
-            memoryCache[cacheKey] = categories
-            val payload = categories.map { CachedCategory.from(it) }
+            // Save top essential categories (max 12) so cache JSON remains lightweight (<150KB) for instant startup
+            val essentialCategories = categories.take(12)
+            val payload = essentialCategories.map { CachedCategory.from(it) }
+            memoryCache[cacheKey] = payload
             ioScope.launch {
                 runCatching {
                     cacheFile(context, cacheKey).apply {

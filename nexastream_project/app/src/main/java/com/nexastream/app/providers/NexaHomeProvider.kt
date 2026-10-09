@@ -61,7 +61,7 @@ object NexaHomeProvider : Provider {
         // Phase 0: Fast Hero Banner + CDN Live Channels (~1s)
         val cdnHomeDeferred = async { limited {
             val cdnList = runCatching {
-                kotlinx.coroutines.withTimeoutOrNull(4000L) {
+                kotlinx.coroutines.withTimeoutOrNull(2500L) {
                     CdnLiveTvProvider.getHome()
                 }
             }.getOrNull().orEmpty()
@@ -70,15 +70,15 @@ object NexaHomeProvider : Provider {
             } else {
                 Log.w("NexaHomeProvider", "CDN Live TV empty or failed, falling back to IPTV All World")
                 runCatching {
-                    kotlinx.coroutines.withTimeoutOrNull(3000L) {
+                    kotlinx.coroutines.withTimeoutOrNull(2000L) {
                         IptvOrgProvider.getHome()
                     }
                 }.getOrElse { emptyList() } ?: emptyList()
             }
         } }
 
-        val moviesBannerDef = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(4000L) { tmdb.getFeaturedMovies() } }.getOrNull() } }
-        val seriesBannerDef = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(4000L) { tmdb.getFeaturedTvShows() } }.getOrNull() } }
+        val moviesBannerDef = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(2500L) { tmdb.getFeaturedMovies() } }.getOrNull() } }
+        val seriesBannerDef = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(2500L) { tmdb.getFeaturedTvShows() } }.getOrNull() } }
 
         val cdnHome: List<Category> = cdnHomeDeferred.await() ?: emptyList()
         val moviesBanner = moviesBannerDef.await()
@@ -133,10 +133,10 @@ object NexaHomeProvider : Provider {
 
     suspend fun getHomePhase1(phase0Categories: List<Category>): List<Category> = coroutineScope {
         // Phase 1: Core Content (Trending, Popular, Cinema, New Seasons)
-        val tmdbHomeDeferred = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(3500L) { tmdb.getHome() } }.getOrElse { emptyList() } ?: emptyList() } }
-        val latestMoviesDeferred = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(3500L) { tmdb.getLatestMovies() } }.getOrNull() } }
-        val allCinemaDeferred = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(3500L) { tmdb.getAllCinema() } }.getOrNull() } }
-        val newSeasonDeferred = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(3500L) { tmdb.getNewSeasonsAndEpisodes() } }.getOrNull() } }
+        val tmdbHomeDeferred = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(2500L) { tmdb.getHome() } }.getOrElse { emptyList() } ?: emptyList() } }
+        val latestMoviesDeferred = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(2500L) { tmdb.getLatestMovies() } }.getOrNull() } }
+        val allCinemaDeferred = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(2500L) { tmdb.getAllCinema() } }.getOrNull() } }
+        val newSeasonDeferred = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(2500L) { tmdb.getNewSeasonsAndEpisodes() } }.getOrNull() } }
 
         val tmdbHome = tmdbHomeDeferred.await()
         val latestMovies = latestMoviesDeferred.await()
@@ -189,29 +189,25 @@ object NexaHomeProvider : Provider {
         } catch (_: Exception) { false }
 
         // Secondary Rows Parallel Fetching (Phase 2)
-        val kidsContentDef = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(4000L) { tmdb.getKidsContent() } }.getOrNull() } }
-        val animeContentDef = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(4000L) { tmdb.getAnimeContent() } }.getOrNull() } }
-        val trendingTeenRomanceDef = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(4000L) { tmdb.getTeenRomance(isMovie = false, name = "Teen Romance") } }.getOrNull() } }
-        val animeRowsDef = async { runCatching { kotlinx.coroutines.withTimeoutOrNull(4000L) { fetchAnimeRows() } }.getOrNull().orEmpty() }
-        val kidsRowsDef = async { runCatching { kotlinx.coroutines.withTimeoutOrNull(4000L) { fetchKidsRows() } }.getOrNull().orEmpty() }
-        val seriesRowsDef = async { runCatching { kotlinx.coroutines.withTimeoutOrNull(4000L) { fetchSeriesMegaRows() } }.getOrNull().orEmpty() }
-        val movieRowsDef = async { runCatching { kotlinx.coroutines.withTimeoutOrNull(4000L) { fetchMovieMegaRows() } }.getOrNull().orEmpty() }
+        val kidsContentDef = async { limited { runCatching { tmdb.getKidsContent() }.getOrNull() } }
+        val animeContentDef = async { limited { runCatching { tmdb.getAnimeContent() }.getOrNull() } }
+        val trendingTeenRomanceDef = async { limited { runCatching { tmdb.getTeenRomance(isMovie = false, name = "Teen Romance") }.getOrNull() } }
+        val animeRowsDef = async { fetchAnimeRows() }
+        val kidsRowsDef = async { fetchKidsRows() }
+        val seriesRowsDef = async { fetchSeriesMegaRows() }
+        val movieRowsDef = async { fetchMovieMegaRows() }
 
         val topRatedMoviesDef = async { limited { runCatching { 
-            kotlinx.coroutines.withTimeoutOrNull(4000L) {
-                val results = TMDb3.Discover.movie(language = "en", sortBy = TMDb3.Params.SortBy.Movie.VOTE_AVERAGE_DESC, voteCount = TMDb3.Params.Range(gte = 500)).results.mapNotNull { tmdb.mapMulti(it) }
-                Category(name = "Top Rated Movies", list = results)
-            }
+            val results = TMDb3.Discover.movie(language = "en", sortBy = TMDb3.Params.SortBy.Movie.VOTE_AVERAGE_DESC, voteCount = TMDb3.Params.Range(gte = 500)).results.mapNotNull { tmdb.mapMulti(it) }
+            Category(name = "Top Rated Movies", list = results)
         }.getOrNull() } }
         val topRatedTvDef = async { limited { runCatching { 
-            kotlinx.coroutines.withTimeoutOrNull(4000L) {
-                val results = TMDb3.TvSeriesLists.topRated(language = "en").results.mapNotNull { tmdb.mapMulti(it) }
-                Category(name = "Top Rated TV Shows", list = results)
-            }
+            val results = TMDb3.TvSeriesLists.topRated(language = "en").results.mapNotNull { tmdb.mapMulti(it) }
+            Category(name = "Top Rated TV Shows", list = results)
         }.getOrNull() } }
 
-        val actionDef = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(4000L) { tmdb.getGenre("28") } }.getOrNull() } }
-        val comedyDef = if (!isTv) async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(4000L) { tmdb.getGenre("35") } }.getOrNull() } } else null
+        val actionDef = async { limited { runCatching { tmdb.getGenre("28") }.getOrNull() } }
+        val comedyDef = if (!isTv) async { limited { runCatching { tmdb.getGenre("35") }.getOrNull() } } else null
 
         val kidsContent = kidsContentDef.await()
         val animeContent = animeContentDef.await()
