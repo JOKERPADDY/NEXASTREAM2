@@ -118,17 +118,7 @@ class HomeMobileFragment : Fragment() {
                     is HomeViewModel.State.SuccessLoading -> {
                         displayHome(state.categories)
                         (activity as? com.nexastream.app.activities.main.MainMobileActivity)?.setHomeLoadingState(false)
-                        if (binding.isLoading.root.visibility == View.VISIBLE) {
-                            binding.isLoading.root.animate()
-                                .alpha(0f)
-                                .setDuration(250)
-                                .withEndAction {
-                                    _binding?.isLoading?.root?.visibility = View.GONE
-                                    _binding?.isLoading?.root?.alpha = 1f
-                                }
-                        } else {
-                            binding.isLoading.root.visibility = View.GONE
-                        }
+                        binding.isLoading.root.visibility = View.GONE
                     }
                     is HomeViewModel.State.FailedLoading -> {
                         (activity as? com.nexastream.app.activities.main.MainMobileActivity)?.setHomeLoadingState(false)

@@ -7,8 +7,8 @@
     android:background="?attr/app_background_color"
     android:clickable="true"
     android:focusable="true"
-    android:visibility="visible"
-    tools:visibility="gone">
+    android:visibility="gone"
+    tools:visibility="visible">
 
     <ProgressBar
         android:id="@+id/pb_is_loading"
