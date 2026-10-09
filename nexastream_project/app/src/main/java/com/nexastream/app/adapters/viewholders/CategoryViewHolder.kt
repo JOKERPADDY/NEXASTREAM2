@@ -72,13 +72,9 @@ class CategoryViewHolder(
         when (_binding) {
             is ItemCategoryMobileBinding -> {
                 displayMobileItem(_binding, onMovieClick, onTvShowClick, onViewAllClick)
-                _binding.tvCategoryTitle.visibility = if (isBanner) View.GONE else View.VISIBLE
-                _binding.tvCategoryViewAll.visibility = if (isBanner) View.GONE else _binding.tvCategoryViewAll.visibility
             }
             is ItemCategoryTvBinding -> {
                 displayTvItem(_binding, onMovieClick, onTvShowClick, onViewAllClick)
-                _binding.tvCategoryTitle.visibility = if (isBanner) View.GONE else View.VISIBLE
-                _binding.tvCategoryViewAll.visibility = if (isBanner) View.GONE else _binding.tvCategoryViewAll.visibility
             }
             is ContentCategorySwiperMobileBinding -> {
                 displayMobileSwiper(_binding, onMovieClick, onTvShowClick)
@@ -91,13 +87,24 @@ class CategoryViewHolder(
         }
     }
 
+    private fun getDisplayName(name: String): String {
+        return when (name) {
+            "Movies Banner" -> "Featured Movies"
+            "Series Banner" -> "Featured Series"
+            "Kids Banner" -> "Featured Kids"
+            "Anime Banner" -> "Featured Anime"
+            else -> name
+        }
+    }
+
     private fun displayMobileItem(
         binding: ItemCategoryMobileBinding,
         onMovieClick: ((Movie) -> Unit)?,
         onTvShowClick: ((TvShow) -> Unit)?,
         onViewAllClick: ((Category) -> Unit)?
     ) {
-        binding.tvCategoryTitle.text = category.name
+        binding.tvCategoryTitle.text = getDisplayName(category.name)
+        binding.tvCategoryTitle.visibility = View.VISIBLE
         
         if (onViewAllClick != null && category.list.isNotEmpty() && category.name != Category.FEATURED) {
             binding.tvCategoryViewAll.visibility = View.VISIBLE
@@ -128,8 +135,8 @@ class CategoryViewHolder(
         onTvShowClick: ((TvShow) -> Unit)?,
         onViewAllClick: ((Category) -> Unit)?
     ) {
-        binding.tvCategoryTitle.text = category.name
-        binding.tvCategoryTitle.visibility = if (category.name.contains("Banner", ignoreCase = true) || category.name == Category.FEATURED) View.GONE else View.VISIBLE
+        binding.tvCategoryTitle.text = getDisplayName(category.name)
+        binding.tvCategoryTitle.visibility = View.VISIBLE
 
         if (onViewAllClick != null && category.list.isNotEmpty() && category.name != Category.FEATURED) {
             binding.tvCategoryViewAll.visibility = View.VISIBLE
