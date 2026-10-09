@@ -144,7 +144,9 @@ class MainMobileActivity : AppCompatActivity() {
         val navController = navHost.navController
 
         if (savedInstanceState == null) {
-            UserPreferences.currentProvider?.let {
+            if (UserPreferences.currentProvider == null) {
+                navController.navigate(R.id.providers)
+            } else if (navController.currentDestination?.id != R.id.home) {
                 navController.navigate(
                     R.id.home,
                     null,

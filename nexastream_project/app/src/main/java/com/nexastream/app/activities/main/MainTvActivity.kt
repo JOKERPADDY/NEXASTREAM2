@@ -68,14 +68,14 @@ class MainTvActivity : FragmentActivity() {
             adjustLayoutDelta(null, null)
 
             if (savedInstanceState == null) {
-                UserPreferences.currentProvider?.let {
-                    if (navController?.currentDestination?.id != R.id.home) {
-                        runCatching {
-                            val navOptions = androidx.navigation.NavOptions.Builder()
-                                .setPopUpTo(R.id.providers, true)
-                                .build()
-                            navController?.navigate(R.id.home, null, navOptions)
-                        }
+                if (UserPreferences.currentProvider == null) {
+                    navController?.navigate(R.id.providers)
+                } else if (navController?.currentDestination?.id != R.id.home) {
+                    runCatching {
+                        val navOptions = androidx.navigation.NavOptions.Builder()
+                            .setPopUpTo(R.id.providers, true)
+                            .build()
+                        navController?.navigate(R.id.home, null, navOptions)
                     }
                 }
             }
