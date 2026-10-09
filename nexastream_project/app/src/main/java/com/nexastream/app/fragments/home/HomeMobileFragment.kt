@@ -441,10 +441,18 @@ class HomeMobileFragment : Fragment() {
                     !isLiveCategory(cat.name) && (cat.name in animeCategories || cat.name.contains("Anime", ignoreCase = true))
                 }
                 else -> allCategories.filter { cat ->
+                    cat.name == "Movies Banner" ||
+                    cat.name == "Series Banner" ||
+                    cat.name.endsWith("Banner", ignoreCase = true) ||
+                    cat.name == Category.FEATURED ||
+                    cat.name.isEmpty() ||
+                    cat.name == "Teen Romance" ||
+                    cat.name == "✨ Recommended For You" ||
+                    isLiveCategory(cat.name) ||
                     (cat.name !in moviesCategories &&
                     cat.name !in seriesCategories &&
                     cat.name !in kidsCategories &&
-                    cat.name !in animeCategories) || cat.name == "Teen Romance" || cat.name == "✨ Recommended For You" || cat.name == Category.FEATURED || cat.name.isEmpty() || isLiveCategory(cat.name)
+                    cat.name !in animeCategories)
                 }
             }
         }
