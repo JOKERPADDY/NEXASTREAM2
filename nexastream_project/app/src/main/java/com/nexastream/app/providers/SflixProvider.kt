@@ -6,6 +6,7 @@ import com.nexastream.app.BuildConfig
 import com.nexastream.app.adapters.AppAdapter
 import com.nexastream.app.extractors.Extractor
 import com.nexastream.app.extractors.VixSrcExtractor
+import com.nexastream.app.extractors.MovieBoxExtractor
 import com.nexastream.app.extractors.VidsrcToExtractor
 import com.nexastream.app.extractors.VidsrcNetExtractor
 import com.nexastream.app.extractors.VidsrcRuExtractor
@@ -325,6 +326,7 @@ object SflixProvider : Provider, ProviderConfigUrl {
                     )
                 }
                 
+                servers.add(0, MovieBoxExtractor().server(tmdbVideoType))
                 servers.add(VixSrcExtractor().server(tmdbVideoType))
                 servers.add(VidsrcToExtractor().server(tmdbVideoType))
                 servers.add(VidsrcNetExtractor().server(tmdbVideoType))

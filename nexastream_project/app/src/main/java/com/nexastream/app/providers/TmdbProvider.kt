@@ -12,6 +12,7 @@ import com.nexastream.app.extractors.VidsrcNetExtractor
 import com.nexastream.app.extractors.VidsrcToExtractor
 import com.nexastream.app.extractors.VidzeeExtractor
 import com.nexastream.app.extractors.VixSrcExtractor
+import com.nexastream.app.extractors.MovieBoxExtractor
 import com.nexastream.app.extractors.VidLinkExtractor
 import com.nexastream.app.extractors.VidsrcRuExtractor
 import com.nexastream.app.extractors.EinschaltenExtractor
@@ -1396,7 +1397,14 @@ class TmdbProvider(override val language: String) : Provider {
 
         Log.d("TmdbProvider", "getServers: lang=$language, simplifiedLang=$lang")
 
-        // 0. Always add VixSrc first as requested by user
+        // 0. Always add MovieBox first as primary default provider
+        try {
+            servers.add(MovieBoxExtractor().server(videoType))
+        } catch (e: Exception) {
+            Log.e("TmdbProvider", "Failed to add MovieBox: ${e.message}")
+        }
+
+        // Always add VixSrc as fallback
         try {
             servers.add(VixSrcExtractor().server(videoType))
         } catch (e: Exception) {
@@ -1538,7 +1546,7 @@ class TmdbProvider(override val language: String) : Provider {
             // Let's stick to: Preferred > VixSrc > Others
             
             // PRIORITY 1: User's manually selected server name match
-            if (!preferredServer.isNullOrBlank()) {
+            if (!preferredServer.isNullOrBlank() && preferredServer.uppercase() != "VIXSRC") {
                 val pref = preferredServer.uppercase()
                 if (n1 == pref && n2 != pref) return@sortedWith -1
                 if (n2 == pref && n1 != pref) return@sortedWith 1
@@ -1548,7 +1556,11 @@ class TmdbProvider(override val language: String) : Provider {
                 if (n2.contains(pref) && !n1.contains(pref)) return@sortedWith 1
             }
 
-            // PRIORITY 2: VixSrc preference (requested by user as default)
+            // PRIORITY 2: MovieBox preference (Primary default server)
+            if (n1.contains("MOVIEBOX") && !n2.contains("MOVIEBOX")) return@sortedWith -1
+            if (n2.contains("MOVIEBOX") && !n1.contains("MOVIEBOX")) return@sortedWith 1
+
+            // PRIORITY 3: VixSrc preference (Fallback)
             if (n1.contains("VIXSRC") && !n2.contains("VIXSRC")) return@sortedWith -1
             if (n2.contains("VIXSRC") && !n1.contains("VIXSRC")) return@sortedWith 1
 

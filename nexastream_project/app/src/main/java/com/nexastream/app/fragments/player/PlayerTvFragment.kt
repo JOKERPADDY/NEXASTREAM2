@@ -2229,6 +2229,11 @@ class PlayerTvFragment : Fragment() {
                         p.trackSelectionParameters.buildUpon()
                             .setPreferredAudioLanguage("spa")
                             .build()
+                } else {
+                    p.trackSelectionParameters =
+                        p.trackSelectionParameters.buildUpon()
+                            .setPreferredAudioLanguages("en", "eng")
+                            .build()
                 }
 
                 mediaSession = MediaSession.Builder(requireContext(), p)

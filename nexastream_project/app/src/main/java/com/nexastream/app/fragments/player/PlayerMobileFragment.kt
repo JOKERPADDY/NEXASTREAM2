@@ -2061,6 +2061,10 @@ class PlayerMobileFragment : Fragment() {
                     player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
                         .setPreferredAudioLanguage("spa")
                         .build()
+                } else {
+                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                        .setPreferredAudioLanguages("en", "eng")
+                        .build()
                 }
 
                 mediaSession = MediaSession.Builder(requireContext(), player)

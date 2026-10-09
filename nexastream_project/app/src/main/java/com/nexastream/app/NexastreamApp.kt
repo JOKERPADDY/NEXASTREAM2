@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Log
+import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 import dagger.hilt.android.HiltAndroidApp
 import com.nexastream.app.database.AppDatabase
@@ -24,7 +25,8 @@ import javax.inject.Inject
 @HiltAndroidApp
 class NexastreamApp : Application() {
 
-    @OptIn(UnstableApi::class)
+    @field:UnstableApi
+    @get:UnstableApi
     @Inject
     lateinit var appDownloadManagerProvider: javax.inject.Provider<AppDownloadManager>
 
@@ -35,6 +37,10 @@ class NexastreamApp : Application() {
         @Volatile
         var currentActivity: Activity? = null
             private set
+
+        @Volatile
+        var movieBoxServer: com.nexastream.app.providers.moviebox.MovieBoxServer? = null
+            private set
     }
 
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -44,6 +50,7 @@ class NexastreamApp : Application() {
         super.attachBaseContext(AppLanguageManager.wrap(base))
     }
 
+    @OptIn(UnstableApi::class)
     override fun onCreate() {
         super.onCreate()
         instance = this
@@ -80,9 +87,9 @@ class NexastreamApp : Application() {
         val threshold = if (isTv) 10L else 50L
 
         applicationScope.launch(Dispatchers.IO) {
+            movieBoxServer = com.nexastream.app.providers.moviebox.MovieBoxServer(appContext).apply { start() }
             AppDatabase.setup(appContext)
             val downloadManager = appDownloadManagerProvider.get()
-            @OptIn(UnstableApi::class)
             Log.d("NexastreamApp", "DownloadManager initialized: ${downloadManager.hashCode()}")
             downloadManager.recoverDownloads()
 

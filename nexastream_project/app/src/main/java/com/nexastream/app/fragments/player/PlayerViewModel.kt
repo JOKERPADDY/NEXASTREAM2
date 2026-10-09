@@ -127,7 +127,7 @@ class PlayerViewModel(
                 val n1 = s1.name.uppercase()
                 val n2 = s2.name.uppercase()
                 
-                if (!preferredName.isNullOrBlank()) {
+                if (!preferredName.isNullOrBlank() && preferredName.uppercase() != "VIXSRC") {
                     val pref = preferredName.uppercase()
                     if (n1 == pref && n2 != pref) return@sortedWith -1
                     if (n2 == pref && n1 != pref) return@sortedWith 1
@@ -135,6 +135,11 @@ class PlayerViewModel(
                     if (n2.contains(pref) && !n1.contains(pref)) return@sortedWith 1
                 }
                 
+                // Priority 1: MovieBox (our primary server)
+                if (n1.contains("MOVIEBOX") && !n2.contains("MOVIEBOX")) return@sortedWith -1
+                if (n2.contains("MOVIEBOX") && !n1.contains("MOVIEBOX")) return@sortedWith 1
+
+                // Priority 2: VixSrc (fallback)
                 if (n1.contains("VIXSRC") && !n2.contains("VIXSRC")) return@sortedWith -1
                 if (n2.contains("VIXSRC") && !n1.contains("VIXSRC")) return@sortedWith 1
                 
