@@ -141,13 +141,20 @@ class HomeViewModel @Inject constructor(
 
             val categories = mutableListOf<Category>()
             
-            // 1. Featured (Hero)
-            state.categories.find { c -> c.name == Category.FEATURED }?.let { c ->
+            // 1. Featured (Hero Banner at Index 0)
+            val heroCategory = state.categories.find { c -> 
+                c.name == Category.FEATURED || 
+                c.name == "Movies Banner" || 
+                c.name == "Series Banner" || 
+                c.name.endsWith("Banner", ignoreCase = true) 
+            }
+            
+            heroCategory?.let { c ->
                 categories.add(c.copy(list = c.list.map(::mergeItem))) 
             }
 
             // 1.5. Livestream (Priority)
-            state.categories.find { it.name == "Livestream" }?.let { c ->
+            state.categories.find { it.name == "Livestream" && it != heroCategory }?.let { c ->
                 categories.add(c.copy(list = c.list.map(::mergeItem)))
             }
             
@@ -168,7 +175,7 @@ class HomeViewModel @Inject constructor(
             
             // 3. Add other categories from provider (CDN, Trending Today, Genres)
             // and insert Favorites after Trending Today
-            state.categories.filter { c -> c.name != Category.FEATURED && c.name != "Livestream" }.forEach { c ->
+            state.categories.filter { c -> c != heroCategory && c.name != "Livestream" }.forEach { c ->
                 val mergedCategory = c.copy(list = c.list.map(::mergeItem))
                 categories.add(mergedCategory)
                 
