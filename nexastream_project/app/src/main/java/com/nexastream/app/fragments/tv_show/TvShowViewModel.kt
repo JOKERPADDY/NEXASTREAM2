@@ -50,7 +50,7 @@ class TvShowViewModel @Inject constructor(
         _state.emit(State.Loading)
 
         try {
-            val tvShow = UserPreferences.currentProvider!!.getTvShow(id)
+            val tvShow = UserPreferences.currentProvider.getTvShow(id)
 
             _state.emit(State.SuccessLoading(tvShow))
         } catch (e: Exception) {

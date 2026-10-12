@@ -34,6 +34,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
+import com.nexastream.app.utils.DownloadQualityFormatter
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -75,6 +76,7 @@ import com.nexastream.app.models.Movie
 import com.nexastream.app.models.Season
 import com.nexastream.app.models.TvShow
 import com.nexastream.app.models.Video
+import com.nexastream.app.utils.setVideoDrmConfiguration
 import com.nexastream.app.models.LiveNowNext
 import com.nexastream.app.models.LiveRecording
 import com.nexastream.app.live.LiveDvrService
@@ -422,7 +424,11 @@ class PlayerTvFragment : Fragment() {
                 if (isPlayingOfflineDownload) return@collect
 
                 when (state) {
-                    PlayerViewModel.State.LoadingServers -> {}
+                    PlayerViewModel.State.LoadingServers -> {
+                        if (isLivestreamContent()) {
+                            showLivestreamLoading()
+                        }
+                    }
                     is PlayerViewModel.State.SuccessLoadingServers -> {
                         servers = state.servers
 
@@ -480,13 +486,15 @@ class PlayerTvFragment : Fragment() {
                             return@collect
                         }
 
-
-
                         val providerName = UserPreferences.currentProvider?.name ?: ""
                         val isTmdb = providerName.contains("TMDb", ignoreCase = true)
                         val isAD = providerName.contains("AfterDark", ignoreCase = true)
 
                         if (servers.isEmpty()) {
+                            if (isLivestreamContent()) {
+                                showLivestreamOffline()
+                                return@collect
+                            }
                             val message = if (isTmdb || isAD) {
                                 val langCode = providerName.substringAfter("(").substringBefore(")")
                                 val locale = Locale.forLanguageTag(langCode)
@@ -532,15 +540,22 @@ class PlayerTvFragment : Fragment() {
 
                     }
                         is PlayerViewModel.State.FailedLoadingServers -> {
-                            Toast.makeText(
-                                requireContext(),
-                                state.error.message ?: "",
-                                Toast.LENGTH_LONG
-                            ).show()
-                            findNavController().navigateUp()
+                            if (isLivestreamContent()) {
+                                showLivestreamOffline()
+                            } else {
+                                Toast.makeText(
+                                    requireContext(),
+                                    state.error.message ?: "",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                                findNavController().navigateUp()
+                            }
                         }
 
                         is PlayerViewModel.State.LoadingVideo -> {
+                            if (isLivestreamContent()) {
+                                showLivestreamLoading("Connecting to stream...")
+                            }
                             player.setMediaItem(
                                 MediaItem.Builder()
                                     .setUri("".toUri())
@@ -565,39 +580,46 @@ class PlayerTvFragment : Fragment() {
                             }
                             val nextServer = servers.getOrNull(servers.indexOf(state.server) + 1)
                             if (nextServer != null) {
+                                if (isLivestreamContent()) {
+                                    showLivestreamLoading("Loading mirror: ${DownloadQualityFormatter.anonymizeName(nextServer.name)}...")
+                                }
                                 viewModel.getVideo(nextServer)
                             } else {
-                                val providerName = UserPreferences.currentProvider?.name ?: ""
-                                val isTmdb = providerName.contains("TMDb", ignoreCase = true)
-                                val isAD = providerName.contains("AfterDark", ignoreCase = true)
-
-                                val message = if (isTmdb || isAD) {
-                                    val langCode =
-                                        providerName.substringAfter("(").substringBefore(")")
-                                    val locale = Locale.forLanguageTag(langCode)
-                                    val langDisplayName =
-                                        locale.getDisplayLanguage(Locale.getDefault())
-                                            .replaceFirstChar {
-                                                if (it.isLowerCase()) it.titlecase(
-                                                    Locale.getDefault()
-                                                ) else it.toString()
-                                            }
-
-                                    if (isTmdb) getString(
-                                        R.string.player_not_available_lang_message,
-                                        langDisplayName
-                                    )
-                                    else getString(R.string.player_retry_later_message)
+                                if (isLivestreamContent()) {
+                                    showLivestreamOffline()
                                 } else {
-                                    "All servers failed to load the video."
-                                }
+                                    val providerName = UserPreferences.currentProvider?.name ?: ""
+                                    val isTmdb = providerName.contains("TMDb", ignoreCase = true)
+                                    val isAD = providerName.contains("AfterDark", ignoreCase = true)
 
-                                Toast.makeText(
-                                    requireContext(),
-                                    message,
-                                    Toast.LENGTH_LONG
-                                ).show()
-                                findNavController().navigateUp()
+                                    val message = if (isTmdb || isAD) {
+                                        val langCode =
+                                            providerName.substringAfter("(").substringBefore(")")
+                                        val locale = Locale.forLanguageTag(langCode)
+                                        val langDisplayName =
+                                            locale.getDisplayLanguage(Locale.getDefault())
+                                                .replaceFirstChar {
+                                                    if (it.isLowerCase()) it.titlecase(
+                                                        Locale.getDefault()
+                                                    ) else it.toString()
+                                                }
+
+                                        if (isTmdb) getString(
+                                            R.string.player_not_available_lang_message,
+                                            langDisplayName
+                                        )
+                                        else getString(R.string.player_retry_later_message)
+                                    } else {
+                                        "All servers failed to load the video."
+                                    }
+
+                                    Toast.makeText(
+                                        requireContext(),
+                                        message,
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                    findNavController().navigateUp()
+                                }
                             }
                         }
                     }
@@ -1404,6 +1426,7 @@ class PlayerTvFragment : Fragment() {
             MediaItem.Builder()
                 .setUri(videoUri)
                 .setMimeType(video.type)
+                .setVideoDrmConfiguration(video.drmConfiguration)
                 .setSubtitleConfigurations(video.subtitles.map { subtitle ->
                     MediaItem.SubtitleConfiguration.Builder(subtitle.file.toUri())
                         .setMimeType(subtitle.file.toSubtitleMimeType())
@@ -1428,20 +1451,28 @@ class PlayerTvFragment : Fragment() {
                     updatePlayerScale()
                     reportCurrentStreamHealthy()
                     stopBufferingWatchdog()
+                    hideLivestreamStatusOverlay()
                 }
                 
                 if (playbackState == Player.STATE_BUFFERING) {
-                    val isLive = currentVideo?.source?.contains("ronaldo.tvfor.pro") == true || 
-                                currentVideo?.source?.contains(".m3u8") == true ||
-                                currentServer?.id?.contains("ronaldo.tvfor.pro") == true
-                    if (isLive) startBufferingWatchdog()
+                    val isLive = isLivestreamContent()
+                    if (isLive) {
+                        showLivestreamLoading()
+                        startBufferingWatchdog()
+                    }
                 }
 
                 if (playbackState == Player.STATE_ENDED) {
                     stopBufferingWatchdog()
+                    hideLivestreamStatusOverlay()
                 }
                 
                 updateLiveControls()
+            }
+
+            override fun onRenderedFirstFrame() {
+                super.onRenderedFirstFrame()
+                hideLivestreamStatusOverlay()
             }
 
             override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
@@ -1463,6 +1494,7 @@ class PlayerTvFragment : Fragment() {
 
                 if (isPlaying) {
                     startProgressHandler()
+                    hideLivestreamStatusOverlay()
                 } else {
                     stopProgressHandler()
                 }
@@ -1519,11 +1551,19 @@ class PlayerTvFragment : Fragment() {
                 val nextServer = servers.getOrNull(servers.indexOf(currentServer) + 1)
                 if (nextServer != null) {
                     Log.i("PlayerTvFragment", "Playback failed, trying next server: ${nextServer.name}")
-                    Toast.makeText(requireContext(), "Playback failed, trying: ${nextServer.name}", Toast.LENGTH_SHORT).show()
+                    if (isLivestreamContent()) {
+                        showLivestreamLoading("Playback failed. Trying mirror: ${DownloadQualityFormatter.anonymizeName(nextServer.name)}...")
+                    } else {
+                        Toast.makeText(requireContext(), "Playback failed, trying: ${DownloadQualityFormatter.anonymizeName(nextServer.name)}", Toast.LENGTH_SHORT).show()
+                    }
                     viewModel.getVideo(nextServer)
                 } else {
                     Log.e("PlayerTvFragment", "All servers failed.")
-                    Toast.makeText(requireContext(), "All servers failed to play this content.", Toast.LENGTH_LONG).show()
+                    if (isLivestreamContent()) {
+                        showLivestreamOffline()
+                    } else {
+                        Toast.makeText(requireContext(), "All servers failed to play this content.", Toast.LENGTH_LONG).show()
+                    }
                 }
             }
         })
@@ -1915,17 +1955,76 @@ class PlayerTvFragment : Fragment() {
         }
     }
 
+    private fun isLivestreamContent(): Boolean {
+        val vt = args.videoType
+        if (vt is Video.Type.Episode) {
+            if (vt.season.title.equals("Live", ignoreCase = true) || vt.title?.contains("Live", ignoreCase = true) == true) return true
+        }
+        if (args.id.startsWith("cdn:") || args.id.startsWith("iptv:") || args.id.startsWith("m3u8:")) return true
+        val provider = UserPreferences.currentProvider
+        if (provider is IptvProvider || provider?.name?.contains("CDN", ignoreCase = true) == true) return true
+        if (currentVideo?.source?.contains("ronaldo.tvfor.pro") == true ||
+            currentVideo?.source?.contains(".m3u8") == true ||
+            currentVideo?.type?.contains("hls", ignoreCase = true) == true) return true
+        return try { player.isCurrentMediaItemLive } catch (e: Exception) { false }
+    }
+
+    private fun showLivestreamLoading(message: String? = null) {
+        if (!isAdded || _binding == null) return
+        binding.layoutLivestreamStatusOverlay.isVisible = true
+        binding.pbLivestreamStatus.isVisible = true
+        binding.tvLivestreamStatusTitle.text = getString(R.string.livestream_loading_title)
+        binding.tvLivestreamStatusMessage.text = message ?: getString(R.string.livestream_loading_message)
+        binding.llLivestreamActions.isVisible = false
+    }
+
+    private fun showLivestreamOffline(message: String? = null) {
+        if (!isAdded || _binding == null) return
+        binding.layoutLivestreamStatusOverlay.isVisible = true
+        binding.pbLivestreamStatus.isVisible = false
+        binding.tvLivestreamStatusTitle.text = getString(R.string.livestream_offline_title)
+        binding.tvLivestreamStatusMessage.text = message ?: getString(R.string.livestream_offline_message)
+        binding.llLivestreamActions.isVisible = true
+
+        binding.btnLivestreamRetry.setOnClickListener {
+            hideLivestreamStatusOverlay()
+            showLivestreamLoading()
+            val srv = currentServer ?: servers.firstOrNull()
+            if (srv != null) {
+                viewModel.getVideo(srv)
+            } else {
+                viewModel.start()
+            }
+        }
+        binding.btnLivestreamBack.setOnClickListener {
+            findNavController().navigateUp()
+        }
+        binding.btnLivestreamRetry.requestFocus()
+    }
+
+    private fun hideLivestreamStatusOverlay() {
+        if (_binding == null) return
+        binding.layoutLivestreamStatusOverlay.isVisible = false
+    }
+
     private var bufferingWatchdogJob: Job? = null
     private fun startBufferingWatchdog() {
         bufferingWatchdogJob?.cancel()
         bufferingWatchdogJob = viewLifecycleOwner.lifecycleScope.launch {
-            delay(20_000)
+            val timeoutMs = if (isLivestreamContent()) 10_000L else 20_000L
+            delay(timeoutMs)
             if (player.playbackState == Player.STATE_BUFFERING) {
                 val nextServer = servers.getOrNull(servers.indexOf(currentServer) + 1)
                 if (nextServer != null) {
                     Log.i("PlayerTvFragment", "Stuck in buffering, trying next server: ${nextServer.name}")
-                    Toast.makeText(context, "Connection slow, trying mirror...", Toast.LENGTH_SHORT).show()
+                    if (isLivestreamContent()) {
+                        showLivestreamLoading("Connection slow, trying mirror...")
+                    } else {
+                        Toast.makeText(context, "Connection slow, trying mirror...", Toast.LENGTH_SHORT).show()
+                    }
                     viewModel.getVideo(nextServer)
+                } else if (isLivestreamContent()) {
+                    showLivestreamOffline()
                 }
             }
         }

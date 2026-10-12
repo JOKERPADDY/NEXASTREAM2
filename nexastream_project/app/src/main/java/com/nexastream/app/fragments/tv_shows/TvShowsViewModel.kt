@@ -69,7 +69,7 @@ class TvShowsViewModel @Inject constructor(
 
         try {
             val tvShows = ParentalControlUtils.filterItems(
-                UserPreferences.currentProvider!!.getTvShows()
+                UserPreferences.currentProvider.getTvShows()
             ).filterIsInstance<TvShow>()
 
             page = 1
@@ -88,7 +88,7 @@ class TvShowsViewModel @Inject constructor(
 
             try {
                 val tvShows = ParentalControlUtils.filterItems(
-                    UserPreferences.currentProvider!!.getTvShows(page + 1)
+                    UserPreferences.currentProvider.getTvShows(page + 1)
                 ).filterIsInstance<TvShow>()
 
                 page += 1

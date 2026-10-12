@@ -434,9 +434,9 @@ abstract class PlayerSettingsView @JvmOverloads constructor(
             val listMobile = listOf(
                 Quality,
                 Audio,
+                Server,
                 Subtitle,
                 Speed,
-                Server,
                 ExtraBuffering,
                 SoftwareDecoder,
                 Gestures,
@@ -446,11 +446,11 @@ abstract class PlayerSettingsView @JvmOverloads constructor(
             val listTv = listOf(
                 Quality,
                 Audio,
+                Server,
                 Subtitle,
                 SecondarySubtitle,
                 Bilingual,
                 Speed,
-                Server,
                 ExtraBuffering,
                 SoftwareDecoder,
                 ManualZoom,
@@ -1323,12 +1323,21 @@ abstract class PlayerSettingsView @JvmOverloads constructor(
                         )
                     })
 
-                    list.firstOrNull()?.isSelected = true
+                    val currentServerId = player.mediaMetadata.mediaServerId
+                    if (!currentServerId.isNullOrEmpty()) {
+                        refresh(player)
+                    } else {
+                        list.firstOrNull()?.isSelected = true
+                    }
                 }
 
                 fun refresh(player: Player) {
+                    val currentServerId = player.mediaMetadata.mediaServerId
                     list.forEach {
-                        it.isSelected = (it.id == player.mediaMetadata.mediaServerId)
+                        it.isSelected = (it.id == currentServerId)
+                    }
+                    if (list.none { it.isSelected }) {
+                        list.firstOrNull()?.isSelected = true
                     }
                 }
             }

@@ -3,6 +3,7 @@ package com.nexastream.app.ui.screens.search
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nexastream.app.adapters.AppAdapter
+import kotlinx.coroutines.CancellationException
 import com.nexastream.app.models.Movie
 import com.nexastream.app.models.TvShow
 import com.nexastream.app.repositories.HomeRepository
@@ -65,17 +66,24 @@ class SearchViewModel @Inject constructor(
                 if (currentState.isAiSearchEnabled) {
                     val aiIntent = AiSearchEngine.parseQuery(query)
                     val lang = UserPreferences.currentLanguage ?: "en"
-                    val aiDiscovered = AiSearchEngine.discoverByAiIntent(aiIntent, language = lang)
+                    val aiDiscovered = if (aiIntent.hasDiscoveryConstraints) {
+                        AiSearchEngine.discoverByAiIntent(aiIntent, language = lang)
+                    } else emptyList()
 
                     val providerResults = provider?.let { p ->
-                        if (aiIntent.cleanedQuery.isNotBlank()) {
-                            runCatching {
-                                repository.search(p, aiIntent.cleanedQuery)
-                            }.getOrDefault(emptyList())
+                        val searchTerm = aiIntent.cleanedQuery.ifBlank { query }
+                        if (searchTerm.isNotBlank()) {
+                            try {
+                                repository.search(p, searchTerm)
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (_: Exception) {
+                                emptyList()
+                            }
                         } else emptyList()
                     } ?: emptyList()
 
-                    val combined = (aiDiscovered + providerResults).distinctBy { item ->
+                    val combined = (providerResults + aiDiscovered).distinctBy { item ->
                         when (item) {
                             is Movie -> "movie:${item.id}"
                             is TvShow -> "tv:${item.id}"
@@ -101,6 +109,8 @@ class SearchViewModel @Inject constructor(
                         aiExplanation = ""
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isLoading = false, error = e.message)
             }

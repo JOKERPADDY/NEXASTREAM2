@@ -34,6 +34,7 @@ import com.nexastream.app.utils.TMDb3
 import com.nexastream.app.utils.TMDb3.original
 import com.nexastream.app.utils.TMDb3.w500
 import com.nexastream.app.utils.UserPreferences
+import com.nexastream.app.utils.format
 import com.nexastream.app.utils.safeSubList
 import android.util.Base64
 import android.util.Log
@@ -359,6 +360,88 @@ class TmdbProvider(override val language: String) : Provider {
             language = language
         ).results.mapNotNull { mapMulti(it) }
         Category(name = "New Season and Episode", list = results)
+    }
+
+    suspend fun getUpcomingMovies(): Category = coroutineScope {
+        val results = TMDb3.MovieLists.upcoming(
+            language = language
+        ).results.mapNotNull { multi ->
+            mapMulti(multi)?.also { item ->
+                if (item is Movie) {
+                    val dateFormatted = item.released?.format("MMM d")
+                    if (!dateFormatted.isNullOrEmpty()) {
+                        item.quality = dateFormatted
+                    }
+                }
+            }
+        }
+        Category(name = "Coming Soon", list = results)
+    }
+
+    suspend fun getMovieRecommendations(movieId: Int, title: String): Category = coroutineScope {
+        val results = TMDb3.Movies.recommendations(
+            movieId = movieId,
+            language = language
+        ).results.mapNotNull { mapMulti(it) }
+        Category(name = "Because You Watched $title", list = results)
+    }
+
+    suspend fun getTvRecommendations(seriesId: Int, title: String): Category = coroutineScope {
+        val results = TMDb3.TvSeries.recommendations(
+            seriesId = seriesId,
+            language = language
+        ).results.mapNotNull { mapMulti(it) }
+        Category(name = "Because You Watched $title", list = results)
+    }
+
+    suspend fun getFranchiseContent(
+        franchiseName: String,
+        companyId: Int? = null,
+        keywordId: Int? = null,
+        searchQuery: String? = null
+    ): Category = coroutineScope {
+        val moviesDef = async {
+            when {
+                companyId != null -> TMDb3.Discover.movie(
+                    language = language,
+                    withCompanies = TMDb3.Params.WithBuilder<TMDb3.Company.CompanyId>(companyId),
+                    sortBy = TMDb3.Params.SortBy.Movie.POPULARITY_DESC
+                ).results.mapNotNull { mapMulti(it) }
+                keywordId != null -> TMDb3.Discover.movie(
+                    language = language,
+                    withKeywords = TMDb3.Params.WithBuilder<TMDb3.Keyword.KeywordId>(keywordId),
+                    sortBy = TMDb3.Params.SortBy.Movie.POPULARITY_DESC
+                ).results.mapNotNull { mapMulti(it) }
+                searchQuery != null -> TMDb3.Search.multi(
+                    query = searchQuery,
+                    language = language
+                ).results.mapNotNull { mapMulti(it) }
+                else -> emptyList()
+            }
+        }
+        val tvDef = async {
+            when {
+                companyId != null -> TMDb3.Discover.tv(
+                    language = language,
+                    withCompanies = TMDb3.Params.WithBuilder<TMDb3.Company.CompanyId>(companyId),
+                    sortBy = TMDb3.Params.SortBy.Tv.POPULARITY_DESC
+                ).results.mapNotNull { mapMulti(it) }
+                keywordId != null -> TMDb3.Discover.tv(
+                    language = language,
+                    withKeywords = TMDb3.Params.WithBuilder<TMDb3.Keyword.KeywordId>(keywordId),
+                    sortBy = TMDb3.Params.SortBy.Tv.POPULARITY_DESC
+                ).results.mapNotNull { mapMulti(it) }
+                else -> emptyList()
+            }
+        }
+        val combined = (moviesDef.await() + tvDef.await()).distinctBy { item ->
+            when (item) {
+                is Movie -> "movie_${item.id}"
+                is TvShow -> "tv_${item.id}"
+                else -> item.hashCode().toString()
+            }
+        }
+        Category(name = franchiseName, list = combined)
     }
 
     data class TeenRomanceCandidate(

@@ -280,7 +280,7 @@ class HomeViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 Log.e("HomeViewModel", "getHome failed", e)
-                if (_state.value !is State.SuccessLoading) {
+                if (cached.isNullOrEmpty()) {
                     _state.emit(State.FailedLoading(e))
                 }
             }

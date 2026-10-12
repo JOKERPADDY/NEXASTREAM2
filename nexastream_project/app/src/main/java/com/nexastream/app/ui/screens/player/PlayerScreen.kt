@@ -37,8 +37,10 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.nexastream.app.models.Video
+import com.nexastream.app.utils.DownloadQualityFormatter
 import com.nexastream.app.utils.NetworkClient
 import com.nexastream.app.utils.UserPreferences
+import com.nexastream.app.utils.setVideoDrmConfiguration
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.seconds
 
@@ -134,6 +136,7 @@ fun PlayerScreen(
             val mediaItem = MediaItem.Builder()
                 .setUri(video.source)
                 .setMimeType(video.type)
+                .setVideoDrmConfiguration(video.drmConfiguration)
                 .build()
             exoPlayer.setMediaItem(mediaItem)
             val resumePosition = viewModel.resolveResumePosition()
@@ -385,7 +388,7 @@ fun ServerSelector(
             Icon(Icons.Default.Dns, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = currentServer?.name ?: "Servers",
+                text = currentServer?.let { DownloadQualityFormatter.anonymizeName(it.name) } ?: "Servers",
                 color = Color.White,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium
@@ -405,7 +408,7 @@ fun ServerSelector(
                                 Icon(Icons.Default.Check, contentDescription = null, tint = Color.Red, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
                             }
-                            Text(server.name, color = Color.White)
+                            Text(DownloadQualityFormatter.anonymizeName(server.name), color = Color.White)
                         }
                     },
                     onClick = {

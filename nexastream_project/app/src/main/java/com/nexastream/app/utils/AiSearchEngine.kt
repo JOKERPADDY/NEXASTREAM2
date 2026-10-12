@@ -7,6 +7,7 @@ import com.nexastream.app.models.TvShow
 import com.nexastream.app.utils.TMDb3.original
 import com.nexastream.app.utils.TMDb3.w500
 import java.util.Calendar
+import kotlinx.coroutines.CancellationException
 
 data class AiSearchIntent(
     val rawQuery: String,
@@ -19,7 +20,11 @@ data class AiSearchIntent(
     val keywords: List<String> = emptyList(),
     val cleanedQuery: String = "",
     val explanation: String = ""
-)
+) {
+    val hasDiscoveryConstraints: Boolean
+        get() = genreIds.isNotEmpty() || startYear != null || minRating != null ||
+            mediaType != SearchFilters.MediaType.ALL
+}
 
 data class AiSearchPrompt(
     val title: String,
@@ -256,6 +261,8 @@ object AiSearchEngine {
                         banner = movie.backdropPath?.original
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Exception) {}
         }
 
@@ -281,6 +288,8 @@ object AiSearchEngine {
                         banner = tv.backdropPath?.original
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Exception) {}
         }
 

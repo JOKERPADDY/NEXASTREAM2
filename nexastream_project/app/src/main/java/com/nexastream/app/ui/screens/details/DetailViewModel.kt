@@ -149,7 +149,7 @@ class DetailViewModel @Inject constructor(
             try {
                 _uiState.value = _uiState.value.copy(isDownloading = true)
                 val video = withContext(Dispatchers.IO) {
-                    UserPreferences.currentProvider!!.getVideo(server)
+                    UserPreferences.currentProvider.getVideo(server)
                 }
 
                 val (downloadId, downloadTitle, downloadPoster) = when (type) {
@@ -181,7 +181,7 @@ class DetailViewModel @Inject constructor(
             try {
                 _uiState.value = _uiState.value.copy(servers = emptyList(), error = null)
                 val servers = withContext(Dispatchers.IO) {
-                    UserPreferences.currentProvider!!.getServers(id, type)
+                    UserPreferences.currentProvider.getServers(id, type)
                 }
                 _uiState.value = _uiState.value.copy(servers = servers)
             } catch (e: Exception) {

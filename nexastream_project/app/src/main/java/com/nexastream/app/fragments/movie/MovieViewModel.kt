@@ -50,7 +50,7 @@ class MovieViewModel @Inject constructor(
         _state.emit(State.Loading)
 
         try {
-            val movie = UserPreferences.currentProvider!!.getMovie(id)
+            val movie = UserPreferences.currentProvider.getMovie(id)
 
             _state.emit(State.SuccessLoading(movie))
         } catch (e: Exception) {

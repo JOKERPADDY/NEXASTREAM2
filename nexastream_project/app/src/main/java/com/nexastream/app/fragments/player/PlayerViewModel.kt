@@ -111,7 +111,7 @@ class PlayerViewModel(
         lastId = id
         _state.emit(State.LoadingServers)
         try {
-            val servers = UserPreferences.currentProvider!!.getServers(id, videoType)
+            val servers = UserPreferences.currentProvider.getServers(id, videoType)
             if (servers.isEmpty()) throw Exception("No servers found")
 
             // REORDERING logic: 
@@ -147,7 +147,7 @@ class PlayerViewModel(
             }
             
             // LOG POTENZIATO: Mostra tutti i server disponibili per il player
-            Log.i("NexaStream", "[SERVERS LIST] -> Provider: ${UserPreferences.currentProvider!!.name}")
+            Log.i("NexaStream", "[SERVERS LIST] -> Provider: ${UserPreferences.currentProvider.name}")
             Log.i("NexaStream", "[SERVERS LIST] -> Found ${finalServers.size} servers: ${finalServers.joinToString { it.name }}")
 
             Log.d("PlayerViewModel", "Ricerca server completata: ${finalServers.size} server trovati")
@@ -162,7 +162,7 @@ class PlayerViewModel(
         Log.d("PlayerViewModel", "Inizio estrazione video dal server: ${server.name}")
         _state.emit(State.LoadingVideo(server))
         try {
-            var video = UserPreferences.currentProvider!!.getVideo(server)
+            var video = UserPreferences.currentProvider.getVideo(server)
             if (video.source.isEmpty()) throw Exception("No source found")
 
             // Real-Debrid Unrestrict Logic

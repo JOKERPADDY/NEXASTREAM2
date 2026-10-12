@@ -125,8 +125,12 @@ class TvShowViewHolder(
 
     private fun isIptvProvider(): Boolean {
         if (tvShow.quality == "LIVE") return true
-        val name = tvShow.providerName ?: UserPreferences.currentProvider?.name ?: ""
-        val provider = Provider.providers.keys.find { it.name == name }
+        if (tvShow.id.startsWith("localiptv:") || tvShow.id.startsWith("patricktv:") || tvShow.id.startsWith("cricfy:") || tvShow.id.startsWith("vavoo:") || tvShow.id.startsWith("iptv:") || tvShow.id.startsWith("plutotv:")) return true
+        val current = UserPreferences.currentProvider
+        if (current is IptvProvider) return true
+        val name = tvShow.providerName ?: current?.name ?: ""
+        if (name.equals("IPTV", ignoreCase = true) || name.contains("IPTV", ignoreCase = true) || name.contains("PatrickTV", ignoreCase = true)) return true
+        val provider = Provider.providers.keys.find { it.name.equals(name, ignoreCase = true) }
         return provider is IptvProvider
     }
 

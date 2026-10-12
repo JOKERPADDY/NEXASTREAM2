@@ -69,7 +69,7 @@ class MoviesViewModel @Inject constructor(
 
         try {
             val movies = ParentalControlUtils.filterItems(
-                UserPreferences.currentProvider!!.getMovies()
+                UserPreferences.currentProvider.getMovies()
             ).filterIsInstance<Movie>()
 
             page = 1
@@ -88,7 +88,7 @@ class MoviesViewModel @Inject constructor(
 
             try {
                 val movies = ParentalControlUtils.filterItems(
-                    UserPreferences.currentProvider!!.getMovies(page + 1)
+                    UserPreferences.currentProvider.getMovies(page + 1)
                 ).filterIsInstance<Movie>()
 
                 page += 1

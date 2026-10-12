@@ -22,6 +22,11 @@ interface MovieBoxApi {
         @Path("subjectId") subjectId: String
     ): SubjectDetailResponse
 
+    @GET("episodes/{seriesId}")
+    suspend fun getEpisodes(
+        @Path("seriesId") seriesId: String
+    ): EpisodesResponse
+
     @GET("stream/{subjectId}")
     suspend fun playInfo(
         @Path("subjectId") subjectId: String,

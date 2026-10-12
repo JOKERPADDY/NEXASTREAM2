@@ -1,0 +1,63 @@
+#EXTM3U
+#EXTINF:-1 group-title="Live Sports",Mux HLS Test Stream HD
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 group-title="Live Sports",Sky Sport Premier Liga HD [UK]
+http://ronaldo.tvfor.pro/atLs7TPn/tht6v98456np1k198n81n2t8?|User-Agent=http-user-agent=Lavf/56.15.102
+#EXTINF:-1 group-title="Live Sports",Sky Sport Main Event HD [UK]
+http://ronaldo.tvfor.pro/zuatk8cz/tht6v98456np1k198n81n2t8?|User-Agent=http-user-agent=Lavf/56.15.102
+#EXTINF:-1 group-title="Live Sports",Sky Sport Football HD [UK]
+http://ronaldo.tvfor.pro/LKGg4xhJ/tht6v98456np1k198n81n2t8?|User-Agent=http-user-agent=Lavf/56.15.102
+#EXTINF:-1 group-title="Live Sports",TNT Sports 1 HD [UK]
+http://ronaldo.tvfor.pro/Z6V9d48eGz/tht6v98456np1k198n81n2t8?|User-Agent=http-user-agent=Lavf/56.15.102
+#EXTINF:-1 group-title="Live Sports",TNT Sports 2 HD [UK]
+http://ronaldo.tvfor.pro/3Z76Abnp8N/tht6v98456np1k198n81n2t8?|User-Agent=http-user-agent=Lavf/56.15.102
+#EXTINF:-1 group-title="Live Sports",Eurosport 1 HD
+http://ronaldo.tvfor.pro/EurosportHD/tht6v98456np1k198n81n2t8?|User-Agent=http-user-agent=Lavf/56.15.102
+#EXTINF:-1 group-title="Live Sports",Eurosport 2 HD
+http://ronaldo.tvfor.pro/Eurosport2HDRussia/tht6v98456np1k198n81n2t8?|User-Agent=http-user-agent=Lavf/56.15.102
+#EXTINF:-1 group-title="Live Sports",ESPN HD
+http://ronaldo.tvfor.pro/rEntionEOp/tht6v98456np1k198n81n2t8?|User-Agent=http-user-agent=Lavf/56.15.102
+#EXTINF:-1 group-title="Live Sports",ESPN 2
+http://ronaldo.tvfor.pro/cRaHUGOBsT/tht6v98456np1k198n81n2t8?|User-Agent=http-user-agent=Lavf/56.15.102
+#EXTINF:-1 group-title="Live Sports",Fox Sport 1 HD
+http://ronaldo.tvfor.pro/lOgencONiS/tht6v98456np1k198n81n2t8?|User-Agent=http-user-agent=Lavf/56.15.102
+#EXTINF:-1 group-title="Live Sports",Fox Sport 2 HD
+http://ronaldo.tvfor.pro/quiCkTaNDE/tht6v98456np1k198n81n2t8?|User-Agent=http-user-agent=Lavf/56.15.102
+#EXTINF:-1 group-title="Live Sports",NBA TV HD
+http://ronaldo.tvfor.pro/xorKeNtEon/tht6v98456np1k198n81n2t8?|User-Agent=http-user-agent=Lavf/56.15.102
+#EXTINF:-1 group-title="Live Sports",NFL HD
+http://ronaldo.tvfor.pro/ghkthHjrk334/tht6v98456np1k198n81n2t8?|User-Agent=http-user-agent=Lavf/56.15.102
+#EXTINF:-1 group-title="Live Sports",UFC Fight Network
+https://d12a2vxqkkh1bo.cloudfront.net/hls/1080p/playlist.m3u8
+#EXTINF:-1 group-title="Live Sports",Red Bull TV
+https://rbmn-live.akamaized.net/hls/live/622817/BoRB-US/master_928.m3u8
+#EXTINF:-1 group-title="Live Sports",Матч! HD
+http://ronaldo.tvfor.pro/6kzDOOrtd1/tht6v98456np1k198n81n2t8?|User-Agent=http-user-agent=Lavf/56.15.102
+#EXTINF:-1 group-title="Live Sports",Матч! Футбол 1 HD
+http://ronaldo.tvfor.pro/MatchFutbol1HD/tht6v98456np1k198n81n2t8?|User-Agent=http-user-agent=Lavf/56.15.102
+#EXTINF:-1 group-title="Live Sports",Матч! Футбол 2 HD
+http://ronaldo.tvfor.pro/MatchFutbol2HD/tht6v98456np1k198n81n2t8?|User-Agent=http-user-agent=Lavf/56.15.102
+#EXTINF:-1 group-title="Live Sports",Матч! Футбол 3 HD
+http://ronaldo.tvfor.pro/MatchFutbol3HD/tht6v98456np1k198n81n2t8?|User-Agent=http-user-agent=Lavf/56.15.102
+#EXTINF:-1 group-title="News",Al-Hurra
+https://mbnvvideoingest-i.akamaihd.net/hls/live/1004673/MBNV_ALHURRA_MAIN/master_2596.m3u8
+#EXTINF:-1 group-title="News",India TV
+https://live-indiatvnews.akamaized.net/indiatv-origin/liveabr/indiatv-origin/live2/chunks.m3u8
+#EXTINF:-1 group-title="News",News 24
+http://tv.balkanweb.com:8081/news24/livestream/playlist.m3u8
+#EXTINF:-1 group-title="Regional",CCTV-1综合
+http://tv.cnbeijing.xyz/tvnx.php?id=001
+#EXTINF:-1 group-title="Regional",CCTV-5体育
+http://tv.cnbeijing.xyz/tvnx.php?id=005
+#EXTINF:-1 group-title="Regional",CCTV-6电影
+http://tv.cnbeijing.xyz/tvnx.php?id=006
+#EXTINF:-1 group-title="Regional",湖南卫视
+http://tv.cnbeijing.xyz/tvnx.php?id=021
+#EXTINF:-1 group-title="Regional",浙江卫视
+http://tv.cnbeijing.xyz/tvnx.php?id=028
+#EXTINF:-1 group-title="Regional",爱尔达综合
+http://pili-live-hdl.qhmywl.com:80/dsdtv/c614a26c0e0fb521c5cdfa10ed7f2089.m3u8
+#EXTINF:-1 group-title="Regional",中天新闻台
+http://pili-live-hdl.qhmywl.com:80/dsdtv/e1a397539e76f45bbbf39d1467024aa3.m3u8
+#EXTINF:-1 group-title="Regional",东森新闻台
+http://pili-live-hdl.qhmywl.com:80/dsdtv/b237f97b0e9e21e88e0bdaae40730332.m3u8

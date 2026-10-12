@@ -17,7 +17,6 @@ import com.nexastream.app.fragments.home.HomeMobileFragmentDirections
 import com.nexastream.app.models.Episode
 import com.nexastream.app.models.Movie
 import com.nexastream.app.models.TvShow
-import com.nexastream.app.providers.Provider
 import com.nexastream.app.utils.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -42,8 +41,8 @@ class ShowOptionsMobileDialog(
             else -> null
         }
 
-        if (!providerName.isNullOrBlank() && providerName != UserPreferences.currentProvider?.name) {
-            Provider.providers.keys.find { it.name == providerName }?.let {
+        if (!providerName.isNullOrBlank() && providerName != UserPreferences.currentProvider.name) {
+            UserPreferences.getProviderByName(providerName)?.let {
                 UserPreferences.currentProvider = it
             }
         }

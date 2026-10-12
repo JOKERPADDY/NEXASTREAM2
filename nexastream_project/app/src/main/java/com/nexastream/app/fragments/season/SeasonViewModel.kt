@@ -51,7 +51,7 @@ class SeasonViewModel @Inject constructor(
     fun getEpisodes() = viewModelScope.launch(Dispatchers.IO) {
         _state.emit(State.Loading)
         try {
-            val episodes = UserPreferences.currentProvider!!.getEpisodesBySeason(seasonId)
+            val episodes = UserPreferences.currentProvider.getEpisodesBySeason(seasonId)
             
             // Inject TV Show and Season info into episodes if missing
             val tvShowId: String = savedStateHandle.get<String>("tvShowId") ?: ""

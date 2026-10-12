@@ -622,4 +622,11 @@
     <string name="player_go_live">GO LIVE</string>
     <string name="player_start_recording">REC</string>
     <string name="player_stop_recording">STOP REC</string>
+
+    <string name="livestream_loading_title">Loading Stream</string>
+    <string name="livestream_loading_message">Please wait while connecting to stream…</string>
+    <string name="livestream_offline_title">Stream Offline</string>
+    <string name="livestream_offline_message">This stream is currently offline or unavailable. Please try again later.</string>
+    <string name="livestream_retry_button">Try Again</string>
+    <string name="livestream_back_button">Go Back</string>
 </resources>

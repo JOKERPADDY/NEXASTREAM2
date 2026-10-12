@@ -35,7 +35,7 @@ class ProviderViewHolder(
     private fun displayMobileItem(binding: ItemProviderMobileBinding) {
         binding.root.apply {
             setOnClickListener {
-                if (UserPreferences.currentProvider?.name == provider.name) return@setOnClickListener
+                if (UserPreferences.currentProvider.name == provider.provider.name || UserPreferences.currentProvider.name == provider.name) return@setOnClickListener
 
                 UserPreferences.setCurrentProvider(provider.provider, notify = false)
                 context.toActivity()?.apply {
@@ -75,7 +75,7 @@ class ProviderViewHolder(
         binding.root.apply {
             isFocusable = true
             setOnClickListener {
-                if (UserPreferences.currentProvider?.name == provider.name) return@setOnClickListener
+                if (UserPreferences.currentProvider.name == provider.provider.name || UserPreferences.currentProvider.name == provider.name) return@setOnClickListener
 
                 UserPreferences.setCurrentProvider(provider.provider, notify = false)
                 context.toActivity()?.apply {

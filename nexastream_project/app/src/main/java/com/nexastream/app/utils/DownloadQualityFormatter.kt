@@ -262,14 +262,39 @@ object DownloadQualityFormatter {
         }
     }
 
-    private fun sourceName(server: Video.Server): String {
-        val name = server.name
+    private val serverNameMap = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val serverCounter = java.util.concurrent.atomic.AtomicInteger(1)
+
+    fun anonymizeName(rawName: String): String {
+        if (rawName.isBlank()) return "Server 1"
+
+        val cleaned = rawName
             .replace(Regex("""(?i)\b(2160p|1440p|1080p|720p|576p|540p|480p|360p|240p|4k|uhd|fhd|hd|sd|cam)\b"""), "")
             .replace(Regex("""(?i)\b(\d+(?:\.\d+)?\s*(gb|mb|kb))\b"""), "")
             .replace(Regex("""\s*[-|/]\s*"""), " ")
             .trim()
 
-        return name.ifBlank { server.id.ifBlank { "Source" } }
+        if (cleaned.isBlank()) return "Server 1"
+
+        val lower = cleaned.lowercase(Locale.US)
+        if (lower.startsWith("server ") || lower == "server" || lower.startsWith("cdn ") || lower.startsWith("direct stream") || lower.startsWith("audio ") || lower.startsWith("reproductor")) {
+            return cleaned.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
+        }
+
+        val key = lower
+            .replace(Regex("""https?://"""), "")
+            .replace(Regex("""www\."""), "")
+            .replace(Regex("""[^a-z0-9]"""), "")
+
+        if (key.isBlank()) return "Server 1"
+
+        return serverNameMap.computeIfAbsent(key) {
+            "Server ${serverCounter.getAndIncrement()}"
+        }
+    }
+
+    private fun sourceName(server: Video.Server): String {
+        return anonymizeName(server.name.ifBlank { server.id })
     }
 
     fun fileSize(server: Video.Server): String? {

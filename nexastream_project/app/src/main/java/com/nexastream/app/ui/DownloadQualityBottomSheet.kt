@@ -423,7 +423,7 @@ class DownloadQualityBottomSheet : BottomSheetDialogFragment() {
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
                                         Text(
-                                            text = "Unavailable Sources (${failedServers.size})",
+                                            text = "Unavailable Servers (${failedServers.size})",
                                             color = Color.Gray,
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.Medium

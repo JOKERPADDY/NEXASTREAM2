@@ -713,7 +713,7 @@ class SettingsMobileFragment : PreferenceFragmentCompat() {
             if (isVisible) {
                 val useNewInterface = UserPreferences
                     .getProviderCache(
-                        UserPreferences.currentProvider!!, UserPreferences
+                        UserPreferences.currentProvider, UserPreferences
                             .PROVIDER_NEW_INTERFACE
                     ) != "false"
                 isChecked = useNewInterface

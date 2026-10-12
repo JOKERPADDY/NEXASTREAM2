@@ -16,6 +16,7 @@ import com.nexastream.app.R
 import com.nexastream.app.databinding.ItemSettingTvBinding
 import com.nexastream.app.databinding.ViewPlayerSettingsTvBinding
 import com.nexastream.app.ui.SpacingItemDecoration
+import com.nexastream.app.utils.DownloadQualityFormatter
 import com.nexastream.app.utils.dp
 import com.nexastream.app.utils.margin
 import com.nexastream.app.utils.UserPreferences
@@ -683,7 +684,7 @@ class PlayerSettingsTvView @JvmOverloads constructor(
 
                     is Settings.SoftwareDecoder -> context.getString(item.stringId)
 
-                    is Settings.Server -> item.name
+                    is Settings.Server -> DownloadQualityFormatter.anonymizeName(item.name)
 
                     else -> ""
                 }
@@ -714,7 +715,7 @@ class PlayerSettingsTvView @JvmOverloads constructor(
                         Settings.Bilingual -> context.getString(Settings.Bilingual.selected.stringId)
                         Settings.Speed -> context.getString(Settings.Speed.selected.stringId)
                         Settings.ExtraBuffering -> context.getString(Settings.ExtraBuffering.selected.stringId)
-                        Settings.Server -> Settings.Server.selected?.name ?: ""
+                        Settings.Server -> Settings.Server.selected?.let { DownloadQualityFormatter.anonymizeName(it.name) } ?: ""
                         Settings.ManualZoom -> ""
                         else -> ""
                     }

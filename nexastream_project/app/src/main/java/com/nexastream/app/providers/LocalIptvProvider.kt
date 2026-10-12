@@ -92,17 +92,24 @@ object LocalIptvProvider : IptvProvider {
         if (cachedChannels != null) return cachedChannels!!
 
         val allChannels = mutableListOf<M3UChannel>()
-        val files = listOf("iptv_diman.m3u", "initial-playlist.m3u", "sports-playlist.m3u")
+        try {
+            val assetManager = NexastreamApp.instance.assets
+            val rootFiles = assetManager.list("")?.filter { it.endsWith(".m3u", ignoreCase = true) || it.endsWith(".m3u8", ignoreCase = true) } ?: emptyList()
+            val m3uSubFiles = assetManager.list("m3u")?.map { "m3u/$it" }?.filter { it.endsWith(".m3u", ignoreCase = true) || it.endsWith(".m3u8", ignoreCase = true) } ?: emptyList()
+            val allFiles = (rootFiles + m3uSubFiles).distinct()
 
-        files.forEach { fileName ->
-            try {
-                val inputStream = NexastreamApp.instance.assets.open(fileName)
-                val reader = BufferedReader(InputStreamReader(inputStream))
-                parseM3UStream(reader, allChannels)
-                inputStream.close()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error reading $fileName: ${e.message}")
+            allFiles.forEach { fileName ->
+                try {
+                    val inputStream = assetManager.open(fileName)
+                    val reader = BufferedReader(InputStreamReader(inputStream))
+                    parseM3UStream(reader, allChannels)
+                    inputStream.close()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error reading $fileName: ${e.message}")
+                }
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error discovering M3U assets: ${e.message}")
         }
 
         cachedChannels = allChannels
@@ -197,7 +204,7 @@ object LocalIptvProvider : IptvProvider {
                         title = channel.name,
                         poster = posterUrl,
                         banner = posterUrl,
-                        providerName = "IPTV"
+                        providerName = name
                     ).apply {
                         itemType = AppAdapter.Type.TV_SHOW_MOBILE_ITEM
                     }
@@ -216,7 +223,7 @@ object LocalIptvProvider : IptvProvider {
             .take(60)
             .map { channel ->
                 val posterUrl = resolveLogoUrl(channel.name, channel.logo)
-                TvShow(id = createId(channel.copy(logo = posterUrl)), title = channel.name, poster = posterUrl, providerName = "IPTV")
+                TvShow(id = createId(channel.copy(logo = posterUrl)), title = channel.name, poster = posterUrl, providerName = name)
             }
     }
 
@@ -230,7 +237,7 @@ object LocalIptvProvider : IptvProvider {
             banner = posterUrl,
             overview = "Local IPTV Stream: $name",
             seasons = listOf(Season(id = id, number = 1, title = "Live Stream")),
-            providerName = "IPTV"
+            providerName = name
         )
     }
 
@@ -323,7 +330,7 @@ object LocalIptvProvider : IptvProvider {
                     title = channel.name,
                     poster = posterUrl,
                     banner = posterUrl,
-                    providerName = "IPTV"
+                    providerName = name
                 )
             }
 

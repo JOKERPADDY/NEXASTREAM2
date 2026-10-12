@@ -26,7 +26,6 @@ import com.nexastream.app.utils.UserPreferences
 import com.nexastream.app.utils.format
 import com.nexastream.app.utils.getCurrentFragment
 import com.nexastream.app.utils.toActivity
-import com.nexastream.app.providers.Provider
 import java.util.Calendar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -50,8 +49,8 @@ class ShowOptionsTvDialog(
             else -> null
         }
 
-        if (!providerName.isNullOrBlank() && providerName != UserPreferences.currentProvider?.name) {
-            Provider.providers.keys.find { it.name == providerName }?.let {
+        if (!providerName.isNullOrBlank() && providerName != UserPreferences.currentProvider.name) {
+            UserPreferences.getProviderByName(providerName)?.let {
                 UserPreferences.currentProvider = it
             }
         }

@@ -19,11 +19,13 @@ import com.nexastream.app.utils.TMDb3.original
 import com.nexastream.app.utils.TMDb3.w500
 import com.nexastream.app.utils.UserPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 sealed class SearchState {
@@ -229,13 +231,14 @@ class SearchViewModel @Inject constructor(
 
     @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
     private fun setupSearchFlow() {
-        searchQuery
-            .debounce(400)
-            .distinctUntilChanged()
-            .onEach { query ->
-                performSearch(query)
-            }
-            .launchIn(viewModelScope)
+        viewModelScope.launch {
+            searchQuery
+                .debounce(400)
+                .distinctUntilChanged()
+                .collectLatest { query ->
+                    performSearch(query)
+                }
+        }
     }
 
     fun onQueryChanged(newQuery: String) {
@@ -253,15 +256,15 @@ class SearchViewModel @Inject constructor(
         }
     }
 
-    private fun performSearch(query: String, force: Boolean = false) = viewModelScope.launch(Dispatchers.IO) {
+    private suspend fun performSearch(query: String, force: Boolean = false) = withContext(Dispatchers.IO) {
         if (query.isBlank() && _filters.value.isDefault()) {
             this@SearchViewModel.query = ""
             page = 1
             _state.emit(SearchState.SuccessSearching(emptyList(), false))
-            return@launch
+            return@withContext
         }
 
-        if (!force && this@SearchViewModel.query == query && query.isNotEmpty()) return@launch
+        if (!force && this@SearchViewModel.query == query && query.isNotEmpty()) return@withContext
         
         this@SearchViewModel.query = query
         _state.emit(SearchState.Searching)
@@ -274,21 +277,28 @@ class SearchViewModel @Inject constructor(
                     _aiExplanation.value = aiIntent.explanation
 
                     val lang = UserPreferences.currentLanguage ?: "en"
-                    val aiDiscovered = com.nexastream.app.utils.AiSearchEngine.discoverByAiIntent(
-                        intent = aiIntent,
-                        language = lang,
-                        page = 1
-                    )
+                    val aiDiscovered = if (aiIntent.hasDiscoveryConstraints) {
+                        com.nexastream.app.utils.AiSearchEngine.discoverByAiIntent(
+                            intent = aiIntent,
+                            language = lang,
+                            page = 1
+                        )
+                    } else emptyList()
 
                     val providerResults = provider?.let { p ->
-                        if (aiIntent.cleanedQuery.isNotBlank()) {
-                            runCatching {
-                                p.search(aiIntent.cleanedQuery, filters = _filters.value)
-                            }.getOrDefault(emptyList())
+                        val searchTerm = aiIntent.cleanedQuery.ifBlank { query }
+                        if (searchTerm.isNotBlank()) {
+                            try {
+                                p.search(searchTerm, filters = _filters.value)
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (_: Exception) {
+                                emptyList()
+                            }
                         } else emptyList()
                     } ?: emptyList()
 
-                    val combined = (aiDiscovered + providerResults).distinctBy { item ->
+                    val combined = (providerResults + aiDiscovered).distinctBy { item ->
                         when (item) {
                             is Movie -> "movie:${item.id}"
                             is TvShow -> "tv:${item.id}"
@@ -300,7 +310,7 @@ class SearchViewModel @Inject constructor(
                     _aiExplanation.value = ""
                     val p = provider ?: run {
                         _state.emit(SearchState.SuccessSearching(emptyList(), false))
-                        return@launch
+                        return@withContext
                     }
                     ParentalControlUtils.filterItems(
                         p.search(query, filters = _filters.value)
@@ -339,6 +349,7 @@ class SearchViewModel @Inject constructor(
                 _state.emit(SearchState.SuccessSearching(emptyList(), false))
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             Log.e("SearchViewModel", "search: ", e)
             _state.emit(SearchState.FailedSearching(e))
         }

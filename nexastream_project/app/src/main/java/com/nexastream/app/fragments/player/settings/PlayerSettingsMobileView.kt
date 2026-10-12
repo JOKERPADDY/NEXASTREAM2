@@ -11,6 +11,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.nexastream.app.R
 import com.nexastream.app.databinding.ItemSettingMobileBinding
 import com.nexastream.app.databinding.ViewPlayerSettingsMobileBinding
+import com.nexastream.app.utils.DownloadQualityFormatter
 import com.nexastream.app.utils.dp
 import com.nexastream.app.utils.margin
 import com.nexastream.app.utils.UserPreferences
@@ -552,7 +553,7 @@ class PlayerSettingsMobileView @JvmOverloads constructor(
 
                     is Settings.KeepScreenOn -> context.getString(item.stringId)
 
-                    is Settings.Server -> item.name
+                    is Settings.Server -> DownloadQualityFormatter.anonymizeName(item.name)
                     else -> ""
                 }
             }
@@ -585,7 +586,7 @@ class PlayerSettingsMobileView @JvmOverloads constructor(
                         Settings.KeepScreenOn -> context.getString(Settings.KeepScreenOn.selected.stringId)
                         Settings.Bilingual -> context.getString(Settings.Bilingual.selected.stringId)
                         Settings.SecondarySubtitle -> UserPreferences.secondarySubtitle ?: context.getString(R.string.player_settings_subtitles_off)
-                        Settings.Server -> Settings.Server.selected?.name ?: ""
+                        Settings.Server -> Settings.Server.selected?.let { DownloadQualityFormatter.anonymizeName(it.name) } ?: ""
                         Settings.ManualZoom -> ""
                         else -> ""
                     }

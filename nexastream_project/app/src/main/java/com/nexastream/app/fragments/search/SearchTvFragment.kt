@@ -34,7 +34,6 @@ import com.nexastream.app.utils.hideKeyboard
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import androidx.navigation.fragment.findNavController
-import com.nexastream.app.providers.Provider
 import com.nexastream.app.providers.IptvProvider
 
 @AndroidEntryPoint
@@ -51,18 +50,22 @@ class SearchTvFragment : Fragment() {
     private val appAdapter by lazy {
         AppAdapter().apply {
             onMovieClickListener = { movie ->
-                if (movie.providerName != UserPreferences.currentProvider?.name) {
-                    UserPreferences.currentProvider = Provider.providers.keys.find { it.name == movie.providerName }
-                    Toast.makeText(requireContext(), getString(R.string.switching_to_provider, movie.providerName), Toast.LENGTH_SHORT).show()
+                if (movie.providerName != UserPreferences.currentProvider.name) {
+                    UserPreferences.getProviderByName(movie.providerName)?.let {
+                        UserPreferences.currentProvider = it
+                        Toast.makeText(requireContext(), getString(R.string.switching_to_provider, movie.providerName), Toast.LENGTH_SHORT).show()
+                    }
                 }
                 findNavController().navigate(
                     SearchTvFragmentDirections.actionSearchToMovie(id = movie.id)
                 )
             }
             onTvShowClickListener = { tvShow ->
-                if (tvShow.providerName != UserPreferences.currentProvider?.name) {
-                    UserPreferences.currentProvider = Provider.providers.keys.find { it.name == tvShow.providerName }
-                    Toast.makeText(requireContext(), getString(R.string.switching_to_provider, tvShow.providerName), Toast.LENGTH_SHORT).show()
+                if (tvShow.providerName != UserPreferences.currentProvider.name) {
+                    UserPreferences.getProviderByName(tvShow.providerName)?.let {
+                        UserPreferences.currentProvider = it
+                        Toast.makeText(requireContext(), getString(R.string.switching_to_provider, tvShow.providerName), Toast.LENGTH_SHORT).show()
+                    }
                 }
                 findNavController().navigate(
                     SearchTvFragmentDirections.actionSearchToTvShow(
@@ -328,7 +331,11 @@ class SearchTvFragment : Fragment() {
                     }
                 }
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                    if (!isGlobalSearchChecked) {
+                        viewModel.onQueryChanged(s?.toString().orEmpty())
+                    }
+                }
             })
         }
 

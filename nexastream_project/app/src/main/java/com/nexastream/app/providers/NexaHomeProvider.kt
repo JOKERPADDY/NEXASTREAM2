@@ -14,15 +14,22 @@ import com.nexastream.app.NexastreamApp
 import android.content.pm.PackageManager
 import com.nexastream.app.utils.safeSubList
 import com.nexastream.app.utils.TMDb3
+import com.nexastream.app.utils.UserPreferences
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 
 object NexaHomeProvider : Provider {
+    private const val PHASE0_TIMEOUT_MOBILE_MS = 2_500L
+    private const val PHASE0_TIMEOUT_TV_MS = 12_000L
+    private const val IPTV_FALLBACK_TIMEOUT_MOBILE_MS = 2_000L
+    private const val IPTV_FALLBACK_TIMEOUT_TV_MS = 10_000L
+
     private const val LOGO_URL = "https://i.ibb.co/39Ld2wbt/MAGISTV.png"
 
     override val baseUrl: String = ""
@@ -34,6 +41,11 @@ object NexaHomeProvider : Provider {
     private val fetchSemaphore = Semaphore(8)
 
     private suspend inline fun <T> limited(crossinline block: suspend () -> T): T = fetchSemaphore.withPermit { block() }
+
+    private fun isTvUi(): Boolean =
+        UserPreferences.forceTvUi || runCatching {
+            NexastreamApp.instance.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+        }.getOrDefault(false)
 
     override suspend fun getHome(): List<Category> = coroutineScope {
         val phase0 = getHomePhase0()
@@ -58,10 +70,14 @@ object NexaHomeProvider : Provider {
     ): List<Category> = getHomeProgressive(onPhase0 = onPhase1, onPhase1 = onPhase1)
 
     suspend fun getHomePhase0(): List<Category> = coroutineScope {
+        val isTv = isTvUi()
+        val phase0Timeout = if (isTv) PHASE0_TIMEOUT_TV_MS else PHASE0_TIMEOUT_MOBILE_MS
+        val iptvFallbackTimeout = if (isTv) IPTV_FALLBACK_TIMEOUT_TV_MS else IPTV_FALLBACK_TIMEOUT_MOBILE_MS
+
         // Phase 0: Fast Hero Banner + CDN Live Channels (~1s)
         val cdnHomeDeferred = async { limited {
             val cdnList = runCatching {
-                kotlinx.coroutines.withTimeoutOrNull(2500L) {
+                kotlinx.coroutines.withTimeoutOrNull(phase0Timeout) {
                     CdnLiveTvProvider.getHome()
                 }
             }.getOrNull().orEmpty()
@@ -70,15 +86,15 @@ object NexaHomeProvider : Provider {
             } else {
                 Log.w("NexaHomeProvider", "CDN Live TV empty or failed, falling back to IPTV All World")
                 runCatching {
-                    kotlinx.coroutines.withTimeoutOrNull(2000L) {
+                    kotlinx.coroutines.withTimeoutOrNull(iptvFallbackTimeout) {
                         IptvOrgProvider.getHome()
                     }
                 }.getOrElse { emptyList() } ?: emptyList()
             }
         } }
 
-        val moviesBannerDef = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(2500L) { tmdb.getFeaturedMovies() } }.getOrNull() } }
-        val seriesBannerDef = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(2500L) { tmdb.getFeaturedTvShows() } }.getOrNull() } }
+        val moviesBannerDef = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(phase0Timeout) { tmdb.getFeaturedMovies() } }.getOrNull() } }
+        val seriesBannerDef = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(phase0Timeout) { tmdb.getFeaturedTvShows() } }.getOrNull() } }
 
         val cdnHome: List<Category> = cdnHomeDeferred.await() ?: emptyList()
         val moviesBanner = moviesBannerDef.await()
@@ -132,11 +148,12 @@ object NexaHomeProvider : Provider {
     }
 
     suspend fun getHomePhase1(phase0Categories: List<Category>): List<Category> = coroutineScope {
+        val timeout = if (isTvUi()) PHASE0_TIMEOUT_TV_MS else PHASE0_TIMEOUT_MOBILE_MS
         // Phase 1: Core Content (Trending, Popular, Cinema, New Seasons)
-        val tmdbHomeDeferred = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(2500L) { tmdb.getHome() } }.getOrElse { emptyList() } ?: emptyList() } }
-        val latestMoviesDeferred = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(2500L) { tmdb.getLatestMovies() } }.getOrNull() } }
-        val allCinemaDeferred = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(2500L) { tmdb.getAllCinema() } }.getOrNull() } }
-        val newSeasonDeferred = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(2500L) { tmdb.getNewSeasonsAndEpisodes() } }.getOrNull() } }
+        val tmdbHomeDeferred = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(timeout) { tmdb.getHome() } }.getOrElse { emptyList() } ?: emptyList() } }
+        val latestMoviesDeferred = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(timeout) { tmdb.getLatestMovies() } }.getOrNull() } }
+        val allCinemaDeferred = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(timeout) { tmdb.getAllCinema() } }.getOrNull() } }
+        val newSeasonDeferred = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(timeout) { tmdb.getNewSeasonsAndEpisodes() } }.getOrNull() } }
 
         val tmdbHome = tmdbHomeDeferred.await()
         val latestMovies = latestMoviesDeferred.await()
@@ -170,6 +187,15 @@ object NexaHomeProvider : Provider {
         latestMovies?.let { categories.add(it) }
         allCinema?.let { categories.add(it) }
         newSeasonAndEpisodes?.let { categories.add(it) }
+
+        // DYNAMIC DEDICATED ROWS (Phase 1)
+        val becauseYouWatchedDeferred = async { limited { runCatching { fetchBecauseYouWatchedRow() }.getOrNull() } }
+        val timeOfDayVibeDeferred = async { limited { runCatching { fetchTimeOfDayVibeRow() }.getOrNull() } }
+        val upcomingReleasesDeferred = async { limited { runCatching { fetchUpcomingReleasesRow() }.getOrNull() } }
+
+        becauseYouWatchedDeferred.await()?.let { categories.add(it) }
+        timeOfDayVibeDeferred.await()?.let { categories.add(it) }
+        upcomingReleasesDeferred.await()?.let { categories.add(it) }
 
         // NETWORK ROWS
         tmdbHome.filter { it.name.startsWith("Popular on") || it.name.startsWith("Popolari su") || it.name.startsWith("Popular en") }.forEach {
@@ -209,6 +235,9 @@ object NexaHomeProvider : Provider {
         val actionDef = async { limited { runCatching { tmdb.getGenre("28") }.getOrNull() } }
         val comedyDef = if (!isTv) async { limited { runCatching { tmdb.getGenre("35") }.getOrNull() } } else null
 
+        val cinematicUniversesDef = async { limited { runCatching { fetchCinematicUniversesRows() }.getOrNull().orEmpty() } }
+        val watchAgainDef = async { limited { runCatching { fetchWatchAgainRow() }.getOrNull() } }
+
         val kidsContent = kidsContentDef.await()
         val animeContent = animeContentDef.await()
         val trendingTeenRomance = trendingTeenRomanceDef.await()
@@ -220,9 +249,14 @@ object NexaHomeProvider : Provider {
         val topRatedTv = topRatedTvDef.await()
         val actionGenre = actionDef.await()
         val comedyGenre = comedyDef?.await()
+        val cinematicUniverses = cinematicUniversesDef.await()
+        val watchAgain = watchAgainDef.await()
 
         val categories = mutableListOf<Category>()
         categories.addAll(phase1Categories)
+
+        watchAgain?.let { categories.add(it) }
+        cinematicUniverses.forEach { categories.add(it) }
 
         kidsContent?.let { 
             if (categories.none { cat -> cat.name == "Kids Banner" }) {
@@ -421,13 +455,15 @@ object NexaHomeProvider : Provider {
             combined.addAll(cdnServers)
             combined.addAll(iptvServers)
             if (combined.isNotEmpty()) return combined
+            throw IllegalStateException("No live stream servers available for this channel.")
         }
         return tmdb.getServers(id, videoType)
     }
 
     override suspend fun getVideo(server: Video.Server): Video = withContext(Dispatchers.IO) {
         if (server.name.contains("IPTV All World")) {
-            return@withContext runCatching { IptvOrgProvider.getVideo(server) }.getOrNull() ?: Video(source = server.id)
+            return@withContext runCatching { IptvOrgProvider.getVideo(server) }.getOrNull()
+                ?: throw IllegalStateException("IPTV stream is currently offline.")
         }
 
         if (server.name.contains("CDN") || server.id.contains("cdnlivetv.tv") || server.id.startsWith("http")) {
@@ -466,7 +502,11 @@ object NexaHomeProvider : Provider {
                 }
             }
 
-            return@withContext video ?: Video(source = server.id)
+            if (video != null && video.source.isNotEmpty() && !video.source.contains("/player/")) {
+                return@withContext video
+            }
+
+            throw IllegalStateException("Live stream source unavailable or stream is currently offline.")
         } else {
             tmdb.getVideo(server)
         }
@@ -614,6 +654,14 @@ object NexaHomeProvider : Provider {
         id == "tmdb_japanese_anime" -> tmdb.getJapaneseAnime().let { Genre(id = id, name = it.name, shows = it.list) }
         id == "tmdb_western_anime" -> tmdb.getWesternAnime().let { Genre(id = id, name = it.name, shows = it.list) }
         id == "tmdb_anime_age_7_12" -> tmdb.getAnimeAge7to12().let { Genre(id = id, name = it.name, shows = it.list) }
+        id == "upcoming_releases" || id == "tmdb_upcoming_movies" || id == "Upcoming & Most Anticipated" || id == "Coming Soon" || id == "📅 Coming Soon" -> {
+            val cat = tmdb.getUpcomingMovies()
+            Genre(id = id, name = "Coming Soon", shows = cat.list)
+        }
+        id == "watch_again" || id == "🔄 Watch Again" -> {
+            val cat = fetchWatchAgainRow()
+            Genre(id = id, name = "Watch Again", shows = cat?.list ?: emptyList())
+        }
         id.startsWith("cdn_") -> {
             runCatching { CdnLiveTvProvider.getGenre(id, page) }.getOrElse {
                 Log.w("NexaHomeProvider", "CDN getGenre failed for $id, trying IPTV fallback")
@@ -631,5 +679,137 @@ object NexaHomeProvider : Provider {
         }
         else -> tmdb.getGenre(id, page)
     }
+
+    private suspend fun fetchBecauseYouWatchedRow(): Category? = coroutineScope {
+        val db = runCatching {
+            com.nexastream.app.database.AppDatabase.getInstance(NexastreamApp.instance)
+        }.getOrNull() ?: return@coroutineScope null
+
+        val watchingMovies = runCatching { db.movieDao().getWatchingMovies().firstOrNull().orEmpty() }.getOrDefault(emptyList())
+        val recentMovie = watchingMovies.maxByOrNull {
+            it.watchHistory?.lastEngagementTimeUtcMillis ?: it.watchedDate?.timeInMillis ?: 0L
+        }
+
+        val watchingEpisodes = runCatching { db.episodeDao().getWatchingEpisodes().firstOrNull().orEmpty() }.getOrDefault(emptyList())
+        val recentEpisode = watchingEpisodes.maxByOrNull {
+            it.watchHistory?.lastEngagementTimeUtcMillis ?: it.watchedDate?.timeInMillis ?: 0L
+        }
+
+        val movieTime = recentMovie?.watchHistory?.lastEngagementTimeUtcMillis
+            ?: recentMovie?.watchedDate?.timeInMillis ?: 0L
+        val episodeTime = recentEpisode?.watchHistory?.lastEngagementTimeUtcMillis
+            ?: recentEpisode?.watchedDate?.timeInMillis ?: 0L
+
+        if (movieTime == 0L && episodeTime == 0L) return@coroutineScope null
+
+        if (movieTime >= episodeTime && recentMovie != null) {
+            val movieId = recentMovie.id.toIntOrNull() ?: return@coroutineScope null
+            val rec = runCatching { tmdb.getMovieRecommendations(movieId, recentMovie.title) }.getOrNull()
+            if (rec != null && rec.list.isNotEmpty()) {
+                rec.apply { itemType = AppAdapter.Type.CATEGORY_MOBILE_ITEM }
+            } else null
+        } else if (recentEpisode != null) {
+            val tvShow = recentEpisode.tvShow
+            val showTitle = tvShow?.title ?: recentEpisode.title ?: ""
+            val seriesId = tvShow?.id?.toIntOrNull() ?: recentEpisode.id.toIntOrNull() ?: return@coroutineScope null
+            val rec = runCatching { tmdb.getTvRecommendations(seriesId, showTitle) }.getOrNull()
+            if (rec != null && rec.list.isNotEmpty()) {
+                rec.apply { itemType = AppAdapter.Type.CATEGORY_MOBILE_ITEM }
+            } else null
+        } else null
+    }
+
+    private suspend fun fetchTimeOfDayVibeRow(): Category? = coroutineScope {
+        val calendar = java.util.Calendar.getInstance()
+        val hour = calendar.get(java.util.Calendar.HOUR_OF_DAY)
+        val dayOfWeek = calendar.get(java.util.Calendar.DAY_OF_WEEK)
+
+        val (title, query) = when {
+            hour >= 22 || hour < 4 -> "✨ Late Night Sci-Fi & Thrillers" to "mind-bending sci-fi space horror thriller movies"
+            dayOfWeek == java.util.Calendar.SATURDAY || dayOfWeek == java.util.Calendar.SUNDAY ->
+                "🍿 Weekend Family Blockbusters" to "top rated animated family adventure movies"
+            dayOfWeek == java.util.Calendar.FRIDAY && hour >= 17 -> "🔥 Friday Night Action" to "high octane action blockbuster movies"
+            else -> "⭐ Recommended Vibes" to "popular trending movies and tv series"
+        }
+
+        val aiIntent = com.nexastream.app.utils.AiSearchEngine.parseQuery(query)
+        val items = runCatching {
+            com.nexastream.app.utils.AiSearchEngine.discoverByAiIntent(aiIntent, language = "en", page = 1)
+        }.getOrNull().orEmpty()
+
+        if (items.isNotEmpty()) {
+            Category(name = title, list = items).apply { itemType = AppAdapter.Type.CATEGORY_MOBILE_ITEM }
+        } else null
+    }
+
+    private suspend fun fetchCinematicUniversesRows(): List<Category> = coroutineScope {
+        val mcuDef = async {
+            runCatching {
+                tmdb.getFranchiseContent(
+                    franchiseName = "⚡ Marvel Cinematic Universe",
+                    companyId = 420
+                )
+            }.getOrNull()
+        }
+        val starWarsDef = async {
+            runCatching {
+                tmdb.getFranchiseContent(
+                    franchiseName = "⚔️ Star Wars Universe",
+                    keywordId = 161176
+                )
+            }.getOrNull()
+        }
+        val dcDef = async {
+            runCatching {
+                tmdb.getFranchiseContent(
+                    franchiseName = "🦇 DC Extended Universe",
+                    companyId = 128064
+                )
+            }.getOrNull()
+        }
+
+        listOfNotNull(mcuDef.await(), starWarsDef.await(), dcDef.await())
+            .filter { it.list.isNotEmpty() }
+            .map { it.apply { itemType = AppAdapter.Type.CATEGORY_MOBILE_ITEM } }
+    }
+
+    private suspend fun fetchUpcomingReleasesRow(): Category? = coroutineScope {
+        val cat = runCatching { tmdb.getUpcomingMovies() }.getOrNull()
+        if (cat != null && cat.list.isNotEmpty()) {
+            cat.copy(name = "Coming Soon").apply { itemType = AppAdapter.Type.CATEGORY_MOBILE_ITEM }
+        } else null
+    }
+
+    private suspend fun fetchWatchAgainRow(): Category? = coroutineScope {
+        val db = runCatching {
+            com.nexastream.app.database.AppDatabase.getInstance(NexastreamApp.instance)
+        }.getOrNull() ?: return@coroutineScope null
+
+        val now = System.currentTimeMillis()
+        val fourteenDaysMillis = 14L * 24 * 60 * 60 * 1000
+
+        val movies = runCatching { db.movieDao().getAll() }.getOrDefault(emptyList())
+        val watchAgainMovies = movies.filter { movie ->
+            val history = movie.watchHistory
+            val isFinished = history != null && history.durationMillis > 0 && history.lastPlaybackPositionMillis >= (history.durationMillis * 0.9)
+            val isWatched = movie.isWatched || isFinished
+            val lastTime = history?.lastEngagementTimeUtcMillis ?: movie.watchedDate?.timeInMillis ?: now
+            val isOldEnough = (now - lastTime) > fourteenDaysMillis
+            (isWatched && isOldEnough) || movie.isFavorite
+        }
+
+        val tvShows = runCatching { db.tvShowDao().getAllForBackup() }.getOrDefault(emptyList())
+        val watchAgainTvShows = tvShows.filter { tv ->
+            val isWatching = tv.isWatching || tv.isFavorite
+            val isOldEnough = (now - (tv.favoritedAtMillis ?: now)) > fourteenDaysMillis
+            isWatching && isOldEnough
+        }
+
+        val combined: List<AppAdapter.Item> = (watchAgainMovies + watchAgainTvShows).take(15)
+        if (combined.isNotEmpty()) {
+            Category(name = "🔄 Watch Again", list = combined).apply { itemType = AppAdapter.Type.CATEGORY_MOBILE_ITEM }
+        } else null
+    }
+
     override suspend fun getPeople(id: String, page: Int): People = tmdb.getPeople(id, page)
 }

@@ -68,10 +68,42 @@ class MovieBoxExtractor : Extractor() {
             throw IllegalStateException("No subjects found on MovieBox for '$searchTitle'")
         }
 
-        val bestSubject = subjects.firstOrNull {
-            val titleMatches = it.name.contains(searchTitle, ignoreCase = true) || searchTitle.contains(it.name, ignoreCase = true)
+        val bestSubject = subjects.minByOrNull { item ->
+            val nameUpper = item.name.uppercase()
+            val searchUpper = searchTitle.uppercase()
             val isTv = type == "tv"
-            titleMatches && (it.isTvShow == isTv)
+
+            var score = 0
+
+            // TV vs Movie type mismatch penalty
+            if (item.isTvShow != isTv) score += 500
+
+            // Dubbed / foreign language mismatch penalty
+            val isDubbed = nameUpper.contains("[HINDI]") || nameUpper.contains("(HINDI)") ||
+                           nameUpper.contains("[TAMIL]") || nameUpper.contains("[TELUGU]") ||
+                           nameUpper.contains("[BENGALI]") || nameUpper.contains("[MALAYALAM]") ||
+                           nameUpper.contains("HINDI DUB") || nameUpper.contains("HINDI DUBBED") ||
+                           nameUpper.contains("[SPANISH]") || nameUpper.contains("[FRENCH]")
+
+            val targetWantsDub = searchUpper.contains("HINDI") || searchUpper.contains("TAMIL") || searchUpper.contains("TELUGU") || searchUpper.contains("DUB")
+
+            if (isDubbed && !targetWantsDub) {
+                score += 1000
+            } else if (!isDubbed && targetWantsDub) {
+                score += 200
+            }
+
+            // Exact title match bonus
+            if (item.name.equals(searchTitle, ignoreCase = true)) {
+                score -= 100
+            } else if (item.name.contains(searchTitle, ignoreCase = true) || searchTitle.contains(item.name, ignoreCase = true)) {
+                score -= 50
+            }
+
+            // Length difference penalty
+            score += Math.abs(item.name.length - searchTitle.length)
+
+            score
         } ?: subjects.first()
 
         Log.i("MovieBoxExtractor", "Found MovieBox Subject: ${bestSubject.name} (ID: ${bestSubject.id})")
@@ -119,10 +151,17 @@ class MovieBoxExtractor : Extractor() {
             )
         }
 
+        val mimeType = when {
+            primaryStream.url.contains(".m3u8", ignoreCase = true) -> "application/x-mpegURL"
+            primaryStream.url.contains(".mpd", ignoreCase = true) -> "application/dash+xml"
+            else -> "video/mp4"
+        }
+
         return Video(
             source = primaryStream.url,
             subtitles = subtitles,
             headers = headers.ifEmpty { null },
+            type = mimeType,
             streams = streams
         )
     }

@@ -14,8 +14,14 @@ data class Video(
     val maintainToken: Boolean = false,
     val streams: List<Stream>? = null,
     val signCookie: Map<String, String>? = null,
-    val linkType: String? = null
+    val linkType: String? = null,
+    val drmConfiguration: DrmConfiguration? = null,
 ) : Serializable {
+
+    data class DrmConfiguration(
+        val licenseUri: String,
+        val licenseRequestHeaders: Map<String, String> = emptyMap(),
+    ) : Serializable
 
     data class Stream(
         val url: String,

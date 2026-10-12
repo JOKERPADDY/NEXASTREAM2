@@ -11,6 +11,7 @@ import com.nexastream.app.models.Season
 import com.nexastream.app.models.TvShow
 import com.nexastream.app.models.WatchItem
 import com.nexastream.app.providers.Provider
+import com.nexastream.app.providers.VersionedHomeCache
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
@@ -80,6 +81,7 @@ object HomeCacheStore {
             if (baseUrlKey.isNotEmpty()) {
                 add(baseUrlKey)
             }
+            (provider as? VersionedHomeCache)?.homeCacheVersion?.let { add(it) }
         }.joinToString("__")
     }
 

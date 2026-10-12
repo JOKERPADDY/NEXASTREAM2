@@ -81,7 +81,7 @@ class PeopleViewModel @Inject constructor(
         _state.emit(State.Loading)
 
         try {
-            val people = UserPreferences.currentProvider!!.getPeople(id, 1)
+            val people = UserPreferences.currentProvider.getPeople(id, 1)
             page = 1
             _state.emit(State.SuccessLoading(people, people.filmography.isNotEmpty()))
         } catch (e: Exception) {
@@ -96,7 +96,7 @@ class PeopleViewModel @Inject constructor(
             _state.emit(State.LoadingMore)
 
             try {
-                val people = UserPreferences.currentProvider!!.getPeople(id, page + 1)
+                val people = UserPreferences.currentProvider.getPeople(id, page + 1)
                 page += 1
                 _state.emit(
                     State.SuccessLoading(

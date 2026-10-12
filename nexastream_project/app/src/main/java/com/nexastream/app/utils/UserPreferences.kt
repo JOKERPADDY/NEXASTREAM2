@@ -73,21 +73,14 @@ object UserPreferences {
     @Volatile
     private var cachedProvider: Provider? = null
 
-    var currentProvider: Provider?
+    var currentProvider: Provider
         get() {
             cachedProvider?.let { return it }
             val providerName = Key.CURRENT_PROVIDER.getString() ?: run {
                 cachedProvider = NexaHomeProvider
                 return NexaHomeProvider
             }
-            val resolved = when {
-                providerName.startsWith("TMDb (") && providerName.endsWith(")") -> {
-                    val lang = providerName.substringAfter("TMDb (").substringBefore(")")
-                    TmdbProvider(lang)
-                }
-                providerName == "HOME" -> NexaHomeProvider
-                else -> Provider.providers.keys.find { it.name == providerName } ?: NexaHomeProvider
-            }
+            val resolved = getProviderByName(providerName) ?: NexaHomeProvider
             cachedProvider = resolved
             return resolved
         }
@@ -95,12 +88,26 @@ object UserPreferences {
             setCurrentProvider(value, notify = true)
         }
 
+    fun getProviderByName(providerName: String?): Provider? {
+        if (providerName.isNullOrEmpty()) return null
+        return when {
+            providerName.startsWith("TMDb (") && providerName.endsWith(")") -> {
+                val lang = providerName.substringAfter("TMDb (").substringBefore(")")
+                TmdbProvider(lang)
+            }
+            providerName == "HOME" -> NexaHomeProvider
+            else -> Provider.providers.keys.find { it.name == providerName }
+        }
+    }
+
     fun setCurrentProvider(value: Provider?, notify: Boolean) {
-        if (value?.name == currentProvider?.name) return
-        cachedProvider = value
-        Key.CURRENT_PROVIDER.setString(value?.name)
+        val target = value ?: NexaHomeProvider
+        if (target.name == cachedProvider?.name && Key.CURRENT_PROVIDER.getString() == target.name) return
+        cachedProvider = target
+        Key.CURRENT_PROVIDER.setString(target.name)
+        AppDatabase.resetInstance()
         runCatching {
-            ArtworkRepairScheduler.schedule(NexastreamApp.instance, value)
+            ArtworkRepairScheduler.schedule(NexastreamApp.instance, target)
         }
 
         if (notify) {
@@ -117,7 +124,7 @@ object UserPreferences {
     }
 
     fun setProviderCache(provider: Provider?, key: String, value: String) {
-        val providerName = provider?.name ?: currentProvider?.name ?: return
+        val providerName = provider?.name ?: currentProvider.name
         val innerJson = providerCache.optJSONObject(providerName)
             ?: JSONObject().also { providerCache.put(providerName, it) }
         
@@ -127,7 +134,7 @@ object UserPreferences {
         innerJson.put(key, value)
         Key.PROVIDER_CACHE.setString(providerCache.toString())
 
-        if (key == PROVIDER_LOGO && providerName == currentProvider?.name) {
+        if (key == PROVIDER_LOGO && providerName == currentProvider.name) {
             ProviderChangeNotifier.notifyProviderChanged()
         }
     }

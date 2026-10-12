@@ -21,6 +21,20 @@ NexaStream is a modern Android application for streaming movies and TV shows, fe
 - **Favorites**: Save your preferred providers and shows for quick access.
 - **Theme Support**: Customize the app's appearance with multiple color palettes.
 
+### PatrickTV / Cricfy configuration
+
+PatrickTV follows the provider and playlist flow of the [Cricfy Kodi plugin](https://github.com/itsyourap/cricfy-kodi-plugin): it fetches the provider catalog through Firebase Remote Config and decrypts provider playlists. To enable it for a local build, add the following values to the root `local.properties` file. The supplied plugin checkout must include its ignored `cricfy_properties.json` and `secret1.txt` / `secret2.txt` resource values; those files were not present in the checkout used for this port.
+
+```properties
+CRICFY_PACKAGE_NAME=
+CRICFY_FIREBASE_API_KEY=
+CRICFY_FIREBASE_APP_ID=
+CRICFY_SECRET1=
+CRICFY_SECRET2=
+```
+
+`CRICFY_SECRET1` and `CRICFY_SECRET2` use the plugin's `keyHex:ivHex` format; at least one must be set. Keep these values local and do not commit them. The built-in players support ClearKey license URLs; inline `keyId:key` ClearKey licenses and DRM in external players are not supported.
+
 ## 🛠 Tech Stack
 
 - **Kotlin**: Primary programming language.

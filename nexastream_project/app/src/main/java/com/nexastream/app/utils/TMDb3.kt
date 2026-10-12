@@ -372,6 +372,19 @@ object TMDb3 {
                 params = params.filterNotNullValues(),
             )
         }
+
+        suspend fun upcoming(
+            language: String? = null,
+            page: Int? = null,
+        ): PageResult<Movie> {
+            val params = mapOf(
+                Params.Key.LANGUAGE to language,
+                Params.Key.PAGE to page?.toString(),
+            )
+            return service.getUpcomingMovies(
+                params = params.filterNotNullValues(),
+            )
+        }
     }
 
     object Movies {
@@ -386,6 +399,21 @@ object TMDb3 {
                 Params.Key.LANGUAGE to language,
             )
             return service.getMovieDetails(
+                movieId = movieId,
+                params = params.filterNotNullValues(),
+            )
+        }
+
+        suspend fun recommendations(
+            movieId: Int,
+            language: String? = null,
+            page: Int? = null,
+        ): PageResult<Movie> {
+            val params = mapOf(
+                Params.Key.LANGUAGE to language,
+                Params.Key.PAGE to page?.toString(),
+            )
+            return service.getMovieRecommendations(
                 movieId = movieId,
                 params = params.filterNotNullValues(),
             )
@@ -679,6 +707,21 @@ object TMDb3 {
                 Params.Key.LANGUAGE to language,
             )
             return service.getTvDetails(
+                seriesId = seriesId,
+                params = params.filterNotNullValues(),
+            )
+        }
+
+        suspend fun recommendations(
+            seriesId: Int,
+            language: String? = null,
+            page: Int? = null,
+        ): PageResult<Tv> {
+            val params = mapOf(
+                Params.Key.LANGUAGE to language,
+                Params.Key.PAGE to page?.toString(),
+            )
+            return service.getTvRecommendations(
                 seriesId = seriesId,
                 params = params.filterNotNullValues(),
             )
@@ -1017,6 +1060,23 @@ object TMDb3 {
         suspend fun getTopRatedMovies(
             @QueryMap params: Map<String, String> = emptyMap(),
         ): PageResult<Movie>
+
+        @GET("movie/upcoming")
+        suspend fun getUpcomingMovies(
+            @QueryMap params: Map<String, String> = emptyMap(),
+        ): PageResult<Movie>
+
+        @GET("movie/{movie_id}/recommendations")
+        suspend fun getMovieRecommendations(
+            @Path("movie_id") movieId: Int,
+            @QueryMap params: Map<String, String> = emptyMap(),
+        ): PageResult<Movie>
+
+        @GET("tv/{series_id}/recommendations")
+        suspend fun getTvRecommendations(
+            @Path("series_id") seriesId: Int,
+            @QueryMap params: Map<String, String> = emptyMap(),
+        ): PageResult<Tv>
 
 
         @GET("movie/{movie_id}")

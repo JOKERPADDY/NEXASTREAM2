@@ -17,6 +17,7 @@ import com.nexastream.app.R
 import com.nexastream.app.databinding.DialogSportsServersBinding
 import com.nexastream.app.databinding.ItemServerLinkBinding
 import com.nexastream.app.models.Video
+import com.nexastream.app.utils.DownloadQualityFormatter
 import kotlinx.coroutines.launch
 
 class SportsServersDialogFragment : DialogFragment() {
@@ -121,7 +122,7 @@ class SportsServersDialogFragment : DialogFragment() {
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val server = servers[position]
-            holder.binding.tvServerName.text = server.name
+            holder.binding.tvServerName.text = DownloadQualityFormatter.anonymizeName(server.name)
             holder.binding.ivServerIcon.setImageResource(R.drawable.ic_player_settings_servers)
             holder.binding.root.setOnClickListener { onServerSelected(server) }
         }

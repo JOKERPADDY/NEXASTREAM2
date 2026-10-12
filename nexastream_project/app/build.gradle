@@ -20,8 +20,8 @@ android {
         applicationId "com.nexastream.app"
         minSdk 23
         targetSdk 35
-        versionCode 6
-        versionName "1.0.5"
+        versionCode 7
+        versionName "1.0.6"
 
         buildConfigField "String", "APP_LAYOUT", "\"${properties.getProperty("APP_LAYOUT", "auto")}\""
         buildConfigField "String", "TMDB_API_KEY", "\"${properties.getProperty("TMDB_API_KEY", "")}\""
@@ -29,6 +29,11 @@ android {
         buildConfigField "String", "SUBDL_API_KEY", "\"${properties.getProperty("SUBDL_API_KEY", "")}\""
         buildConfigField "String", "TRAKT_CLIENT_ID", "\"${properties.getProperty("TRAKT_CLIENT_ID", "")}\""
         buildConfigField "String", "TRAKT_CLIENT_SECRET", "\"${properties.getProperty("TRAKT_CLIENT_SECRET", "")}\""
+        buildConfigField "String", "CRICFY_PACKAGE_NAME", "\"${properties.getProperty("CRICFY_PACKAGE_NAME", "")}\""
+        buildConfigField "String", "CRICFY_FIREBASE_API_KEY", "\"${properties.getProperty("CRICFY_FIREBASE_API_KEY", "")}\""
+        buildConfigField "String", "CRICFY_FIREBASE_APP_ID", "\"${properties.getProperty("CRICFY_FIREBASE_APP_ID", "")}\""
+        buildConfigField "String", "CRICFY_SECRET1", "\"${properties.getProperty("CRICFY_SECRET1", "")}\""
+        buildConfigField "String", "CRICFY_SECRET2", "\"${properties.getProperty("CRICFY_SECRET2", "")}\""
     }
 
     compileOptions {

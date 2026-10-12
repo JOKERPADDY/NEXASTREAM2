@@ -29,6 +29,7 @@ import com.nexastream.app.models.Episode
 import com.nexastream.app.models.Movie
 import com.nexastream.app.models.SportMatch
 import com.nexastream.app.models.TvShow
+import com.nexastream.app.providers.NexaHomeProvider
 import com.nexastream.app.repositories.HomeRepository
 import com.nexastream.app.utils.CacheUtils
 import com.nexastream.app.utils.LoggingUtils
@@ -426,7 +427,78 @@ class HomeTvFragment : Fragment() {
     }
 
     private fun displayHome(categories: List<Category>) {
-        categories
+        val isHomeProvider = UserPreferences.currentProvider == NexaHomeProvider
+        val homeBanners = categories.filter {
+            it.name == "Movies Banner" || it.name == "Series Banner"
+        }
+        val featuredCategory = categories.firstOrNull { it.name == Category.FEATURED }
+        val displayCategories = if (isHomeProvider) {
+            val featuredItems = (
+                featuredCategory?.list.orEmpty() + homeBanners.flatMap { it.list }
+            ).filter { it is Movie || it is TvShow }.ifEmpty {
+                categories.filter {
+                    it.name == "Trending Today" ||
+                        it.name == "Trending Series" ||
+                        it.name == "Popular Movies" ||
+                        it.name == "Popular TV Shows"
+                }.flatMap { it.list }.filter { it is Movie || it is TvShow }
+            }.distinctBy { item ->
+                    when (item) {
+                        is Movie -> "movie:${item.id}"
+                        is TvShow -> "tv:${item.id}"
+                        else -> item.hashCode().toString()
+                    }
+                }
+            val withoutOldBanners = categories.filterNot {
+                it.name == Category.FEATURED ||
+                    it.name == "Movies Banner" ||
+                    it.name == "Series Banner"
+            }
+            if (featuredItems.isNotEmpty()) {
+                val mergedFeatured = Category(Category.FEATURED, featuredItems).apply {
+                    selectedIndex = featuredCategory?.selectedIndex
+                        ?.coerceIn(0, featuredItems.lastIndex)
+                        ?: 0
+                }
+                listOf(mergedFeatured) + withoutOldBanners
+            } else {
+                withoutOldBanners
+            }
+        } else {
+            categories
+        }
+
+        val categoriesWithLivestream = if (isHomeProvider) {
+            val liveCategories = displayCategories.filter { category ->
+                category.name.equals("Livestream", ignoreCase = true) ||
+                    category.name.equals("CDN Live Channels", ignoreCase = true) ||
+                    category.name.equals("Live Channels", ignoreCase = true) ||
+                    category.name.startsWith("Livestream · ", ignoreCase = true)
+            }
+            val liveItems = liveCategories.flatMap { it.list }
+                .distinctBy { item ->
+                    when (item) {
+                        is TvShow -> item.id
+                        else -> item.hashCode().toString()
+                    }
+                }
+            if (liveItems.isEmpty()) {
+                displayCategories
+            } else {
+                val remaining = displayCategories.filterNot { it in liveCategories }.toMutableList()
+                val heroIndex = remaining.indexOfFirst { it.name == Category.FEATURED }
+                remaining.add(
+                    (heroIndex + 1).coerceAtLeast(0),
+                    Category("Livestream", liveItems)
+                )
+                remaining
+            }
+        } else {
+            displayCategories
+        }
+
+        val tvCategories = categoriesWithLivestream
+        tvCategories
             .find { it.name == Category.FEATURED }
             ?.also {
                 val index = appAdapter.items
@@ -434,8 +506,8 @@ class HomeTvFragment : Fragment() {
                     .find { item -> item.name == Category.FEATURED }
                     ?.selectedIndex
                     ?: 0
-                it.selectedIndex = index
-                
+                it.selectedIndex = index.coerceIn(0, it.list.lastIndex.coerceAtLeast(0))
+
                 // Initialize background with first item from featured category immediately
                 val firstItem = it.list.getOrNull(index)
                 val poster = when (firstItem) {
@@ -447,11 +519,11 @@ class HomeTvFragment : Fragment() {
                 if (poster != null) {
                     updateBackground(poster, null)
                 }
-                
+
                 resetSwiperSchedule()
             }
 
-        categories
+        tvCategories
             .find { it.name == Category.CONTINUE_WATCHING }
             ?.also {
                 it.name = getString(R.string.home_continue_watching)
@@ -463,26 +535,25 @@ class HomeTvFragment : Fragment() {
                 }
             }
 
-        categories
+        tvCategories
             .find { it.name == Category.FAVORITE_MOVIES }
             ?.also { it.name = getString(R.string.home_favorite_movies) }
 
-        categories
+        tvCategories
             .find { it.name == Category.FAVORITE_TV_SHOWS }
             ?.also { it.name = getString(R.string.home_favorite_tv_shows) }
 
         appAdapter.submitList(
-            categories
+            tvCategories
                 .filter { it.list.isNotEmpty() }
                 .onEach { category ->
                     if (category.name != getString(R.string.home_continue_watching)) {
+                        val isLivestream = category.name.equals("Livestream", ignoreCase = true) ||
+                            category.name.equals("CDN Live Channels", ignoreCase = true) ||
+                            category.name.equals("Live Channels", ignoreCase = true)
                         category.list.forEach { show ->
-                            if (category.name == "Livestream" || category.name == "CDN Live Channels" || category.name == "Live Channels") {
-                                if (show is TvShow) {
-                                    show.itemType = AppAdapter.Type.LIVESTREAM_TV_ITEM
-                                } else {
-                                    show.itemType = AppAdapter.Type.TV_SHOW_TV_ITEM
-                                }
+                            if (isLivestream && show is TvShow) {
+                                show.itemType = AppAdapter.Type.LIVESTREAM_TV_ITEM
                             } else {
                                 when (show) {
                                     is Episode -> show.itemType = AppAdapter.Type.EPISODE_TV_ITEM

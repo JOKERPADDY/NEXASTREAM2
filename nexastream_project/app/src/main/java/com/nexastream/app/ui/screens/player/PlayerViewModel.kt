@@ -198,7 +198,7 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.update { it.copy(isLoading = true, error = null, currentServer = server) }
             try {
-                val video = UserPreferences.currentProvider!!.getVideo(server)
+                val video = UserPreferences.currentProvider.getVideo(server)
                 if (video.source.isEmpty()) throw Exception("Empty source from ${server.name}")
                 _uiState.update { it.copy(video = video, isLoading = false) }
             } catch (e: Exception) {

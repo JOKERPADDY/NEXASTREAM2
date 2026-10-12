@@ -25,6 +25,10 @@ interface ProviderConfigUrl {
 
 interface IptvProvider : Provider
 
+interface VersionedHomeCache {
+    val homeCacheVersion: String
+}
+
 interface Provider {
 
     val baseUrl: String
@@ -101,6 +105,7 @@ interface Provider {
             SoloLatinoProvider to ProviderSupport(movies = true, tvShows = true),
             FlixLatamProvider to ProviderSupport(movies = true, tvShows = true),
             FilmPalastProvider to ProviderSupport(movies = true, tvShows = false),
+            LocalIptvProvider to ProviderSupport(movies = false, tvShows = true),
             PatrickTvProvider to ProviderSupport(movies = false, tvShows = true)
             // TmdbProvider to ProviderSupport(movies = true, tvShows = true) // TmdbProvider is a special case with language parameter
         )

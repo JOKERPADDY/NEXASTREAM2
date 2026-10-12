@@ -2,7 +2,7 @@ package com.nexastream.app.providers
 
 import android.util.Base64
 import android.util.Log
-import com.nexastream.app.NexastreamApp
+import com.google.gson.Gson
 import com.nexastream.app.adapters.AppAdapter
 import com.nexastream.app.models.Category
 import com.nexastream.app.models.Episode
@@ -14,27 +14,41 @@ import com.nexastream.app.models.Season
 import com.nexastream.app.models.TvShow
 import com.nexastream.app.models.Video
 import com.nexastream.app.utils.ChannelLogoRepository
-import java.io.BufferedReader
-import java.io.InputStreamReader
+import java.io.IOException
 
-object PatrickTvProvider : IptvProvider {
+object PatrickTvProvider : IptvProvider, VersionedHomeCache {
 
     override val name = "PatrickTV"
     override val baseUrl = ""
     override val logo = "https://i.ibb.co/W1d0CxF/Logo-IPTV-All-World.jpg"
     override val language = "en"
+    override val homeCacheVersion = "cricfy-v1"
 
-    private const val TAG = "PatrickTvProvider"
+    private const val PLAYBACK_ID_PREFIX = "patricktv:cricfy:"
+    private const val LEGACY_PLAYBACK_ID_PREFIX = "patricktv:v2:"
+    private val gson = Gson()
 
-    private var cachedChannels: List<M3UChannel>? = null
-
-    data class M3UChannel(
-        val name: String,
+    private data class LegacyPlaybackData(
         val url: String,
-        val logo: String?,
-        val group: String?,
+        val name: String,
+        val logo: String? = null,
         val userAgent: String? = null,
-        val referer: String? = null
+        val referer: String? = null,
+        val cookie: String? = null,
+        val headers: Map<String, String>? = null,
+    )
+
+    private data class PlaybackData(
+        val url: String,
+        val title: String,
+        val logo: String? = null,
+        val providerTitle: String? = null,
+        val providerLogo: String? = null,
+        val userAgent: String? = null,
+        val cookie: String? = null,
+        val referer: String? = null,
+        val licenseString: String? = null,
+        val headers: Map<String, String>? = null,
     )
 
     private val staticLogos = mapOf(
@@ -47,307 +61,278 @@ object PatrickTvProvider : IptvProvider {
         "кхл" to "https://iptvx.one/picons/khl-hd.png",
         "real madrid" to "https://upload.wikimedia.org/wikipedia/en/thumb/5/56/Real_Madrid_CF.svg/1200px-Real_Madrid_CF.svg.png",
         "setanta" to "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c9/Setanta_Sports_logo.svg/1200px-Setanta_Sports_logo.svg.png",
-        "ufc" to "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0d/UFC_logo.svg/1200px-UFC_logo.svg.png"
+        "ufc" to "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0d/UFC_logo.svg/1200px-UFC_logo.svg.png",
     )
 
-    private fun normalizeName(rawName: String): String {
-        return rawName
-            .replace(Regex("""^[,\s]+|[,\s]+$"""), "")
-            .replace(Regex("""\s+"""), " ")
-            .trim()
-    }
+    private fun normalizeName(rawName: String): String =
+        rawName.replace(Regex("""\s+"""), " ").trim()
 
-    private suspend fun resolveLogoUrl(channelName: String, m3uLogo: String?): String {
-        if (!m3uLogo.isNullOrBlank()) return m3uLogo
+    private suspend fun resolveLogoUrl(channelName: String, channelLogo: String?, providerLogo: String?): String {
+        channelLogo?.takeIf(String::isNotBlank)?.let { return it }
 
-        val nameLower = channelName.lowercase().trim()
-        staticLogos.entries.find { nameLower.contains(it.key) }?.value?.let { return it }
-
+        val normalizedName = channelName.lowercase().trim()
+        staticLogos.entries.firstOrNull { normalizedName.contains(it.key) }?.value?.let { return it }
         ChannelLogoRepository.getLogoUrl(channelName)?.let { return it }
-
+        providerLogo?.takeIf(String::isNotBlank)?.let { return it }
         return logo
     }
 
-    private fun createId(channel: M3UChannel): String {
-        val rawId = "${channel.url}|${channel.name}|${channel.logo ?: ""}|${channel.userAgent ?: ""}|${channel.referer ?: ""}"
-        return "patricktv:" + Base64.encodeToString(rawId.toByteArray(), Base64.NO_WRAP)
+    private fun createId(source: CricfyProviderSource, channel: CricfyChannel): String {
+        val data = PlaybackData(
+            url = channel.url,
+            title = channel.title,
+            logo = channel.logo,
+            providerTitle = source.title,
+            providerLogo = source.image,
+            userAgent = channel.userAgent,
+            cookie = channel.cookie,
+            referer = channel.referer,
+            licenseString = channel.licenseString,
+            headers = channel.headers,
+        )
+        val encoded = Base64.encodeToString(
+            gson.toJson(data).toByteArray(Charsets.UTF_8),
+            Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING,
+        )
+        return PLAYBACK_ID_PREFIX + encoded
     }
 
     fun decodeId(id: String): Triple<String, String, String> {
-        return try {
-            val raw = String(Base64.decode(id.removePrefix("patricktv:"), Base64.DEFAULT))
-            val parts = raw.split("|")
-            val cleanUrl = parts[0].removePrefix("patricktv:").trim()
-            Triple(cleanUrl, parts.getOrNull(1) ?: "", parts.getOrNull(2) ?: "")
-        } catch (e: Exception) {
-            Triple(id.removePrefix("patricktv:"), "Unknown Channel", "")
+        val data = decodePlaybackData(id)
+        return Triple(data.url, data.title, data.logo.orEmpty())
+    }
+
+    private fun decodePlaybackData(id: String): PlaybackData {
+        val encodedPrefix = when {
+            id.startsWith(PLAYBACK_ID_PREFIX) -> PLAYBACK_ID_PREFIX
+            id.startsWith(LEGACY_PLAYBACK_ID_PREFIX) -> LEGACY_PLAYBACK_ID_PREFIX
+            else -> null
         }
-    }
-
-    private fun getMetadataFromId(id: String): Map<String, String?> {
-        return try {
-            val raw = String(Base64.decode(id.removePrefix("patricktv:"), Base64.DEFAULT))
-            val parts = raw.split("|")
-            mapOf(
-                "ua" to parts.getOrNull(3).takeIf { it?.isNotEmpty() == true },
-                "referer" to parts.getOrNull(4).takeIf { it?.isNotEmpty() == true }
-            )
-        } catch (e: Exception) { emptyMap() }
-    }
-
-    private fun getAllChannels(): List<M3UChannel> {
-        if (cachedChannels != null) return cachedChannels!!
-
-        val rawChannels = mutableListOf<M3UChannel>()
-        val fileName = "patricktv.m3u"
-
-        try {
-            val inputStream = NexastreamApp.instance.assets.open(fileName)
-            val reader = BufferedReader(InputStreamReader(inputStream))
-            parseM3UStream(reader, rawChannels)
-            inputStream.close()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error reading $fileName: ${e.message}")
-        }
-
-        // Strict deduplication: first by URL, then by normalized channel name
-        val deduplicated = rawChannels
-            .distinctBy { it.url }
-            .distinctBy { normalizeName(it.name).lowercase() }
-
-        cachedChannels = deduplicated
-        return deduplicated
-    }
-
-    private fun parseM3UStream(reader: BufferedReader, channels: MutableList<M3UChannel>) {
-        var curName = ""
-        var curLogo = ""
-        var curGroup = ""
-        var curUA: String? = null
-        var curRef: String? = null
-
-        reader.forEachLine { line ->
-            val t = line.trim()
-            if (t.startsWith("#EXTINF")) {
-                val parsedName = t.substringAfterLast(",").trim()
-                curName = normalizeName(parsedName)
-                curLogo = Regex("""tvg-logo="([^"]+)"""").find(t)?.groupValues?.get(1) ?: ""
-                curGroup = Regex("""group-title="([^"]+)"""").find(t)?.groupValues?.get(1) ?: ""
-
-                if (t.contains("http-user-agent=")) {
-                    curUA = t.substringAfter("http-user-agent=").substringBefore(" ").removeSurrounding("\"")
+        if (encodedPrefix != null) {
+            return try {
+                val encodingFlags = if (encodedPrefix == LEGACY_PLAYBACK_ID_PREFIX) {
+                    Base64.DEFAULT
+                } else {
+                    Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
                 }
-                if (t.contains("http-referrer=")) {
-                    curRef = t.substringAfter("http-referrer=").substringBefore(" ").removeSurrounding("\"")
-                }
-            } else if (t.startsWith("#EXTGRP")) {
-                curGroup = t.substringAfter(":").trim()
-            } else if (t.startsWith("#EXTVLCOPT:")) {
-                if (t.contains("http-user-agent=")) curUA = t.substringAfter("http-user-agent=").trim()
-                if (t.contains("http-referrer=")) curRef = t.substringAfter("http-referrer=").trim()
-            } else if (t.startsWith("http")) {
-                val urlParts = t.split("|")
-                val cleanUrl = urlParts[0].trim()
-
-                if (urlParts.size > 1) {
-                    urlParts.drop(1).forEach { part ->
-                        if (part.contains("User-Agent=", ignoreCase = true)) {
-                            curUA = part.substringAfterLast("=").trim()
-                        }
+                val json = String(
+                    Base64.decode(id.removePrefix(encodedPrefix), encodingFlags),
+                    Charsets.UTF_8,
+                )
+                if (encodedPrefix == LEGACY_PLAYBACK_ID_PREFIX) {
+                    val legacy = gson.fromJson(json, LegacyPlaybackData::class.java)
+                        ?: throw IllegalArgumentException("Empty legacy PatrickTV playback data")
+                    PlaybackData(
+                        url = legacy.url,
+                        title = legacy.name,
+                        logo = legacy.logo,
+                        userAgent = legacy.userAgent,
+                        cookie = legacy.cookie,
+                        referer = legacy.referer,
+                        headers = legacy.headers,
+                    )
+                } else {
+                    gson.fromJson(json, PlaybackData::class.java)
+                        ?: throw IllegalArgumentException("Empty PatrickTV playback data")
+                }.also { data ->
+                    require(data.url.isNotBlank() && data.title.isNotBlank()) {
+                        "PatrickTV playback data is missing a URL or channel title"
                     }
                 }
-
-                if (curName.isNotEmpty() && cleanUrl.isNotEmpty()) {
-                    channels.add(M3UChannel(curName, cleanUrl, curLogo, curGroup, curUA, curRef))
-                    curName = ""; curLogo = ""; curGroup = ""; curUA = null; curRef = null
-                }
+            } catch (error: Exception) {
+                throw IllegalArgumentException("Invalid PatrickTV playback ID", error)
             }
+        }
+
+        return try {
+            val raw = String(Base64.decode(id.removePrefix("patricktv:"), Base64.DEFAULT), Charsets.UTF_8)
+            val parts = raw.split("|")
+            PlaybackData(
+                url = parts.first().removePrefix("patricktv:").trim(),
+                title = parts.getOrNull(1).orEmpty(),
+                logo = parts.getOrNull(2)?.ifBlank { null },
+                userAgent = parts.getOrNull(3)?.ifBlank { null },
+                referer = parts.getOrNull(4)?.ifBlank { null },
+            )
+        } catch (error: Exception) {
+            throw IllegalArgumentException("Invalid PatrickTV playback ID", error)
+        }
+    }
+
+    private suspend fun allProviderChannels(): List<Pair<CricfyProviderSource, List<CricfyChannel>>> =
+        CricfyProviderClient.getChannelsForAllProviders()
+
+    private suspend fun channelItem(
+        source: CricfyProviderSource,
+        channel: CricfyChannel,
+    ): TvShow {
+        val posterUrl = resolveLogoUrl(channel.title, channel.logo, source.image)
+        return TvShow(
+            id = createId(source, channel),
+            title = normalizeName(channel.title).ifBlank { "Unknown Channel" },
+            poster = posterUrl,
+            banner = posterUrl,
+            overview = buildString {
+                append("Live channel")
+                channel.group?.takeIf(String::isNotBlank)?.let { append("\nGroup: $it") }
+                append("\nSource: ${source.title}")
+            },
+            providerName = name,
+        ).apply {
+            itemType = AppAdapter.Type.TV_SHOW_MOBILE_ITEM
         }
     }
 
     override suspend fun getHome(): List<Category> {
-        val channels = getAllChannels()
-
-        val sportsKeywords = listOf("sport", "espn", "fox", "sky", "bein", "nba", "nfl", "nhl", "mlb", "football", "cricket", "tennis", "basketball", "racing", "матч", "боец", "футбол", "спорт", "arena", "euro", "dazn", "formula", "f1", "motor", "golf", "setanta", "diema", "maxsport", "кхл", "boxing", "ufc", "mma")
-        val newsKeywords = listOf("news", "cnn", "bbc", "fox news", "msnbc", "al jazeera", "новости", "известия", "рбк", "вести")
-        val movieKeywords = listOf("movie", "film", "cinema", "hbo", "star", "showtime", "кино", "сериал", "премьера", "хит", "action")
-        val kidsKeywords = listOf("kids", "cartoon", "disney", "nickelodeon", "nick jr", "детский", "мульт", "карусель", "duck")
-        val musicKeywords = listOf("music", "mtv", "vh1", "spotify", "apple music", "музыка", "bridge", "shanson", "stingray", "retro")
-
-        val categorized = mutableMapOf<String, MutableList<M3UChannel>>(
-            "Live Sports" to mutableListOf(),
-            "Movies & Series" to mutableListOf(),
-            "News" to mutableListOf(),
-            "Kids" to mutableListOf(),
-            "Music" to mutableListOf(),
-            "Regional & Others" to mutableListOf()
-        )
-
-        channels.forEach { channel ->
-            val nameLower = channel.name.lowercase()
-            val groupLower = channel.group?.lowercase() ?: ""
-
-            when {
-                sportsKeywords.any { nameLower.contains(it) || groupLower.contains(it) } -> categorized["Live Sports"]!!.add(channel)
-                movieKeywords.any { nameLower.contains(it) || groupLower.contains(it) } -> categorized["Movies & Series"]!!.add(channel)
-                newsKeywords.any { nameLower.contains(it) || groupLower.contains(it) } -> categorized["News"]!!.add(channel)
-                kidsKeywords.any { nameLower.contains(it) || groupLower.contains(it) } -> categorized["Kids"]!!.add(channel)
-                musicKeywords.any { nameLower.contains(it) || groupLower.contains(it) } -> categorized["Music"]!!.add(channel)
-                else -> categorized["Regional & Others"]!!.add(channel)
-            }
-        }
-
-        return categorized.mapNotNull { (groupName, list) ->
-            if (list.isEmpty()) return@mapNotNull null
-            Category(
-                name = groupName,
-                list = list
-                    .distinctBy { normalizeName(it.name).lowercase() }
-                    .map { channel ->
-                        val posterUrl = resolveLogoUrl(channel.name, channel.logo)
-                        TvShow(
-                            id = createId(channel.copy(logo = posterUrl)),
-                            title = channel.name,
-                            poster = posterUrl,
-                            banner = posterUrl,
-                            providerName = "PatrickTV"
-                        ).apply {
-                            itemType = AppAdapter.Type.TV_SHOW_MOBILE_ITEM
-                        }
-                    }
-            ).apply {
+        val providerChannels = allProviderChannels()
+        val categories = providerChannels.mapNotNull { (source, channels) ->
+            val items = channels
+                .distinctBy { it.url }
+                .map { channel -> channelItem(source, channel) }
+            if (items.isEmpty()) null
+            else Category(name = source.title, list = items).apply {
                 itemType = AppAdapter.Type.CATEGORY_MOBILE_ITEM
             }
         }
+        if (categories.isEmpty()) {
+            throw IOException("Cricfy providers loaded, but none returned playable channels")
+        }
+        return categories
     }
 
-    override suspend fun search(query: String, page: Int, filters: SearchFilters?): List<AppAdapter.Item> {
+    override suspend fun search(
+        query: String,
+        page: Int,
+        filters: SearchFilters?,
+    ): List<AppAdapter.Item> {
         if (page > 1) return emptyList()
-        val allChannels = getAllChannels()
-        return allChannels.filter { it.name.contains(query, ignoreCase = true) }
-            .distinctBy { normalizeName(it.name).lowercase() }
-            .take(60)
-            .map { channel ->
-                val posterUrl = resolveLogoUrl(channel.name, channel.logo)
-                TvShow(
-                    id = createId(channel.copy(logo = posterUrl)),
-                    title = channel.name,
-                    poster = posterUrl,
-                    providerName = "PatrickTV"
-                )
+        val normalizedQuery = query.trim()
+        if (normalizedQuery.isEmpty()) return emptyList()
+
+        return allProviderChannels()
+            .flatMap { (source, channels) ->
+                channels.asSequence()
+                    .filter { it.title.contains(normalizedQuery, ignoreCase = true) }
+                    .distinctBy { it.url }
+                    .map { channel -> source to channel }
+                    .toList()
             }
+            .take(60)
+            .map { (source, channel) -> channelItem(source, channel) }
     }
 
     override suspend fun getTvShow(id: String): TvShow {
-        val (_, name, logoUrl) = decodeId(id)
-        val posterUrl = resolveLogoUrl(name, logoUrl.takeIf { it.isNotBlank() && it != logo })
+        val playback = decodePlaybackData(id)
+        val posterUrl = resolveLogoUrl(playback.title, playback.logo, playback.providerLogo)
         return TvShow(
             id = id,
-            title = name,
+            title = playback.title,
             poster = posterUrl,
             banner = posterUrl,
-            overview = "PatrickTV Stream: $name",
+            overview = "PatrickTV live stream: ${playback.title}",
             seasons = listOf(Season(id = id, number = 1, title = "Live Stream")),
-            providerName = "PatrickTV"
+            providerName = name,
         )
     }
 
-    override suspend fun getEpisodesBySeason(seasonId: String): List<Episode> {
-        return listOf(Episode(id = seasonId, number = 1, title = "Play Stream", season = null))
-    }
+    override suspend fun getEpisodesBySeason(seasonId: String): List<Episode> =
+        listOf(Episode(id = seasonId, number = 1, title = "Play Stream", season = null))
 
-    override suspend fun getServers(id: String, videoType: Video.Type): List<Video.Server> {
-        return listOf(Video.Server(id = id, name = "Direct Stream"))
-    }
+    override suspend fun getServers(id: String, videoType: Video.Type): List<Video.Server> =
+        listOf(Video.Server(id = id, name = "Direct Stream"))
 
     override suspend fun getVideo(server: Video.Server): Video {
-        val (url, _, _) = decodeId(server.id)
-        val meta = getMetadataFromId(server.id)
+        val playback = decodePlaybackData(server.id)
+        val drmConfiguration = playback.licenseString
+            ?.takeIf(String::isNotBlank)
+            ?.let { license ->
+                if (license.startsWith("http://", true) || license.startsWith("https://", true)) {
+                    Video.DrmConfiguration(
+                        licenseUri = license.substringBefore('|'),
+                        licenseRequestHeaders = mapOf(
+                            "Content-Type" to "*/*",
+                            "User-Agent" to "Dalvik/2.1.0 (Linux; U; Android)",
+                        ),
+                    )
+                } else if (license.contains(":")) {
+                    val parts = license.trim().split(":", limit = 2)
+                    if (parts.size == 2) {
+                        val jwk = buildClearKeyJwk(parts[0], parts[1])
+                        if (jwk != null) Video.DrmConfiguration(licenseUri = jwk) else null
+                    } else null
+                } else null
+            }
 
-        val headers = mutableMapOf<String, String>()
-        meta["ua"]?.let { headers["User-Agent"] = it }
-        meta["referer"]?.let { headers["Referer"] = it }
+        val headers = linkedMapOf<String, String>()
+        playback.headers.orEmpty().forEach { (key, value) -> headers.setHeader(key, value) }
+        playback.userAgent?.let { headers.setHeader("User-Agent", it) }
+        playback.referer?.let { headers.setHeader("Referer", it) }
+        playback.cookie?.let { headers.setHeader("Cookie", it) }
 
-        if (url.contains("ronaldo.tvfor.pro")) {
-            if (!headers.containsKey("User-Agent") || headers["User-Agent"]?.startsWith("http") == true) {
-                headers["User-Agent"] = "Lavf/56.15.102"
+        if (playback.url.contains("ronaldo.tvfor.pro")) {
+            if (headers["User-Agent"].isNullOrBlank() || headers["User-Agent"]?.startsWith("http") == true) {
+                headers.setHeader("User-Agent", "Lavf/56.15.102")
             }
             if (!headers.containsKey("Referer")) {
-                headers["Referer"] = "http://ronaldo.tvfor.pro/"
+                headers.setHeader("Referer", "http://ronaldo.tvfor.pro/")
             }
         }
 
-        return Video(source = url, headers = headers, maintainToken = true)
+        return Video(
+            source = playback.url,
+            headers = headers.takeIf { it.isNotEmpty() },
+            maintainToken = true,
+            drmConfiguration = drmConfiguration,
+        )
+    }
+
+    private fun buildClearKeyJwk(kidHex: String, keyHex: String): String? {
+        return try {
+            val kidClean = kidHex.filterNot(Char::isWhitespace)
+            val keyClean = keyHex.filterNot(Char::isWhitespace)
+            if (kidClean.length % 2 != 0 || keyClean.length % 2 != 0) return null
+            val kidBytes = kidClean.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            val keyBytes = keyClean.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            val kidB64 = Base64.encodeToString(kidBytes, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
+            val keyB64 = Base64.encodeToString(keyBytes, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
+            val jwkJson = """{"keys":[{"kty":"oct","k":"$keyB64","kid":"$kidB64"}],"type":"temporary"}"""
+            val jwkB64 = Base64.encodeToString(jwkJson.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+            "data:application/json;base64,$jwkB64"
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun MutableMap<String, String>.setHeader(name: String, value: String) {
+        val existingName = keys.firstOrNull { it.equals(name, ignoreCase = true) }
+        if (existingName != null) remove(existingName)
+        put(name, value)
     }
 
     override suspend fun getMovies(page: Int): List<Movie> = emptyList()
     override suspend fun getTvShows(page: Int): List<TvShow> = emptyList()
     override suspend fun getMovie(id: String): Movie = Movie(id = id, title = "Live", poster = "")
+
     override suspend fun getGenre(id: String, page: Int): Genre {
         if (page > 1) return Genre(id, id, emptyList())
 
-        val allChannels = getAllChannels()
-        val normalizedId = id.trim().lowercase()
-
-        val sportsKeywords = listOf("sport", "espn", "fox", "sky", "bein", "nba", "nfl", "nhl", "mlb", "football", "cricket", "tennis", "basketball", "racing", "матч", "боец", "футбол", "спорт", "arena", "euro", "dazn", "formula", "f1", "motor", "golf", "setanta", "diema", "maxsport", "кхл", "boxing", "ufc", "mma")
-        val newsKeywords = listOf("news", "cnn", "bbc", "fox news", "msnbc", "al jazeera", "новости", "известия", "рбк", "вести", "business")
-        val movieKeywords = listOf("movie", "film", "cinema", "hbo", "star", "showtime", "кино", "сериал", "премьера", "хит", "action")
-        val kidsKeywords = listOf("kids", "cartoon", "disney", "nickelodeon", "nick jr", "детский", "мульт", "карусель", "duck", "family", "animation")
-        val musicKeywords = listOf("music", "mtv", "vh1", "spotify", "apple music", "музыка", "bridge", "shanson", "stingray", "retro")
-
-        val matchedChannels = when {
-            normalizedId == "live sports" -> allChannels.filter { ch ->
-                val nameLower = ch.name.lowercase()
-                val groupLower = ch.group?.lowercase() ?: ""
-                sportsKeywords.any { nameLower.contains(it) || groupLower.contains(it) }
-            }
-            normalizedId.contains("movie") || normalizedId.contains("series") -> allChannels.filter { ch ->
-                val nameLower = ch.name.lowercase()
-                val groupLower = ch.group?.lowercase() ?: ""
-                movieKeywords.any { nameLower.contains(it) || groupLower.contains(it) }
-            }
-            normalizedId.contains("news") || normalizedId.contains("business") -> allChannels.filter { ch ->
-                val nameLower = ch.name.lowercase()
-                val groupLower = ch.group?.lowercase() ?: ""
-                newsKeywords.any { nameLower.contains(it) || groupLower.contains(it) }
-            }
-            normalizedId.contains("kids") || normalizedId.contains("cartoon") -> allChannels.filter { ch ->
-                val nameLower = ch.name.lowercase()
-                val groupLower = ch.group?.lowercase() ?: ""
-                kidsKeywords.any { nameLower.contains(it) || groupLower.contains(it) }
-            }
-            normalizedId.contains("music") -> allChannels.filter { ch ->
-                val nameLower = ch.name.lowercase()
-                val groupLower = ch.group?.lowercase() ?: ""
-                musicKeywords.any { nameLower.contains(it) || groupLower.contains(it) }
-            }
-            else -> {
-                val byGroup = allChannels.filter { ch ->
-                    ch.group?.lowercase()?.contains(normalizedId) == true ||
-                    normalizedId.contains(ch.group?.lowercase() ?: "___")
+        val normalizedId = id.trim()
+        val shows = allProviderChannels()
+            .flatMap { (source, channels) ->
+                if (!source.title.equals(normalizedId, ignoreCase = true)) return@flatMap emptyList()
+                channels.distinctBy { it.url }.map { channel ->
+                    val posterUrl = resolveLogoUrl(channel.title, channel.logo, source.image)
+                    TvShow(
+                        id = createId(source, channel),
+                        title = normalizeName(channel.title),
+                        poster = posterUrl,
+                        banner = posterUrl,
+                        providerName = name,
+                    )
                 }
-                if (byGroup.isNotEmpty()) byGroup
-                else allChannels.filter { ch ->
-                    ch.name.lowercase().contains(normalizedId) ||
-                    sportsKeywords.any { normalizedId.contains(it) && ch.name.lowercase().contains(it) }
-                }.ifEmpty { allChannels }
             }
-        }
-
-        val shows = matchedChannels
-            .distinctBy { normalizeName(it.name).lowercase() }
-            .map { channel ->
-                val posterUrl = resolveLogoUrl(channel.name, channel.logo)
-                TvShow(
-                    id = createId(channel.copy(logo = posterUrl)),
-                    title = channel.name,
-                    poster = posterUrl,
-                    banner = posterUrl,
-                    providerName = "PatrickTV"
-                )
-            }
-
         return Genre(id, id, shows)
     }
+
     override suspend fun getPeople(id: String, page: Int): People = People(id, id)
 }
