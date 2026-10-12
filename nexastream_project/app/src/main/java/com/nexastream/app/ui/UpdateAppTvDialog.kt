@@ -8,12 +8,11 @@ import android.view.WindowManager
 import androidx.core.view.isVisible
 import com.nexastream.app.BuildConfig
 import com.nexastream.app.databinding.DialogUpdateAppTvBinding
-import com.nexastream.app.utils.GitHub
+import com.nexastream.app.models.UpdateInfo
 
 class UpdateAppTvDialog(
     context: Context,
-    newReleases: List<GitHub.Release>,
-    isForceUpdate: Boolean = false,
+    updateInfo: UpdateInfo
 ) : Dialog(context) {
 
     private val binding = DialogUpdateAppTvBinding.inflate(LayoutInflater.from(context))
@@ -30,7 +29,7 @@ class UpdateAppTvDialog(
     init {
         setContentView(binding.root)
 
-        if (isForceUpdate) {
+        if (updateInfo.forceUpdate) {
             binding.btnUpdateCancel.visibility = View.GONE
             setCancelable(false)
             setCanceledOnTouchOutside(false)
@@ -41,17 +40,16 @@ class UpdateAppTvDialog(
         }
 
         binding.tvUpdateCurrentVersion.text = BuildConfig.VERSION_NAME
+        binding.tvUpdateNewVersion.text = updateInfo.versionName
 
-        binding.tvUpdateNewVersion.text = newReleases.first().tagName.substringAfter("v")
+        val notes = if (updateInfo.changelog.isNotBlank()) {
+            updateInfo.changelog
+        } else {
+            "New release available: v${updateInfo.versionName}"
+        }
+        binding.tvUpdateReleaseNotes.text = notes
 
-        binding.tvUpdateReleaseNotes.text = newReleases.map {
-            it.body?.replace(
-                Regex("^- ([a-z0-9]+: )?(.*?)(#\\d+ )?\$", RegexOption.MULTILINE),
-                "- $2"
-            )
-        }.joinToString("\n")
-
-        // Ensure update button gets default focus for convenient TV remote control usage
+        // Ensure update button gets default focus for TV remote usage
         binding.btnUpdate.requestFocus()
 
         window?.setLayout(

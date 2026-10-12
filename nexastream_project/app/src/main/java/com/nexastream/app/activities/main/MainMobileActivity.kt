@@ -210,7 +210,7 @@ class MainMobileActivity : AppCompatActivity() {
                         showUpdateDialog(state)
                     }
 
-                    MainViewModel.State.DownloadingUpdate -> updateAppDialog?.isLoading = true
+                    is MainViewModel.State.DownloadingUpdate -> updateAppDialog?.isLoading = true
                     is MainViewModel.State.SuccessDownloadingUpdate -> {
                         viewModel.installUpdate(this@MainMobileActivity, state.apk)
                         dismissUpdateDialog()
@@ -306,10 +306,10 @@ class MainMobileActivity : AppCompatActivity() {
         if (isFinishing || isDestroyed) return
 
         dismissUpdateDialog()
-        updateAppDialog = UpdateAppMobileDialog(this, state.newReleases, state.isForceUpdate).also { dialog ->
+        updateAppDialog = UpdateAppMobileDialog(this, state.updateInfo).also { dialog ->
             dialog.setOnUpdateClickListener {
                 if (!dialog.isLoading) {
-                    viewModel.downloadUpdate(this@MainMobileActivity, state.asset)
+                    viewModel.downloadUpdate(this@MainMobileActivity, state.updateInfo.apkUrl)
                 }
             }
             dialog.show()

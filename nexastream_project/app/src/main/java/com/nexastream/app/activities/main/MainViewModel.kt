@@ -6,13 +6,13 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nexastream.app.BuildConfig
-import com.nexastream.app.utils.GitHub
+import com.nexastream.app.models.UpdateInfo
 import com.nexastream.app.utils.InAppUpdater
+import com.nexastream.app.utils.UserPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
-import com.nexastream.app.utils.UserPreferences
 import java.io.File
 
 class MainViewModel : ViewModel() {
@@ -23,12 +23,10 @@ class MainViewModel : ViewModel() {
     sealed class State {
         data object CheckingUpdate : State()
         data class SuccessCheckingUpdate(
-            val newReleases: List<GitHub.Release>,
-            val asset: GitHub.Release.Asset,
-            val isForceUpdate: Boolean = false
+            val updateInfo: UpdateInfo
         ) : State()
 
-        data object DownloadingUpdate : State()
+        data class DownloadingUpdate(val progress: Int = 0) : State()
         data class SuccessDownloadingUpdate(val apk: File) : State()
 
         data object InstallingUpdate : State()
@@ -36,81 +34,60 @@ class MainViewModel : ViewModel() {
         data class FailedUpdate(val error: Exception) : State()
     }
 
-
     fun checkUpdate() = viewModelScope.launch(Dispatchers.IO) {
         if (!UserPreferences.updateCheckEnabled) return@launch
-        
-        // Throttling: Check only once every hour to avoid GitHub rate limits (HTTP 403)
-        // Bypass throttling in debug builds so testing updates is instant
+
         val now = System.currentTimeMillis()
-        if (!BuildConfig.DEBUG && (now - UserPreferences.lastUpdateCheckMillis < 60 * 60 * 1000)) {
-            Log.d("MainViewModel", "checkUpdate skip: last check was less than 1 hour ago")
+        if (!BuildConfig.DEBUG && (now - UserPreferences.lastUpdateCheckMillis < 30 * 60 * 1000)) {
+            Log.d("MainViewModel", "checkUpdate skip: last check was less than 30 minutes ago")
             return@launch
         }
-        
+
         UserPreferences.lastUpdateCheckMillis = now
         _state.emit(State.CheckingUpdate)
 
         try {
-            val newReleases = InAppUpdater.getNewReleases()
-            if (newReleases.isEmpty()) return@launch
-
-            val asset = newReleases.first().assets
-                .filter { 
-                    it.contentType == "application/vnd.android.package-archive" || 
-                    it.contentType == "application/octet-stream" || 
-                    it.name.endsWith(".apk") 
-                }
-                .find {
-                    when (BuildConfig.APP_LAYOUT) {
-                        "mobile" -> it.name.endsWith("-mobile.apk")
-                        "tv" -> it.name.endsWith("-tv.apk")
-                        else -> !it.name.endsWith("-mobile.apk") && !it.name.endsWith("-tv.apk")
-                    }
-                }
-                ?: throw Exception("Can't find update APK")
-
-            val isForceUpdate = newReleases.any { release ->
-                val textToSearch = listOfNotNull(release.tagName, release.name, release.body)
-                    .joinToString(" ")
-                    .lowercase()
-                textToSearch.contains("[force]") || textToSearch.contains("[critical]")
+            val updateInfo = InAppUpdater.getRemoteUpdate()
+            if (updateInfo != null) {
+                _state.emit(State.SuccessCheckingUpdate(updateInfo))
+            } else {
+                Log.d("MainViewModel", "App is up to date.")
             }
-
-            _state.emit(State.SuccessCheckingUpdate(newReleases, asset, isForceUpdate))
         } catch (e: Exception) {
-            Log.e("MainViewModel", "checkUpdate failed (likely rate limit): ${e.message}")
-            // Fail silently for background check to avoid annoying 403 Toasts
-            // _state.emit(State.FailedUpdate(e)) 
+            Log.e("MainViewModel", "checkUpdate failed: ${e.message}")
         }
     }
 
     fun downloadUpdate(
         context: Context,
-        asset: GitHub.Release.Asset,
+        apkUrl: String
     ) = viewModelScope.launch(Dispatchers.IO) {
-        _state.emit(State.DownloadingUpdate)
+        _state.emit(State.DownloadingUpdate(0))
 
         try {
-            val apk = InAppUpdater.downloadApk(context, asset)
+            val apk = InAppUpdater.downloadApk(context, apkUrl) { progress ->
+                viewModelScope.launch(Dispatchers.IO) {
+                    _state.emit(State.DownloadingUpdate(progress))
+                }
+            }
 
             _state.emit(State.SuccessDownloadingUpdate(apk))
         } catch (e: Exception) {
-            Log.e("MainViewModel", "downloadUpdate: ", e)
+            Log.e("MainViewModel", "downloadUpdate failed: ${e.message}", e)
             _state.emit(State.FailedUpdate(e))
         }
     }
 
     fun installUpdate(
         context: Context,
-        apk: File,
+        apk: File
     ) = viewModelScope.launch(Dispatchers.IO) {
         _state.emit(State.InstallingUpdate)
 
         try {
             InAppUpdater.installApk(context, Uri.fromFile(apk))
         } catch (e: Exception) {
-            Log.e("MainViewModel", "installUpdate: ", e)
+            Log.e("MainViewModel", "installUpdate failed: ${e.message}", e)
             _state.emit(State.FailedUpdate(e))
         }
     }

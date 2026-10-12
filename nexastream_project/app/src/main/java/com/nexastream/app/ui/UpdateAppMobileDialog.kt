@@ -8,12 +8,11 @@ import android.view.WindowManager
 import androidx.core.view.isVisible
 import com.nexastream.app.BuildConfig
 import com.nexastream.app.databinding.DialogUpdateAppMobileBinding
-import com.nexastream.app.utils.GitHub
+import com.nexastream.app.models.UpdateInfo
 
 class UpdateAppMobileDialog(
     context: Context,
-    newReleases: List<GitHub.Release>,
-    isForceUpdate: Boolean = false,
+    updateInfo: UpdateInfo
 ) : Dialog(context) {
 
     private val binding = DialogUpdateAppMobileBinding.inflate(LayoutInflater.from(context))
@@ -30,7 +29,7 @@ class UpdateAppMobileDialog(
     init {
         setContentView(binding.root)
 
-        if (isForceUpdate) {
+        if (updateInfo.forceUpdate) {
             binding.btnUpdateCancel.visibility = View.GONE
             setCancelable(false)
             setCanceledOnTouchOutside(false)
@@ -41,23 +40,20 @@ class UpdateAppMobileDialog(
         }
 
         binding.tvUpdateCurrentVersion.text = BuildConfig.VERSION_NAME
+        binding.tvUpdateNewVersion.text = updateInfo.versionName
 
-        binding.tvUpdateNewVersion.text = newReleases.first().tagName.substringAfter("v")
-
-        binding.tvUpdateReleaseNotes.text = newReleases.map {
-            it.body?.replace(
-                Regex("^- ([a-z0-9]+: )?(.*?)(#\\d+ )?\$", RegexOption.MULTILINE),
-                "- $2"
-            )
-        }.joinToString("\n")
-
+        val notes = if (updateInfo.changelog.isNotBlank()) {
+            updateInfo.changelog
+        } else {
+            "New release available: v${updateInfo.versionName}"
+        }
+        binding.tvUpdateReleaseNotes.text = notes
 
         window?.setLayout(
             context.resources.displayMetrics.widthPixels,
             WindowManager.LayoutParams.WRAP_CONTENT
         )
     }
-
 
     fun setOnUpdateClickListener(listener: (view: View) -> Unit) {
         binding.btnUpdate.setOnClickListener(listener)

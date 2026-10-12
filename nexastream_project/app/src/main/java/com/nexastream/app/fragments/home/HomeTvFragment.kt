@@ -171,14 +171,14 @@ class HomeTvFragment : Fragment() {
                 when (state) {
                     is MainViewModel.State.SuccessCheckingUpdate -> {
                         binding.cvUpdateBanner.isVisible = true
-                        binding.tvUpdateBannerMessage.text = "Version ${state.newReleases.first().tagName} is available."
+                        binding.tvUpdateBannerMessage.text = "Version v${state.updateInfo.versionName} is available."
                         binding.btnUpdateBannerInstall.setOnClickListener {
-                            mainViewModel.downloadUpdate(requireContext(), state.asset)
+                            mainViewModel.downloadUpdate(requireContext(), state.updateInfo.apkUrl)
                         }
                     }
-                    MainViewModel.State.DownloadingUpdate -> {
+                    is MainViewModel.State.DownloadingUpdate -> {
                         binding.btnUpdateBannerInstall.isEnabled = false
-                        binding.btnUpdateBannerInstall.text = "Downloading..."
+                        binding.btnUpdateBannerInstall.text = "Downloading (${state.progress}%)..."
                     }
                     is MainViewModel.State.SuccessDownloadingUpdate -> {
                         mainViewModel.installUpdate(requireContext(), state.apk)

@@ -143,11 +143,9 @@ class MainTvActivity : FragmentActivity() {
             viewModel.state.flowWithLifecycle(lifecycle, Lifecycle.State.STARTED).collect { state ->
                 when (state) {
                     is MainViewModel.State.SuccessCheckingUpdate -> {
-                        if (state.isForceUpdate) {
-                            showUpdateDialog(state)
-                        }
+                        showUpdateDialog(state)
                     }
-                    MainViewModel.State.DownloadingUpdate -> updateAppDialog?.isLoading = true
+                    is MainViewModel.State.DownloadingUpdate -> updateAppDialog?.isLoading = true
                     is MainViewModel.State.SuccessDownloadingUpdate -> {
                         viewModel.installUpdate(this@MainTvActivity, state.apk)
                         dismissUpdateDialog()
@@ -191,10 +189,10 @@ class MainTvActivity : FragmentActivity() {
         if (isFinishing || isDestroyed) return
 
         dismissUpdateDialog()
-        updateAppDialog = UpdateAppTvDialog(this, state.newReleases, state.isForceUpdate).also { dialog ->
+        updateAppDialog = UpdateAppTvDialog(this, state.updateInfo).also { dialog ->
             dialog.setOnUpdateClickListener {
                 if (!dialog.isLoading) {
-                    viewModel.downloadUpdate(this@MainTvActivity, state.asset)
+                    viewModel.downloadUpdate(this@MainTvActivity, state.updateInfo.apkUrl)
                 }
             }
             dialog.show()
