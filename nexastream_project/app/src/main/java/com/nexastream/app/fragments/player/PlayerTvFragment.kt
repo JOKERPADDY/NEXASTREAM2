@@ -56,6 +56,7 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.session.MediaSession
 import androidx.media3.ui.PlayerControlView
 import androidx.media3.ui.SubtitleView
@@ -2243,8 +2244,17 @@ class PlayerTvFragment : Fragment() {
 
     private var currentExtraBuffering = false
     private var currentSoftwareDecoder = false
+    private var trackSelector: DefaultTrackSelector? = null
 
     private fun buildPlayer(extraBuffering: Boolean, isLive: Boolean): ExoPlayer {
+        val selector = DefaultTrackSelector(requireContext()).apply {
+            parameters = buildUponParameters()
+                .setMaxVideoSize(1280, 720)
+                .setMaxVideoBitrate(3_500_000)
+                .build()
+        }
+        trackSelector = selector
+
         val minBuffer = if (isLive) 30_000 else 25_000
         val maxBuffer = if (extraBuffering) 300_000 else 120_000
         val playbackBuffer = if (isLive) 5_000 else 1_000
@@ -2273,6 +2283,7 @@ class PlayerTvFragment : Fragment() {
         }
 
         return baseBuilder
+            .setTrackSelector(selector)
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
             .setLoadControl(loadControl)
             .build()
