@@ -147,8 +147,8 @@ class MainTvActivity : FragmentActivity() {
                     }
                     is MainViewModel.State.DownloadingUpdate -> updateAppDialog?.isLoading = true
                     is MainViewModel.State.SuccessDownloadingUpdate -> {
-                        viewModel.installUpdate(this@MainTvActivity, state.apk)
                         dismissUpdateDialog()
+                        viewModel.installUpdate(this@MainTvActivity, state.apk)
                     }
                     MainViewModel.State.InstallingUpdate -> updateAppDialog?.isLoading = true
                     is MainViewModel.State.FailedUpdate -> {

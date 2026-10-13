@@ -24,6 +24,7 @@ object InAppUpdater {
     // Primary & Fallback Update Configuration URLs
     private val UPDATE_CONFIG_URLS = listOf(
         "https://nexastream-73801.web.app/update.json",
+        "https://raw.githubusercontent.com/JOKERPADDY/NEXASTREAM2/main/update.json",
         "https://raw.githubusercontent.com/THWAYNESHOP/NEXASTREAM2/main/update.json"
     )
 
@@ -38,8 +39,10 @@ object InAppUpdater {
 
     private data class Version(val name: String) : Comparable<Version> {
         override operator fun compareTo(other: Version): Int {
-            val thisParts = this.name.substringAfter("v").split(".").toTypedArray()
-            val thatParts = other.name.substringAfter("v").split(".").toTypedArray()
+            val cleanThis = this.name.removePrefix("v").removePrefix("V").trim()
+            val cleanOther = other.name.removePrefix("v").removePrefix("V").trim()
+            val thisParts = cleanThis.split(".").toTypedArray()
+            val thatParts = cleanOther.split(".").toTypedArray()
             for (i in 0 until max(thisParts.size, thatParts.size)) {
                 val thisPart = thisParts.getOrNull(i)?.toIntOrNull() ?: 0
                 val thatPart = thatParts.getOrNull(i)?.toIntOrNull() ?: 0
@@ -85,24 +88,30 @@ object InAppUpdater {
     }
 
     private suspend fun tryFallbackGitHubRelease(): UpdateInfo? = withContext(Dispatchers.IO) {
-        try {
-            val release = GitHub.Releases.getLatestRelease("THWAYNESHOP", "NEXASTREAM2")
-            val releaseVersion = release.tagName.substringAfter("v")
-            if (Version(releaseVersion) > Version(BuildConfig.VERSION_NAME)) {
-                val apkAsset = release.assets.firstOrNull { it.name.endsWith(".apk", ignoreCase = true) }
-                if (apkAsset != null) {
-                    return@withContext UpdateInfo(
-                        versionCode = BuildConfig.VERSION_CODE + 1,
-                        versionName = releaseVersion,
-                        apkUrl = apkAsset.browserDownloadUrl,
-                        changelog = release.body ?: "New release available: v$releaseVersion",
-                        forceUpdate = false,
-                        supportTelegramUrl = "https://t.me/NEXASTREAM2"
-                    )
+        val repos = listOf(
+            Pair("JOKERPADDY", "NEXASTREAM2"),
+            Pair("THWAYNESHOP", "NEXASTREAM2")
+        )
+        for ((owner, repo) in repos) {
+            try {
+                val release = GitHub.Releases.getLatestRelease(owner, repo)
+                val releaseVersion = release.tagName.removePrefix("v").removePrefix("V").trim()
+                if (Version(releaseVersion) > Version(BuildConfig.VERSION_NAME)) {
+                    val apkAsset = release.assets.firstOrNull { it.name.endsWith(".apk", ignoreCase = true) }
+                    if (apkAsset != null) {
+                        return@withContext UpdateInfo(
+                            versionCode = BuildConfig.VERSION_CODE + 1,
+                            versionName = releaseVersion,
+                            apkUrl = apkAsset.browserDownloadUrl,
+                            changelog = release.body ?: "New release available: v$releaseVersion",
+                            forceUpdate = false,
+                            supportTelegramUrl = "https://t.me/NEXASTREAM2"
+                        )
+                    }
                 }
+            } catch (e: Exception) {
+                Log.e(TAG, "Fallback GitHub release check failed for $owner/$repo: ${e.message}")
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Fallback GitHub release check failed: ${e.message}")
         }
         return@withContext null
     }
@@ -151,20 +160,47 @@ object InAppUpdater {
 
     fun installApk(context: Context, uri: Uri) {
         val file = File(uri.path ?: return)
+        if (!file.exists()) {
+            Log.e(TAG, "Cannot install APK: File does not exist at ${file.absolutePath}")
+            return
+        }
+
+        // On Android 8.0+ (API 26+), verify install permission before launching installer
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            if (!context.packageManager.canRequestPackageInstalls()) {
+                android.widget.Toast.makeText(
+                    context,
+                    "Please allow installing unknown apps, then return and click Update again",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+                val settingsIntent = Intent(
+                    android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:${context.packageName}")
+                ).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(settingsIntent)
+                return
+            }
+        }
+
         val contentUri = FileProvider.getUriForFile(
             context,
-            BuildConfig.APPLICATION_ID + ".provider",
+            "${BuildConfig.APPLICATION_ID}.provider",
             file
         )
 
         val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(contentUri, "application/vnd.android.package-archive")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
-            setDataAndType(contentUri, "application/vnd.android.package-archive")
         }
 
-        context.startActivity(intent)
+        try {
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start installer intent: ${e.message}", e)
+            android.widget.Toast.makeText(context, "Failed to launch installer: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+        }
     }
 }

@@ -223,8 +223,8 @@ class MainMobileActivity : AppCompatActivity() {
 
                     is MainViewModel.State.DownloadingUpdate -> updateAppDialog?.isLoading = true
                     is MainViewModel.State.SuccessDownloadingUpdate -> {
-                        viewModel.installUpdate(this@MainMobileActivity, state.apk)
                         dismissUpdateDialog()
+                        viewModel.installUpdate(this@MainMobileActivity, state.apk)
                     }
 
                     MainViewModel.State.InstallingUpdate -> updateAppDialog?.isLoading = true
