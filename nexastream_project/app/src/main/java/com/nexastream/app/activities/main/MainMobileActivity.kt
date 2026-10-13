@@ -2,8 +2,10 @@ package com.nexastream.app.activities.main
 
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -168,6 +170,11 @@ class MainMobileActivity : AppCompatActivity() {
         updateToolbarLogo()
 
         navController.addOnDestinationChangedListener { _, destination, _ ->
+            if (destination.id != R.id.player) {
+                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
+                updateImmersiveMode()
+            }
+
             updateNavigationVisibility(destination.id)
             updateBottomNavigationVisibility(destination.id)
             binding.ablMain.visibility = if (isTopLevelProviderDestination(destination.id) && destination.id != R.id.home && destination.id != R.id.search) View.VISIBLE else View.GONE
@@ -191,7 +198,11 @@ class MainMobileActivity : AppCompatActivity() {
             }
             binding.navMainFragment.layoutParams = params
 
-            binding.mainContent.post { binding.mainContent.requestApplyInsets() }
+            binding.mainContent.post {
+                binding.mainContent.requestLayout()
+                binding.bnvMain.requestLayout()
+                binding.mainContent.requestApplyInsets()
+            }
         }
 
         lifecycleScope.launch {
@@ -618,6 +629,21 @@ class MainMobileActivity : AppCompatActivity() {
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         (getCurrentFragment() as? PlayerMobileFragment)?.onUserLeaveHint()
+    }
+
+    @androidx.media3.common.util.UnstableApi
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        val navHostFragment = supportFragmentManager.findFragmentById(R.id.nav_main_fragment) as? NavHostFragment
+        val currentFragment = navHostFragment?.childFragmentManager?.primaryNavigationFragment
+        if (currentFragment !is PlayerMobileFragment) {
+            updateImmersiveMode()
+            binding.root.post {
+                binding.root.requestLayout()
+                binding.bnvMain.requestLayout()
+                binding.mainContent.requestApplyInsets()
+            }
+        }
     }
 
     fun updateImmersiveMode() {

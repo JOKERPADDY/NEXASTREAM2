@@ -735,7 +735,7 @@ class PlayerMobileFragment : Fragment() {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             show(WindowInsetsCompat.Type.systemBars())
         }
-        requireActivity().requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        requireActivity().requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
         releasePlayer()
         try {
             requireContext().unregisterReceiver(chooserReceiver)

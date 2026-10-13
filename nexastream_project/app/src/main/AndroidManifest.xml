@@ -122,6 +122,7 @@
         <activity
             android:name=".activities.main.MainMobileActivity"
             android:configChanges="orientation|screenLayout|screenSize|smallestScreenSize"
+            android:screenOrientation="userPortrait"
             android:exported="true"
             android:supportsPictureInPicture="true"
             android:theme="@style/AppTheme.Mobile">

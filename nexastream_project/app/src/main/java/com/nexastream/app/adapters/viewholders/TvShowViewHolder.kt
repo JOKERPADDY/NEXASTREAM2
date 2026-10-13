@@ -29,6 +29,7 @@ import com.nexastream.app.R
 import com.nexastream.app.adapters.AppAdapter
 import com.nexastream.app.database.AppDatabase
 import com.nexastream.app.databinding.*
+import com.nexastream.app.utils.ReminderManager
 import com.nexastream.app.fragments.home.HomeTvFragment
 import com.nexastream.app.fragments.home.HomeTvFragmentDirections
 import androidx.core.content.ContextCompat
@@ -359,6 +360,7 @@ class TvShowViewHolder(
             text = tvShow.quality ?: ""
             isVisible = !text.isNullOrEmpty()
         }
+        bindReminderButton(binding.ivTvShowRemind, tvShow)
         binding.pbTvShowProgress.apply {
             val watchHistory = tvShow.episodeToWatch?.watchHistory
             progress = when {
@@ -460,6 +462,7 @@ class TvShowViewHolder(
             text = tvShow.quality ?: ""
             isVisible = !text.isNullOrEmpty()
         }
+        bindReminderButton(binding.ivTvShowRemind, tvShow)
         binding.pbTvShowProgress.apply {
             val watchHistory = tvShow.episodeToWatch?.watchHistory
             progress = when {
@@ -479,6 +482,24 @@ class TvShowViewHolder(
             isVisible = !gridEpisodeBadge.isNullOrEmpty()
         }
         binding.tvTvShowTitle.text = tvShow.title
+    }
+
+    private fun bindReminderButton(remindView: ImageView, tvShow: TvShow) {
+        val qualityStr = tvShow.quality ?: ""
+        val isUpcoming = qualityStr.contains(Regex("(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|Coming Soon|2026)", RegexOption.IGNORE_CASE))
+            || (tvShow.released != null && tvShow.released!!.timeInMillis > System.currentTimeMillis())
+
+        remindView.apply {
+            isVisible = isUpcoming
+            if (isUpcoming) {
+                val isSet = ReminderManager.isReminderSet(context, tvShow.id)
+                setBackgroundResource(if (isSet) R.drawable.bg_remind_badge_active else R.drawable.bg_remind_badge)
+                setOnClickListener {
+                    val updated = ReminderManager.toggleReminder(context, tvShow.id, tvShow.title)
+                    setBackgroundResource(if (updated) R.drawable.bg_remind_badge_active else R.drawable.bg_remind_badge)
+                }
+            }
+        }
     }
 
     private fun displayGridTvItem(binding: ItemTvShowGridBinding) {

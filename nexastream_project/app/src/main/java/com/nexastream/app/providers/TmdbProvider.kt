@@ -383,7 +383,8 @@ class TmdbProvider(override val language: String) : Provider {
             movieId = movieId,
             language = language
         ).results.mapNotNull { mapMulti(it) }
-        Category(name = "Because You Watched $title", list = results)
+        val name = if (title.isNotBlank()) "Because You Watched $title" else "Recommended For You"
+        Category(name = name, list = results)
     }
 
     suspend fun getTvRecommendations(seriesId: Int, title: String): Category = coroutineScope {
@@ -391,7 +392,8 @@ class TmdbProvider(override val language: String) : Provider {
             seriesId = seriesId,
             language = language
         ).results.mapNotNull { mapMulti(it) }
-        Category(name = "Because You Watched $title", list = results)
+        val name = if (title.isNotBlank()) "Because You Watched $title" else "Recommended For You"
+        Category(name = name, list = results)
     }
 
     suspend fun getFranchiseContent(

@@ -110,8 +110,8 @@ object NexaHomeProvider : Provider {
             val priorityOrder = listOf(
                 listOf("Sky Sport Premier", "Sky Sports Premier"),
                 listOf("Sky Sport Mix"),
-                listOf("National Geographic"),
-                listOf("Nickelodeon"),
+                listOf("National Geographic", "Nat Geo", "National Graphic"),
+                listOf("Nickelodeon", "Nick"),
                 listOf("NBA TV"),
                 listOf("Fox"),
                 listOf("ESPN"),
@@ -704,14 +704,21 @@ object NexaHomeProvider : Provider {
 
         if (movieTime >= episodeTime && recentMovie != null) {
             val movieId = recentMovie.id.toIntOrNull() ?: return@coroutineScope null
-            val rec = runCatching { tmdb.getMovieRecommendations(movieId, recentMovie.title) }.getOrNull()
+            val movieTitle = recentMovie.title.ifBlank {
+                runCatching { db.movieDao().getById(recentMovie.id)?.title }.getOrNull().orEmpty()
+            }
+            val rec = runCatching { tmdb.getMovieRecommendations(movieId, movieTitle) }.getOrNull()
             if (rec != null && rec.list.isNotEmpty()) {
                 rec.apply { itemType = AppAdapter.Type.CATEGORY_MOBILE_ITEM }
             } else null
         } else if (recentEpisode != null) {
             val tvShow = recentEpisode.tvShow
-            val showTitle = tvShow?.title ?: recentEpisode.title ?: ""
             val seriesId = tvShow?.id?.toIntOrNull() ?: recentEpisode.id.toIntOrNull() ?: return@coroutineScope null
+            var showTitle = tvShow?.title.orEmpty()
+            if (showTitle.isBlank()) {
+                val dbShow = runCatching { db.tvShowDao().getById(seriesId.toString()) }.getOrNull()
+                showTitle = dbShow?.title.orEmpty().ifBlank { recentEpisode.title.orEmpty() }
+            }
             val rec = runCatching { tmdb.getTvRecommendations(seriesId, showTitle) }.getOrNull()
             if (rec != null && rec.list.isNotEmpty()) {
                 rec.apply { itemType = AppAdapter.Type.CATEGORY_MOBILE_ITEM }

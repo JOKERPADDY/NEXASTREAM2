@@ -128,6 +128,12 @@ object CdnLiveTvProvider : Provider {
             lowerName.contains("canal") && (lowerName.contains("premier") || lowerName.contains("league")) -> {
                 "android.resource://$packageName/drawable/canal"
             }
+            lowerName.contains("national") || lowerName.contains("nat geo") || lowerName.contains("geographic") -> {
+                "android.resource://$packageName/drawable/nationalgraphic"
+            }
+            lowerName.contains("nickelodeon") || lowerName.contains("nick") -> {
+                "android.resource://$packageName/drawable/nickelodeon"
+            }
             else -> {
                 com.nexastream.app.utils.ArtworkRequestHeaders.run {
                     val urlWithParams = appendQueryParams(image, mapOf("user" to USER, "plan" to PLAN))

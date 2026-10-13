@@ -10,6 +10,7 @@ import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.AnimationUtils
+import android.widget.ImageView
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
@@ -91,8 +92,10 @@ import com.nexastream.app.databinding.ContentMovieDirectorsTvBinding
 import com.nexastream.app.utils.DownloadQualityFormatter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import com.nexastream.app.utils.ReminderManager
 import kotlinx.coroutines.withContext
 
+@androidx.media3.common.util.UnstableApi
 class MovieViewHolder(
     private val _binding: ViewBinding
 ) : RecyclerView.ViewHolder(
@@ -347,6 +350,8 @@ class MovieViewHolder(
             }
         }
 
+        bindReminderButton(binding.ivMovieRemind, movie)
+
         binding.tvMovieReleasedYear.visibility = View.GONE
 
         binding.pbMovieProgress.apply {
@@ -497,6 +502,8 @@ class MovieViewHolder(
             }
         }
 
+        bindReminderButton(binding.ivMovieRemind, movie)
+
         binding.tvMovieReleasedYear.visibility = View.GONE
 
         binding.pbMovieProgress.apply {
@@ -513,6 +520,24 @@ class MovieViewHolder(
         }
 
         binding.tvMovieTitle.text = movie.title
+    }
+
+    private fun bindReminderButton(remindView: ImageView, movie: Movie) {
+        val qualityStr = movie.quality ?: ""
+        val isUpcoming = qualityStr.contains(Regex("(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|Coming Soon|2026)", RegexOption.IGNORE_CASE))
+            || (movie.released != null && movie.released!!.timeInMillis > System.currentTimeMillis())
+
+        remindView.apply {
+            isVisible = isUpcoming
+            if (isUpcoming) {
+                val isSet = ReminderManager.isReminderSet(context, movie.id)
+                setBackgroundResource(if (isSet) R.drawable.bg_remind_badge_active else R.drawable.bg_remind_badge)
+                setOnClickListener {
+                    val updated = ReminderManager.toggleReminder(context, movie.id, movie.title)
+                    setBackgroundResource(if (updated) R.drawable.bg_remind_badge_active else R.drawable.bg_remind_badge)
+                }
+            }
+        }
     }
 
     private fun displayGridTvItem(binding: ItemMovieGridTvBinding) {
