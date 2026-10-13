@@ -440,10 +440,19 @@ class MovieBoxServer(
 
                                 fun getScore(u: String): Int {
                                     val isH265 = u.contains("h265") || u.contains("x265") || u.contains("hev1")
-                                    if (u.contains(".m3u8")) return if (isH265) 3 else 10
-                                    if (u.contains(".mpd")) return if (isH265) 2 else 9
-                                    if (u.contains(".mp4")) return if (isH265) 1 else 8
-                                    return if (isH265) 0 else 5
+                                    val is720p = u.contains("720")
+                                    val is1080p = u.contains("1080")
+                                    val is480p = u.contains("480")
+
+                                    var score = 0
+                                    // Prioritize 720p / H.264 for smooth, instant playback
+                                    if (is720p) score += 100
+                                    else if (is1080p) score += 80
+                                    else if (is480p) score += 60
+                                    else score += 40
+
+                                    if (!isH265) score += 10
+                                    return score
                                 }
                                 getScore(u2).compareTo(getScore(u1))
                             }

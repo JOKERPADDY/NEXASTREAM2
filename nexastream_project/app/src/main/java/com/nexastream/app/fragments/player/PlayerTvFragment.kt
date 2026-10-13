@@ -2245,10 +2245,10 @@ class PlayerTvFragment : Fragment() {
     private var currentSoftwareDecoder = false
 
     private fun buildPlayer(extraBuffering: Boolean, isLive: Boolean): ExoPlayer {
-        val minBuffer = if (isLive) 30_000 else 30_000
+        val minBuffer = if (isLive) 30_000 else 25_000
         val maxBuffer = if (extraBuffering) 300_000 else 120_000
-        val playbackBuffer = if (isLive) 10_000 else 5_000
-        val rebufferBuffer = if (isLive) 15_000 else 8_000
+        val playbackBuffer = if (isLive) 5_000 else 1_000
+        val rebufferBuffer = if (isLive) 8_000 else 2_000
 
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
