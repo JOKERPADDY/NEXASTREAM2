@@ -23,8 +23,8 @@ object InAppUpdater {
 
     // Primary & Fallback Update Configuration URLs
     private val UPDATE_CONFIG_URLS = listOf(
-        "https://raw.githubusercontent.com/THWAYNESHOP/NEXASTREAM2/main/update.json",
-        "https://api.github.com/repos/THWAYNESHOP/NEXASTREAM2/contents/update.json"
+        "https://nexastream-73801.web.app/update.json",
+        "https://raw.githubusercontent.com/THWAYNESHOP/NEXASTREAM2/main/update.json"
     )
 
     private val httpClient by lazy {
