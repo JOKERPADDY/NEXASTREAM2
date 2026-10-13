@@ -2245,13 +2245,19 @@ class PlayerTvFragment : Fragment() {
     private var currentSoftwareDecoder = false
 
     private fun buildPlayer(extraBuffering: Boolean, isLive: Boolean): ExoPlayer {
+        val minBuffer = if (isLive) 30_000 else 30_000
+        val maxBuffer = if (extraBuffering) 300_000 else 120_000
+        val playbackBuffer = if (isLive) 10_000 else 5_000
+        val rebufferBuffer = if (isLive) 15_000 else 8_000
+
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                if (isLive) 30_000 else DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
-                if (extraBuffering) 300_000 else DefaultLoadControl.DEFAULT_MAX_BUFFER_MS,
-                if (isLive) 10_000 else DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
-                if (isLive) 15_000 else DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS
+                minBuffer,
+                maxBuffer,
+                playbackBuffer,
+                rebufferBuffer
             )
+            .setPrioritizeTimeOverSizeThresholds(true)
             .build()
 
         val baseBuilder = if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.N_MR1 && !currentSoftwareDecoder) {
@@ -2279,6 +2285,9 @@ class PlayerTvFragment : Fragment() {
 
         var tokenLogged = false
         val okHttpClient = OkHttpClient.Builder()
+            .connectionPool(okhttp3.ConnectionPool(16, 5, java.util.concurrent.TimeUnit.MINUTES))
+            .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
             .dns(DnsResolver.doh)
             .addInterceptor { chain ->
                 var request = chain.request()
