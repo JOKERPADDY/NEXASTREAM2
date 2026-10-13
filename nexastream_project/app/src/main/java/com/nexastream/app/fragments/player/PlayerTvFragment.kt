@@ -2247,12 +2247,7 @@ class PlayerTvFragment : Fragment() {
     private var trackSelector: DefaultTrackSelector? = null
 
     private fun buildPlayer(extraBuffering: Boolean, isLive: Boolean): ExoPlayer {
-        val selector = DefaultTrackSelector(requireContext()).apply {
-            parameters = buildUponParameters()
-                .setMaxVideoSize(1280, 720)
-                .setMaxVideoBitrate(3_500_000)
-                .build()
-        }
+        val selector = DefaultTrackSelector(requireContext())
         trackSelector = selector
 
         val minBuffer = if (isLive) 30_000 else 25_000

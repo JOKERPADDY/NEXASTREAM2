@@ -490,19 +490,11 @@ class MovieBoxServer(
                                     continue
                                 }
 
-                                val cleanCookieHeader = if (stCookie.contains("urlprefix=") && stCookie.contains("sign=")) {
-                                    val prefix = stCookie.substringBefore("urlprefix=")
-                                    val signPart = stCookie.substring(stCookie.indexOf("sign="))
-                                    "$prefix$signPart"
-                                } else {
-                                    stCookie
-                                }
-
                                 if (workingUrl.isEmpty()) {
                                     workingUrl = url
-                                    workingCookie = cleanCookieHeader
+                                    workingCookie = stCookie
                                 }
-                                streamItems.add(mapOf("quality" to qual, "url" to url, "cookie" to cleanCookieHeader))
+                                streamItems.add(mapOf("quality" to qual, "url" to url, "cookie" to stCookie))
                             }
                         }
 
