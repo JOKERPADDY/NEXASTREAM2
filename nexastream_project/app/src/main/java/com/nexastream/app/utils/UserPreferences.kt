@@ -17,6 +17,7 @@ import com.nexastream.app.providers.Provider
 import com.nexastream.app.providers.Provider.Companion.providers
 import com.nexastream.app.providers.TmdbProvider
 import com.nexastream.app.providers.NexaHomeProvider
+import com.nexastream.app.providers.MovieBoxProvider
 import androidx.core.content.edit
 import com.nexastream.app.database.AppDatabase
 import org.json.JSONObject
@@ -63,10 +64,10 @@ object UserPreferences {
         val jsonString = Key.PROVIDER_CACHE.getString() ?: "{}"
         providerCache = runCatching { JSONObject(jsonString) }.getOrDefault(JSONObject())
         
-        // Default to home provider if no provider set yet
+        // Default to MovieBox provider if no provider set yet
         if (Key.CURRENT_PROVIDER.getString().isNullOrEmpty()) {
-            Key.CURRENT_PROVIDER.setString(NexaHomeProvider.name)
-            cachedProvider = NexaHomeProvider
+            Key.CURRENT_PROVIDER.setString(MovieBoxProvider.name)
+            cachedProvider = MovieBoxProvider
         }
     }
 
@@ -77,10 +78,10 @@ object UserPreferences {
         get() {
             cachedProvider?.let { return it }
             val providerName = Key.CURRENT_PROVIDER.getString() ?: run {
-                cachedProvider = NexaHomeProvider
-                return NexaHomeProvider
+                cachedProvider = MovieBoxProvider
+                return MovieBoxProvider
             }
-            val resolved = getProviderByName(providerName) ?: NexaHomeProvider
+            val resolved = getProviderByName(providerName) ?: MovieBoxProvider
             cachedProvider = resolved
             return resolved
         }
@@ -101,7 +102,7 @@ object UserPreferences {
     }
 
     fun setCurrentProvider(value: Provider?, notify: Boolean) {
-        val target = value ?: NexaHomeProvider
+        val target = value ?: MovieBoxProvider
         if (target.name == cachedProvider?.name && Key.CURRENT_PROVIDER.getString() == target.name) return
         cachedProvider = target
         Key.CURRENT_PROVIDER.setString(target.name)

@@ -38,9 +38,7 @@ class NexastreamApp : Application() {
         var currentActivity: Activity? = null
             private set
 
-        @Volatile
-        var movieBoxServer: com.nexastream.app.providers.moviebox.MovieBoxServer? = null
-            private set
+
     }
 
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -87,7 +85,11 @@ class NexastreamApp : Application() {
         val threshold = if (isTv) 10L else 50L
 
         applicationScope.launch(Dispatchers.IO) {
-            movieBoxServer = com.nexastream.app.providers.moviebox.MovieBoxServer(appContext).apply { start() }
+            try {
+                com.nexastream.app.providers.genga.LocalGengaServer.getInstance(appContext, 3001)
+            } catch (e: Exception) {
+                Log.e("NexastreamApp", "Failed to start LocalGengaServer", e)
+            }
             AppDatabase.setup(appContext)
             val downloadManager = appDownloadManagerProvider.get()
             Log.d("NexastreamApp", "DownloadManager initialized: ${downloadManager.hashCode()}")

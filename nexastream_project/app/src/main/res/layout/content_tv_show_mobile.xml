@@ -146,65 +146,59 @@
         app:layout_constraintTop_toBottomOf="@id/barrier1"
         tools:text="Genres" />
 
-    <TextView
-        android:id="@+id/btn_tv_show_watch_now"
-        style="@style/AppTheme.Widget.Mobile.Button"
-        android:layout_width="wrap_content"
+    <LinearLayout
+        android:id="@+id/ll_tv_show_actions"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginStart="10dp"
-        android:layout_marginTop="26dp"
-        android:text="@string/tv_show_watch_season_episode"
-        app:layout_constraintEnd_toStartOf="@id/btn_tv_show_trailer"
-        app:layout_constraintHorizontal_chainStyle="packed"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tv_tv_show_genres"
-        app:layout_goneMarginEnd="10dp" />
-
-    <ProgressBar
-        android:id="@+id/pb_tv_show_progress_episode"
-        style="@android:style/Widget.ProgressBar.Horizontal"
-        android:layout_width="0dp"
-        android:layout_height="4dp"
-        android:layout_marginStart="10dp"
-        android:layout_marginTop="8dp"
-        android:layout_marginEnd="10dp"
-        android:backgroundTint="#CC646464"
-        android:progressTint="#FFFFFF"
-        app:layout_constraintEnd_toEndOf="@id/btn_tv_show_watch_now"
-        app:layout_constraintStart_toStartOf="@id/btn_tv_show_watch_now"
-        app:layout_constraintTop_toBottomOf="@id/btn_tv_show_watch_now"
-        tools:progress="80" />
-
-    <TextView
-        android:id="@+id/btn_tv_show_trailer"
-        style="@style/AppTheme.Widget.Mobile.Button.Secondary"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="24dp"
-        android:layout_marginTop="26dp"
-        android:layout_marginEnd="10dp"
-        android:text="@string/tv_show_trailer"
+        android:layout_marginTop="20dp"
+        android:gravity="center"
+        android:orientation="horizontal"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toEndOf="@id/btn_tv_show_watch_now"
-        app:layout_constraintTop_toBottomOf="@id/tv_tv_show_genres" />
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/tv_tv_show_genres">
 
-    <androidx.constraintlayout.widget.Barrier
-        android:id="@+id/barrier2"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        app:barrierDirection="bottom"
-        app:constraint_referenced_ids="btn_tv_show_watch_now,pb_tv_show_progress_episode,btn_tv_show_trailer" />
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/btn_tv_show_watch_now"
+                style="@style/AppTheme.Widget.Mobile.Button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/tv_show_watch_season_episode" />
+
+            <ProgressBar
+                android:id="@+id/pb_tv_show_progress_episode"
+                style="@android:style/Widget.ProgressBar.Horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="4dp"
+                android:layout_marginTop="4dp"
+                android:backgroundTint="#CC646464"
+                android:progressTint="#FFFFFF"
+                tools:progress="80" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/btn_tv_show_trailer"
+            style="@style/AppTheme.Widget.Mobile.Button.Secondary"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:text="@string/tv_show_trailer" />
+    </LinearLayout>
 
     <TextView
         android:id="@+id/tv_tv_show_overview"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="10dp"
-        android:layout_marginTop="30dp"
+        android:layout_marginTop="20dp"
         android:layout_marginEnd="10dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/barrier2"
+        app:layout_constraintTop_toBottomOf="@id/ll_tv_show_actions"
         tools:text="Overview" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -733,10 +733,7 @@ class PlayerSettingsMobileView @JvmOverloads constructor(
                         else -> View.GONE
                     }
 
-                    is Settings.Server -> when {
-                        item.isSelected -> View.VISIBLE
-                        else -> View.GONE
-                    }
+                    is Settings.Server -> View.VISIBLE
 
                     else -> View.GONE
                 }

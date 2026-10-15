@@ -4,8 +4,12 @@ import com.google.gson.annotations.SerializedName
 
 data class SeasonInfo(
     @SerializedName("seasonNumber") val seasonNumber: Int = 1,
-    @SerializedName("episodes") val episodes: List<EpisodeInfo> = emptyList()
-)
+    @SerializedName("episodes") val episodesRaw: List<EpisodeInfo> = emptyList(),
+    @SerializedName("episodeList") val episodeListRaw: List<EpisodeInfo> = emptyList()
+) {
+    val episodes: List<EpisodeInfo>
+        get() = episodesRaw.ifEmpty { episodeListRaw }
+}
 
 data class EpisodeInfo(
     @SerializedName("episodeNumber") val episodeNumber: String = "1",
