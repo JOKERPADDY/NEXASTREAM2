@@ -716,6 +716,11 @@ class LocalGengaServer(
         if (sid.isEmpty()) return null
 
         val title = (
+            itemData["title_en"] ?: 
+            itemData["englishTitle"] ?: 
+            itemData["englishName"] ?: 
+            itemData["titleEn"] ?: 
+            itemData["en_title"] ?: 
             itemData["title"] ?: 
             itemData["name"] ?: 
             itemData["subjectName"] ?: 
@@ -728,9 +733,10 @@ class LocalGengaServer(
             itemData["show_name"] ?: 
             itemData["showTitle"] ?: 
             itemData["titleName"] ?: 
-            itemData["title_en"] ?: 
             itemData["tag"] ?: 
             itemData["label"] ?: 
+            item["title_en"] ?:
+            item["englishTitle"] ?:
             item["title"] ?:
             item["name"] ?:
             ""
@@ -798,8 +804,8 @@ class LocalGengaServer(
     ): String = withContext(Dispatchers.IO) {
         val prefs = context.getSharedPreferences("genga_prefs", Context.MODE_PRIVATE)
         val spCode = prefs.getString("sp_code", "")?.takeIf { it.isNotEmpty() } ?: "404"
-        val region = prefs.getString("custom_local_iso", "")?.takeIf { it.isNotEmpty() }?.uppercase() ?: "IN"
-        val timezone = "Asia/Kolkata"
+        val region = prefs.getString("custom_local_iso", "")?.takeIf { it.isNotEmpty() }?.uppercase() ?: "US"
+        val timezone = "America/New_York"
 
         val isCacheable = method == "GET"
         val cacheKey = "$method|$endpoint|${queryParams.entries.sortedBy { it.key }.joinToString("&") { "${it.key}=${it.value}" }}"
@@ -834,6 +840,12 @@ class LocalGengaServer(
         val urlBuilder = fullUrlWithoutQuery.toHttpUrl().newBuilder()
         if (!queryParams.containsKey("host")) {
             urlBuilder.addQueryParameter("host", "api.inmoviebox.com")
+        }
+        if (!queryParams.containsKey("lang")) {
+            urlBuilder.addQueryParameter("lang", "en")
+        }
+        if (!queryParams.containsKey("language")) {
+            urlBuilder.addQueryParameter("language", "en")
         }
         queryParams.forEach { (k, v) ->
             urlBuilder.addQueryParameter(k, v)
@@ -901,11 +913,13 @@ class LocalGengaServer(
             .url(httpUrl)
             .header("User-Agent", "MovieBoxPro/16.2.1 (Android 14; com.community.mbox.in)")
             .header("Accept", accept)
+            .header("Accept-Language", "en-US,en;q=0.9")
             .header("Content-Type", contentType)
             .header("X-Sign-Version", "2.0")
             .header("appid", "4U01pxRu278GqCZKY9")
             .header("region", region)
             .header("lang", "en")
+            .header("language", "en")
             .header("os", "android")
             .header("X-Timestamp", timestamp)
             .header("Referer", "https://api.inmoviebox.com/")
