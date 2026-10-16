@@ -61,6 +61,8 @@ class LocalGengaServer(
     fun start() {
         if (isRunning) return
         isRunning = true
+        responseCache.clear()
+        try { diskCachePrefs.edit().clear().apply() } catch (_: Exception) {}
         scope.launch {
             try {
                 serverSocket = ServerSocket().apply {
@@ -424,9 +426,27 @@ class LocalGengaServer(
                         }
                     }
 
-                    // 2. COOKIE BASE64 DECODING & DUMMY FILTERING
+                    // 2. COOKIE BASE64 DECODING & DUMMY FILTERING WITH ENGLISH AUDIO PREFERENCE
+                    val sortedStreams = streams.sortedWith { s1, s2 ->
+                        val u1 = (s1["url"] ?: "").toString().lowercase()
+                        val u2 = (s2["url"] ?: "").toString().lowercase()
+                        val name1 = (s1["name"] ?: s1["quality"] ?: "").toString().lowercase()
+                        val name2 = (s2["name"] ?: s2["quality"] ?: "").toString().lowercase()
+
+                        fun getScore(u: String, name: String): Int {
+                            var score = 0
+                            val isHindi = u.contains("hindi") || u.contains("dubbed_hi") || u.contains("_hi_") || name.contains("hindi")
+                            val isEnglish = u.contains("english") || u.contains("_en_") || name.contains("english")
+                            if (isHindi) score -= 100
+                            if (isEnglish) score += 50
+                            if (u.contains(".m3u8")) score += 10
+                            return score
+                        }
+                        getScore(u2, name2).compareTo(getScore(u1, name1))
+                    }
+
                     var workingUrl = ""
-                    for (st in streams) {
+                    for (st in sortedStreams) {
                         var u = st["url"]?.toString() ?: ""
                         val cookie = st["signCookie"]?.toString() ?: globalCookie.toString()
                         var isDummy = u.contains("macdn.aoneroom.com") || u.contains("please_update") || u.contains("update_app")
@@ -741,6 +761,13 @@ class LocalGengaServer(
             item["name"] ?:
             ""
         ).toString()
+
+        val fullText = "$title ${itemData["description"]} ${itemData["tags"]} ${itemData["keywords"]} ${itemData["categoryName"]}".lowercase()
+        val adultKeywords = listOf("adult", "18+", "xxx", "porn", "erotic", "sex", "hentai", "nsfw", "sensual", "nude", "uncensored", "pornstar", "playboy", "penthouse")
+        if (com.nexastream.app.utils.UserPreferences.familyMode && adultKeywords.any { fullText.contains(it) }) {
+            Log.d("LocalGengaServer", "Filtered adult card in family mode: $title ($sid)")
+            return null
+        }
 
         var posterUrl = ""
         val poster = itemData["poster"]

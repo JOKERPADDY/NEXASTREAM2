@@ -622,7 +622,7 @@ object UserPreferences {
         set(value) = Key.BILINGUAL_SUBTITLES.setBoolean(value)
 
     var familyMode: Boolean
-        get() = Key.FAMILY_MODE.getBoolean() ?: false
+        get() = Key.FAMILY_MODE.getBoolean() ?: true
         set(value) = Key.FAMILY_MODE.setBoolean(value)
 
     var autoStartOnBoot: Boolean
