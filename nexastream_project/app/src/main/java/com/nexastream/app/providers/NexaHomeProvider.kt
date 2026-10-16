@@ -728,10 +728,21 @@ object NexaHomeProvider : Provider {
             val cat = fetchWatchAgainRow()
             Genre(id = id, name = "Watch Again", shows = cat?.list ?: emptyList())
         }
+        id == "cdn_all_channels" || id.equals("CDN Live Channels", ignoreCase = true) || id.equals("Livestream", ignoreCase = true) -> {
+            val cdnGenre = runCatching { CdnLiveTvProvider.getGenre("cdn_all_channels", page) }.getOrNull()?.shows.orEmpty().filterIsInstance<TvShow>()
+            val homeIptvShows = HomeIptvChannels.getTvShows()
+            val combined = (cdnGenre + homeIptvShows).distinctBy { it.title }
+            Genre(id = id, name = "CDN Live TV & Channels", shows = combined)
+        }
+        id == "cdn_sports" || id.equals("Live Sports (CDN)", ignoreCase = true) || id.equals("Live Sports", ignoreCase = true) || id.equals("Sports", ignoreCase = true) -> {
+            val cdnSports = runCatching { CdnLiveTvProvider.getGenre("cdn_sports", page) }.getOrNull()?.shows.orEmpty().filterIsInstance<TvShow>()
+            val sportsChannels = HomeIptvChannels.getTvShows("Sports") + HomeIptvChannels.getTvShows("Sky Sports") + HomeIptvChannels.getTvShows("TNT Sports") + HomeIptvChannels.getTvShows("Match!") + HomeIptvChannels.getTvShows("Bein Sports") + HomeIptvChannels.getTvShows("US Sports")
+            val combined = (cdnSports + sportsChannels).distinctBy { it.title }
+            Genre(id = id, name = "Live Sports", shows = combined)
+        }
         id.startsWith("cdn_") -> {
             runCatching { CdnLiveTvProvider.getGenre(id, page) }.getOrElse {
                 Log.w("NexaHomeProvider", "CDN getGenre failed for $id, trying IPTV fallback")
-                // Fallback to IPTV based on the ID
                 when {
                     id.contains("sports", ignoreCase = true) -> runCatching { IptvOrgProvider.getGenre("Sports", page) }.getOrNull() ?: Genre(id = id, name = "Sports", shows = emptyList())
                     id.contains("news", ignoreCase = true) -> runCatching { IptvOrgProvider.getGenre("News", page) }.getOrNull() ?: Genre(id = id, name = "News", shows = emptyList())
@@ -743,7 +754,27 @@ object NexaHomeProvider : Provider {
                 }
             }
         }
-        else -> tmdb.getGenre(id, page)
+        else -> {
+            val groupChannels = HomeIptvChannels.channels.filter { 
+                it.group.equals(id, ignoreCase = true) || 
+                id.contains(it.group, ignoreCase = true) ||
+                it.name.contains(id, ignoreCase = true) 
+            }
+            if (groupChannels.isNotEmpty() && !id.startsWith("tmdb_")) {
+                val shows = groupChannels.map { data ->
+                    TvShow(
+                        id = data.id,
+                        title = data.name,
+                        poster = data.logo ?: "https://i.ibb.co/W1d0CxF/Logo-IPTV-All-World.jpg",
+                        quality = "LIVE",
+                        providerName = name
+                    ).apply { itemType = AppAdapter.Type.TV_SHOW_MOBILE_ITEM }
+                }
+                Genre(id = id, name = id, shows = shows)
+            } else {
+                tmdb.getGenre(id, page)
+            }
+        }
     }
 
     private suspend fun fetchBecauseYouWatchedRow(): Category? = coroutineScope {

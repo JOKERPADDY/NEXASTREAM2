@@ -120,6 +120,9 @@ object CdnLiveTvProvider : Provider {
         val packageName = com.nexastream.app.NexastreamApp.instance.packageName
 
         val posterUrl = when {
+            lowerName.contains("premier") && lowerName.contains("liga") -> {
+                "android.resource://$packageName/drawable/skysport2"
+            }
             lowerName.contains("sky") && (lowerName.contains("premier") || lowerName.contains("league") || lowerName.contains("sport")) -> {
                 "android.resource://$packageName/drawable/skysport"
             }

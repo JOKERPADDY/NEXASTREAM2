@@ -15,17 +15,17 @@ object HomeIptvChannels {
 
     val channels = listOf(
         // === SKY SPORTS UK ===
-        ChannelData("sky-arena", "Sky Sports Arena HD", "http://ronaldo.tvfor.pro/uC3alP4H/tht6v98456np1k198n81n2t8", logo = "https://i.ibb.co/3mY9M3n/sky-sports-arena.png", group = "Sky Sports"),
-        ChannelData("sky-action", "Sky Sports Action HD", "http://ronaldo.tvfor.pro/fedegwwSe/tht6v98456np1k198n81n2t8", logo = "https://i.ibb.co/LKGg4xhJ/sky-sports-action.png", group = "Sky Sports"),
-        ChannelData("sky-mix", "Sky Sports Mix HD", "http://ronaldo.tvfor.pro/VehBD92Q/tht6v98456np1k198n81n2t8", logo = "https://i.ibb.co/VehBD92Q/sky-sports-mix.png", group = "Sky Sports"),
-        ChannelData("sky-golf", "Sky Sports Golf HD", "http://ronaldo.tvfor.pro/alwFYkJK/tht6v98456np1k198n81n2t8", logo = "https://i.ibb.co/alwFYkJK/sky-sports-golf.png", group = "Sky Sports"),
-        ChannelData("sky-cricket", "Sky Sports Cricket HD", "http://ronaldo.tvfor.pro/cOwmjQnG/tht6v98456np1k198n81n2t8", logo = "https://i.ibb.co/cOwmjQnG/sky-sports-cricket.png", group = "Sky Sports"),
-        ChannelData("sky-f1", "Sky Sports F1 HD", "http://ronaldo.tvfor.pro/mMYFHBz8/tht6v98456np1k198n81n2t8", logo = "https://i.ibb.co/mMYFHBz8/sky-sports-f1.png", group = "Sky Sports"),
-        ChannelData("sky-football", "Sky Sports Football HD", "http://ronaldo.tvfor.pro/LKGg4xhJ/tht6v98456np1k198n81n2t8", logo = "https://i.ibb.co/LKGg4xhJ/sky-sports-football.png", group = "Sky Sports"),
-        ChannelData("sky-main-event", "Sky Sports Main Event HD", "http://ronaldo.tvfor.pro/zuatk8cz/tht6v98456np1k198n81n2t8", logo = "https://i.ibb.co/zuatk8cz/sky-sports-main-event.png", group = "Sky Sports"),
-        ChannelData("sky-news", "Sky Sports News HD", "http://ronaldo.tvfor.pro/3IHoar5e/tht6v98456np1k198n81n2t8", logo = "https://i.ibb.co/3IHoar5e/sky-sports-news.png", group = "Sky Sports"),
-        ChannelData("sky-racing", "Sky Sports Racing HD", "http://ronaldo.tvfor.pro/u9cU1TJZ/tht6v98456np1k198n81n2t8", logo = "https://i.ibb.co/u9cU1TJZ/sky-sports-racing.png", group = "Sky Sports"),
-        ChannelData("sky-premier-liga", "Sky Sport Premier Liga HD", "http://ronaldo.tvfor.pro/atLs7TPn/tht6v98456np1k198n81n2t8", logo = "https://i.ibb.co/atLs7TPn/sky-sports-premier.png", group = "Sky Sports"),
+        ChannelData("sky-arena", "Sky Sports Arena HD", "http://ronaldo.tvfor.pro/uC3alP4H/tht6v98456np1k198n81n2t8", group = "Sky Sports"),
+        ChannelData("sky-action", "Sky Sports Action HD", "http://ronaldo.tvfor.pro/fedegwwSe/tht6v98456np1k198n81n2t8", group = "Sky Sports"),
+        ChannelData("sky-mix", "Sky Sports Mix HD", "http://ronaldo.tvfor.pro/VehBD92Q/tht6v98456np1k198n81n2t8", group = "Sky Sports"),
+        ChannelData("sky-golf", "Sky Sports Golf HD", "http://ronaldo.tvfor.pro/alwFYkJK/tht6v98456np1k198n81n2t8", group = "Sky Sports"),
+        ChannelData("sky-cricket", "Sky Sports Cricket HD", "http://ronaldo.tvfor.pro/cOwmjQnG/tht6v98456np1k198n81n2t8", group = "Sky Sports"),
+        ChannelData("sky-f1", "Sky Sports F1 HD", "http://ronaldo.tvfor.pro/mMYFHBz8/tht6v98456np1k198n81n2t8", group = "Sky Sports"),
+        ChannelData("sky-football", "Sky Sports Football HD", "http://ronaldo.tvfor.pro/LKGg4xhJ/tht6v98456np1k198n81n2t8", group = "Sky Sports"),
+        ChannelData("sky-main-event", "Sky Sports Main Event HD", "http://ronaldo.tvfor.pro/zuatk8cz/tht6v98456np1k198n81n2t8", group = "Sky Sports"),
+        ChannelData("sky-news", "Sky Sports News HD", "http://ronaldo.tvfor.pro/3IHoar5e/tht6v98456np1k198n81n2t8", group = "Sky Sports"),
+        ChannelData("sky-racing", "Sky Sports Racing HD", "http://ronaldo.tvfor.pro/u9cU1TJZ/tht6v98456np1k198n81n2t8", group = "Sky Sports"),
+        ChannelData("sky-premier-liga", "Sky Sport Premier Liga HD", "http://ronaldo.tvfor.pro/atLs7TPn/tht6v98456np1k198n81n2t8", group = "Sky Sports"),
         
         // === TNT SPORTS UK ===
         ChannelData("tnt-1", "TNT Sports 1 HD", "http://ronaldo.tvfor.pro/Z6V9d48eGz/tht6v98456np1k198n81n2t8", logo = "https://i.ibb.co/Z6V9d48eGz/tnt-sports-1.png", group = "TNT Sports"),
@@ -64,8 +64,19 @@ object HomeIptvChannels {
 
     fun getTvShows(groupName: String? = null): List<TvShow> {
         val filtered = if (groupName != null) channels.filter { it.group == groupName } else channels
+        val packageName = com.nexastream.app.NexastreamApp.instance.packageName
         return filtered.map { data ->
-            val posterUrl = data.logo ?: "https://i.ibb.co/W1d0CxF/Logo-IPTV-All-World.jpg"
+            val posterUrl = when {
+                data.id == "sky-premier-liga" || data.name.contains("Premier Liga", ignoreCase = true) -> {
+                    "android.resource://$packageName/drawable/skysport2"
+                }
+                data.group == "Sky Sports" || data.name.contains("Sky Sport", ignoreCase = true) -> {
+                    "android.resource://$packageName/drawable/skysport"
+                }
+                else -> {
+                    data.logo ?: "https://i.ibb.co/W1d0CxF/Logo-IPTV-All-World.jpg"
+                }
+            }
             TvShow(
                 id = data.id,
                 title = data.name,

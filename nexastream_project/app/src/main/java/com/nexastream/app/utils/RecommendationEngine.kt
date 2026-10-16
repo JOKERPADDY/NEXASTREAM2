@@ -182,18 +182,34 @@ object RecommendationEngine {
             .sortedByDescending { scoreItem(it, profile) }
             .take(15)
 
+        val resolvedHeroBanner = if (heroBanner.isNotEmpty()) {
+            heroBanner
+        } else {
+            val fallbackItems = allItems.take(5).ifEmpty { sortedRankable.firstOrNull()?.list.orEmpty().take(5) }
+            if (fallbackItems.isNotEmpty()) {
+                listOf(Category(name = Category.FEATURED, list = fallbackItems))
+            } else {
+                emptyList()
+            }
+        }
+
         val result = mutableListOf<Category>()
 
-        // 1. Always put Livestream first if present
+        // 1. Hero Banner FIRST (at the very top, index 0)
+        result.addAll(resolvedHeroBanner.filter { !it.name.startsWith("Livestream", ignoreCase = true) })
+        if (result.isEmpty()) {
+            val fallbackItems = allItems.take(5).ifEmpty { sortedRankable.firstOrNull()?.list.orEmpty().take(5) }
+            if (fallbackItems.isNotEmpty()) {
+                result.add(Category(name = Category.FEATURED, list = fallbackItems))
+            }
+        }
+
+        // 2. Livestream SECOND (right below Hero Banner)
         sanitizedCategories.find { it.name.equals("Livestream", ignoreCase = true) || it.name.startsWith("Livestream", ignoreCase = true) }?.let { ls ->
             result.add(ls)
         }
 
-        // 2. Add hero banner and other fixed categories (excluding Livestream if already added)
-        result.addAll(heroBanner.filter { !it.name.startsWith("Livestream", ignoreCase = true) })
-        result.addAll(fixedHead.filter { !it.name.startsWith("Livestream", ignoreCase = true) })
-
-        // 3. Add recommended section
+        // 3. Recommended section THIRD
         if (allItems.isNotEmpty()) {
             result.add(
                 Category(
@@ -203,7 +219,8 @@ object RecommendationEngine {
             )
         }
 
-        // 4. Add sorted rankable categories (excluding Livestream if already added)
+        // 4. Other fixed & rankable categories
+        result.addAll(fixedHead.filter { !it.name.startsWith("Livestream", ignoreCase = true) && it.name != Category.FEATURED })
         result.addAll(sortedRankable.filter { !it.name.startsWith("Livestream", ignoreCase = true) })
 
         return result.distinctBy { it.name }
