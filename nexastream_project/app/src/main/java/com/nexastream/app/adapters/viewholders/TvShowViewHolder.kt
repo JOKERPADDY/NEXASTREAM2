@@ -25,6 +25,7 @@ import androidx.viewbinding.ViewBinding
 import com.nexastream.app.providers.IptvProvider
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
+import com.nexastream.app.NavMainGraphMobileDirections
 import com.nexastream.app.R
 import com.nexastream.app.adapters.AppAdapter
 import com.nexastream.app.database.AppDatabase
@@ -346,7 +347,13 @@ class TvShowViewHolder(
                 if (isIptvProvider()) {
                     handleDirectPlay(binding.root.findNavController())
                 } else {
-                    binding.root.findNavController().navigate(R.id.tv_show, tvShowArgs())
+                    val navController = binding.root.findNavController()
+                    val currentDestId = navController.currentDestination?.id
+                    when (currentDestId) {
+                        R.id.home -> navController.navigate(HomeMobileFragmentDirections.actionHomeToTvShow(id = tvShow.id, poster = tvShow.poster, banner = tvShow.banner))
+                        R.id.tv_show -> navController.navigate(TvShowMobileFragmentDirections.actionTvShowToTvShow(id = tvShow.id, poster = tvShow.poster, banner = tvShow.banner))
+                        else -> navController.navigate(NavMainGraphMobileDirections.actionGlobalTvShow(id = tvShow.id, poster = tvShow.poster, banner = tvShow.banner))
+                    }
                 }
             }
         }

@@ -326,8 +326,8 @@ object SflixProvider : Provider, ProviderConfigUrl {
                     )
                 }
                 
-                servers.add(0, MovieBoxExtractor().server(tmdbVideoType))
-                servers.add(VixSrcExtractor().server(tmdbVideoType))
+                servers.add(0, VixSrcExtractor().server(tmdbVideoType))
+                servers.add(1, MovieBoxExtractor().server(tmdbVideoType))
                 servers.add(VidsrcToExtractor().server(tmdbVideoType))
                 servers.add(VidsrcNetExtractor().server(tmdbVideoType))
                 servers.add(TwoEmbedExtractor().server(tmdbVideoType))

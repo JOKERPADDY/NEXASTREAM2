@@ -28,9 +28,9 @@ object CdnLiveTvProvider : Provider {
     override val logo: String = "https://cdnlivetv.tv/assets/img/logo.png"
     override val language: String = "en"
 
-    private val client = NetworkClient.systemDns.newBuilder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(10, TimeUnit.SECONDS)
+    private val client = NetworkClient.compatibleTrustAll.newBuilder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
         .build()
 
     private val service = Retrofit.Builder()
@@ -97,12 +97,16 @@ object CdnLiveTvProvider : Provider {
     private suspend fun buildHomeCategories(channels: List<CDNChannel>): List<Category> {
         val categories = mutableListOf<Category>()
 
-        // 1. Featured Channels
-        if (channels.isNotEmpty()) {
-            val tvShowItems = channels.map { it.toTvShow() }
+        val tvShowItems = if (channels.isNotEmpty()) {
+            channels.map { it.toTvShow() }
+        } else {
+            HomeIptvChannels.getTvShows()
+        }
+
+        if (tvShowItems.isNotEmpty()) {
             categories.add(
                 Category(
-                    name = "CDN Live Channels",
+                    name = "Livestream",
                     list = tvShowItems
                 ).apply { itemType = AppAdapter.Type.CATEGORY_MOBILE_ITEM }
             )
@@ -116,13 +120,7 @@ object CdnLiveTvProvider : Provider {
         val packageName = com.nexastream.app.NexastreamApp.instance.packageName
 
         val posterUrl = when {
-            lowerName.contains("sky") && (lowerName.contains("premier") || lowerName.contains("league")) -> {
-                "android.resource://$packageName/drawable/skysport2"
-            }
-            lowerName.contains("sky") && lowerName.contains("sport") && lowerName.contains("mix") -> {
-                "android.resource://$packageName/drawable/skysport"
-            }
-            lowerName.contains("sky") && lowerName.contains("sport") -> {
+            lowerName.contains("sky") && (lowerName.contains("premier") || lowerName.contains("league") || lowerName.contains("sport")) -> {
                 "android.resource://$packageName/drawable/skysport"
             }
             lowerName.contains("canal") && (lowerName.contains("premier") || lowerName.contains("league")) -> {
@@ -178,9 +176,10 @@ object CdnLiveTvProvider : Provider {
                 ch.code.equals(target, ignoreCase = true)
             }
             if (channel != null) {
+                val playerUrl = channel.url.takeIf { it.isNotBlank() } ?: "https://cdnlivetv.tv/channels/player/${channel.code}"
                 return listOf(
-                    Video.Server(id = channel.url, name = "CDN 1080p (Default)"),
-                    Video.Server(id = "${channel.url}#480p", name = "CDN 480p")
+                    Video.Server(id = playerUrl, name = "CDN 1080p (Default)"),
+                    Video.Server(id = "$playerUrl#480p", name = "CDN 480p")
                 )
             }
         }
@@ -189,124 +188,136 @@ object CdnLiveTvProvider : Provider {
     }
 
     override suspend fun getVideo(server: Video.Server): Video = withContext(Dispatchers.IO) {
-        val url = server.id.substringBefore("#480p")
+        var url = server.id.substringBefore("#480p")
         Log.e("CdnLiveTv", "getVideo(url=$url)")
         
-        if (url.contains("/player/") || url.contains("/channels/player/")) {
-            try {
-                val request = okhttp3.Request.Builder()
-                    .url(url)
-                    .header("Referer", "https://cdnlivetv.tv/")
-                    .header("User-Agent", NetworkClient.USER_AGENT)
-                    .build()
-                
-                val response = client.newCall(request).execute()
-                val html = response.body?.string().orEmpty()
-                Log.e("CdnLiveTv", "Fetched player HTML, length: ${html.length}")
-                
-                // Log in chunks to see all scripts
-                html.chunked(3000).forEachIndexed { index, chunk ->
-                    Log.e("CdnLiveTv", "HTML Chunk $index: $chunk")
+        if (url.isNotBlank() && !url.startsWith("http")) {
+            url = "https://cdnlivetv.tv/${url.removePrefix("/")}"
+        }
+
+        // If it's already a direct .m3u8 stream, return it with headers
+        if (url.endsWith(".m3u8") || url.contains(".m3u8?")) {
+            return@withContext Video(
+                source = url,
+                headers = mapOf(
+                    "Referer" to "https://cdnlivetv.tv/",
+                    "Origin" to "https://cdnlivetv.tv",
+                    "User-Agent" to NetworkClient.USER_AGENT
+                )
+            )
+        }
+
+        try {
+            val request = okhttp3.Request.Builder()
+                .url(url)
+                .header("Referer", "https://cdnlivetv.tv/")
+                .header("Origin", "https://cdnlivetv.tv")
+                .header("User-Agent", NetworkClient.USER_AGENT)
+                .build()
+            
+            val response = client.newCall(request).execute()
+            val html = response.body?.string().orEmpty()
+            Log.e("CdnLiveTv", "Fetched player HTML from $url, length: ${html.length}")
+            
+            // Try to find m3u8 in the HTML (greedy search)
+            val m3u8Regex = Regex("""["'](https?[:\\]+[^"']+\.m3u8[^"']*)["']""")
+            val fileRegex = Regex("""file\s*[:\s]+["']([^"']+)["']""")
+            val sourceRegex = Regex("""source\s*[:\s]+["']([^"']+)["']""")
+            
+            var streamUrl = m3u8Regex.find(html)?.groupValues?.get(1)
+                ?: fileRegex.find(html)?.groupValues?.get(1)
+                ?: sourceRegex.find(html)?.groupValues?.get(1)
+            
+            // 2. Try atob patterns
+            if (streamUrl == null) {
+                Regex("""atob\s*\(\s*["']([^"']+)["']\s*\)""").findAll(html).forEach { match ->
+                    try {
+                        val decoded = String(android.util.Base64.decode(match.groupValues[1], android.util.Base64.DEFAULT))
+                        if (decoded.contains(".m3u8")) {
+                            streamUrl = decoded
+                            Log.e("CdnLiveTv", "Found decoded m3u8: $streamUrl")
+                        }
+                    } catch (e: Exception) {}
                 }
-                
-                // Try to find m3u8 in the HTML (greedy search)
-                val m3u8Regex = Regex("""["'](https?[:\\]+[^"']+\.m3u8[^"']*)["']""")
-                val fileRegex = Regex("""file\s*[:\s]+["']([^"']+)["']""")
-                val sourceRegex = Regex("""source\s*[:\s]+["']([^"']+)["']""")
-                
-                var streamUrl = m3u8Regex.find(html)?.groupValues?.get(1)
-                    ?: fileRegex.find(html)?.groupValues?.get(1)
-                    ?: sourceRegex.find(html)?.groupValues?.get(1)
-                
-                // 2. Try atob patterns
-                if (streamUrl == null) {
-                    Regex("""atob\s*\(\s*["']([^"']+)["']\s*\)""").findAll(html).forEach { match ->
+            }
+
+            // 3. Try iframe redirection
+            if (streamUrl == null) {
+                val doc = org.jsoup.Jsoup.parse(html)
+                for (iframe in doc.select("iframe")) {
+                    val src = iframe.attr("src")
+                    if (src.isNotEmpty() && src.startsWith("http")) {
+                        Log.e("CdnLiveTv", "Found iframe: $src")
                         try {
-                            val decoded = String(android.util.Base64.decode(match.groupValues[1], android.util.Base64.DEFAULT))
-                            if (decoded.contains(".m3u8")) {
-                                streamUrl = decoded
-                                Log.e("CdnLiveTv", "Found decoded m3u8: $streamUrl")
+                            val iframeReq = okhttp3.Request.Builder().url(src).header("Referer", url).build()
+                            val iframeHtml = client.newCall(iframeReq).execute().body?.string().orEmpty()
+                            val foundInIframe = m3u8Regex.find(iframeHtml)?.groupValues?.get(1)
+                                ?: extractObfuscatedStreamUrl(iframeHtml)
+                            if (foundInIframe != null) {
+                                streamUrl = foundInIframe
+                                break
                             }
                         } catch (e: Exception) {}
                     }
                 }
+            }
 
-                // 3. Try iframe redirection
-                if (streamUrl == null) {
-                    val doc = org.jsoup.Jsoup.parse(html)
-                    doc.select("iframe").forEach { iframe ->
-                        val src = iframe.attr("src")
-                        if (src.isNotEmpty() && src.startsWith("http")) {
-                            Log.e("CdnLiveTv", "Found iframe: $src")
-                        }
-                    }
+            if (streamUrl == null && html.contains("eval(function(p,a,c,k,e,d)")) {
+                Log.e("CdnLiveTv", "Packed JS detected, attempting to unpack...")
+                val unpacked = com.nexastream.app.utils.JsUnpacker(html).unpack()
+                if (unpacked != null) {
+                    streamUrl = m3u8Regex.find(unpacked)?.groupValues?.get(1)
+                        ?: fileRegex.find(unpacked)?.groupValues?.get(1)
                 }
+            }
 
-                if (streamUrl == null && html.contains("eval(function(p,a,c,k,e,d)")) {
-                    Log.e("CdnLiveTv", "Packed JS detected, attempting to unpack...")
-                    val unpacked = com.nexastream.app.utils.JsUnpacker(html).unpack()
-                    if (unpacked != null) {
-                        streamUrl = m3u8Regex.find(unpacked)?.groupValues?.get(1)
-                            ?: fileRegex.find(unpacked)?.groupValues?.get(1)
-                    }
+            // 5. Try to extract stream URL from custom obfuscation (CDN Live TV specific)
+            if (streamUrl == null) {
+                streamUrl = extractObfuscatedStreamUrl(html)
+                if (streamUrl != null) {
+                    Log.e("CdnLiveTv", "Found obfuscated stream URL: $streamUrl")
                 }
+            }
 
-                // 5. Try to extract stream URL from custom obfuscation (CDN Live TV specific)
-                if (streamUrl == null) {
-                    streamUrl = extractObfuscatedStreamUrl(html)
-                    if (streamUrl != null) {
-                        Log.e("CdnLiveTv", "Found obfuscated stream URL: $streamUrl")
-                    }
-                }
-
-                val currentUrl = streamUrl
-                if (currentUrl != null) {
-                    val finalStreamUrl = try {
-                        currentUrl.replace("\\/", "/")
-                            .let { if (it.startsWith("//")) "https:$it" else it }
-                    } catch (e: Exception) {
-                        Log.e("CdnLiveTv", "Error formatting stream URL: $currentUrl", e)
-                        null
-                    }
-                    
-                    if (finalStreamUrl != null) {
-                        Log.e("CdnLiveTv", "Extracted stream Success: $finalStreamUrl")
-                        return@withContext Video(
-                            source = finalStreamUrl,
-                            headers = mapOf(
-                                "Referer" to "https://cdnlivetv.tv/",
-                                "Origin" to "https://cdnlivetv.tv",
-                                "User-Agent" to NetworkClient.USER_AGENT
-                            )
-                        )
-                    }
+            val currentUrl = streamUrl
+            if (currentUrl != null) {
+                val finalStreamUrl = try {
+                    currentUrl.replace("\\/", "/")
+                        .let { if (it.startsWith("//")) "https:$it" else it }
+                } catch (e: Exception) {
+                    Log.e("CdnLiveTv", "Error formatting stream URL: $currentUrl", e)
+                    null
                 }
                 
-                Log.e("CdnLiveTv", "Stream not found or invalid in player HTML. Body length: ${html.length}")
-            } catch (e: Exception) {
-                Log.e("CdnLiveTv", "Error extracting stream from $url", e)
+                if (finalStreamUrl != null) {
+                    Log.e("CdnLiveTv", "Extracted stream Success: $finalStreamUrl")
+                    return@withContext Video(
+                        source = finalStreamUrl,
+                        headers = mapOf(
+                            "Referer" to "https://cdnlivetv.tv/",
+                            "Origin" to "https://cdnlivetv.tv",
+                            "User-Agent" to NetworkClient.USER_AGENT
+                        )
+                    )
+                }
             }
+            
+            Log.e("CdnLiveTv", "Stream not found or invalid in player HTML. Body length: ${html.length}")
+        } catch (e: Exception) {
+            Log.e("CdnLiveTv", "Error extracting stream from $url", e)
         }
         Video(source = url)
     }
 
     /**
      * Extracts stream URL from CDN Live TV's specific obfuscation pattern.
-     * The pattern involves:
-     * 1. Multiple variables with base64-encoded string parts
-     * 2. A function with a randomized name (e.g., ZBeEXEZVzJ or EuDBXDBAHg) that decodes base64
-     * 3. Concatenation of decoded parts to form the final URL
      */
     private fun extractObfuscatedStreamUrl(html: String): String? {
         try {
-            // 1. Detect the decoding function name dynamically
-            // Look for: function NAME(s){s=s.replace(/-/g,'+').replace(/_/g,'/') ... }
             val funcNamePattern = Regex("""function\s+([a-zA-Z0-9_]+)\s*\(\s*[a-z]\s*\)\s*\{\s*[a-z]\s*=\s*[a-z]\.replace\(""")
             val funcNameMatch = funcNamePattern.find(html) ?: return null
             val funcName = funcNameMatch.groupValues[1]
-            Log.d("CdnLiveTv", "Detected obfuscation function: $funcName")
 
-            // 2. Extract all variable assignments: var xxx='yyy' or var xxx = "yyy"
             val varAssignments = mutableMapOf<String, String>()
             val varPattern = Regex("""var\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*["']([^"']*)["']""")
             for (match in varPattern.findAll(html)) {
@@ -315,18 +326,12 @@ object CdnLiveTvProvider : Provider {
                 varAssignments[varName] = varValue
             }
 
-            // 3. Look for URL construction pattern using the detected function name: 
-            // var RJcIbpAgvVfE=funcName(...)+funcName(...)+...
             val urlPattern = Regex("""var\s+[a-zA-Z_][a-zA-Z0-9_]*\s*=\s*((?:$funcName\s*\(\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\)\s*(?:\+\s*)?)+)""")
             val urlMatch = urlPattern.find(html) ?: return null
 
-            // Extract the sequence of function calls
             val callSequence = urlMatch.groupValues[1]
-
-            // Split by '+' to get individual function calls
             val functionCalls = callSequence.split("+").map { it.trim() }
 
-            // 4. Process each function call: funcName(variableName)
             val decodedParts = StringBuilder()
             val callPattern = Regex("""$funcName\s*\(\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\)""")
             
@@ -348,28 +353,16 @@ object CdnLiveTvProvider : Provider {
         }
     }
 
-    /**
-     * Implements the randomized decoding logic (formerly EuDBXDBAHg):
-     * function NAME(s){s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';try{return decodeURIComponent(escape(atob(s)))}catch(e){return atob(s)}}
-     */
     private fun obfuscatedBase64Decode(input: String): String {
         return try {
-            // Convert URL-safe base64 to standard base64
             var s = input.replace("-", "+").replace("_", "/")
-
-            // Add padding if needed
             while (s.length % 4 != 0) {
                 s += "="
             }
-
-            // Decode base64
             val decodedBytes = android.util.Base64.decode(s, android.util.Base64.DEFAULT)
-
-            // Standard JS UTF-8 decode trick
             String(decodedBytes, Charsets.UTF_8)
         } catch (e: Exception) {
             try {
-                // Fallback: direct decode as ISO-8859-1 (standard atob behavior)
                 val s = input.replace("-", "+").replace("_", "/")
                 var padded = s
                 while (padded.length % 4 != 0) padded += "="

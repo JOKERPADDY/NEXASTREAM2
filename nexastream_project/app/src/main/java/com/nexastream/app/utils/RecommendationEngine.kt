@@ -184,11 +184,14 @@ object RecommendationEngine {
 
         val result = mutableListOf<Category>()
 
-        // 1. Always add hero banner first
-        result.addAll(heroBanner)
+        // 1. Always put Livestream first if present
+        sanitizedCategories.find { it.name.equals("Livestream", ignoreCase = true) || it.name.startsWith("Livestream", ignoreCase = true) }?.let { ls ->
+            result.add(ls)
+        }
 
-        // 2. Add other fixed categories (livestreams, banners, etc.)
-        result.addAll(fixedHead)
+        // 2. Add hero banner and other fixed categories (excluding Livestream if already added)
+        result.addAll(heroBanner.filter { !it.name.startsWith("Livestream", ignoreCase = true) })
+        result.addAll(fixedHead.filter { !it.name.startsWith("Livestream", ignoreCase = true) })
 
         // 3. Add recommended section
         if (allItems.isNotEmpty()) {
@@ -200,8 +203,8 @@ object RecommendationEngine {
             )
         }
 
-        // 4. Add sorted rankable categories
-        result.addAll(sortedRankable)
+        // 4. Add sorted rankable categories (excluding Livestream if already added)
+        result.addAll(sortedRankable.filter { !it.name.startsWith("Livestream", ignoreCase = true) })
 
         return result.distinctBy { it.name }
     }

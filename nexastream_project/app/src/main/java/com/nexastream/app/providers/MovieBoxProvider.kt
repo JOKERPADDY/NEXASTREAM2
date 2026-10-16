@@ -43,7 +43,7 @@ object MovieBoxProvider : Provider {
     override suspend fun getPeople(id: String, page: Int): People = GengaProvider.getPeople(id, page)
 
     override suspend fun getServers(id: String, videoType: Video.Type): List<Video.Server> {
-        return extractor.servers(videoType)
+        return com.nexastream.app.extractors.MovieBoxExtractor().servers(videoType)
     }
 
     override suspend fun getVideo(server: Video.Server): Video {

@@ -23,6 +23,7 @@ import androidx.viewbinding.ViewBinding
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
 import androidx.core.view.isVisible
+import com.nexastream.app.NavMainGraphMobileDirections
 import com.nexastream.app.R
 import com.nexastream.app.adapters.AppAdapter
 import com.nexastream.app.database.AppDatabase
@@ -314,20 +315,31 @@ class MovieViewHolder(
         binding.root.apply {
             setOnClickListener {
                 checkProviderAndRun {
-                    when (context.toActivity()?.getCurrentFragment()) {
-                        is HomeMobileFragment -> {
-                            findNavController().navigate(HomeMobileFragmentDirections.actionHomeToMovie(id = movie.id))
-                            if (movie.itemType == AppAdapter.Type.MOVIE_CONTINUE_WATCHING_MOBILE_ITEM) {
-                                findNavController().navigate(MovieMobileFragmentDirections.actionMovieToPlayer(
+                    val navController = findNavController()
+                    val currentDestId = navController.currentDestination?.id
+
+                    if (movie.itemType == AppAdapter.Type.MOVIE_CONTINUE_WATCHING_MOBILE_ITEM) {
+                        navController.navigate(
+                            NavMainGraphMobileDirections.actionGlobalPlayer(
+                                id = movie.id,
+                                title = movie.title,
+                                subtitle = movie.released?.format("yyyy") ?: "",
+                                videoType = Video.Type.Movie(
                                     id = movie.id,
                                     title = movie.title,
-                                    subtitle = movie.released?.format("yyyy") ?: "",
-                                    videoType = Video.Type.Movie(id = movie.id, title = movie.title, releaseDate = movie.released?.format("yyyy-MM-dd") ?: "", poster = movie.poster ?: "", imdbId = movie.imdbId),
-                                ))
-                            }
+                                    releaseDate = movie.released?.format("yyyy-MM-dd") ?: "",
+                                    poster = movie.poster ?: "",
+                                    imdbId = movie.imdbId
+                                )
+                            )
+                        )
+                    } else {
+                        when (currentDestId) {
+                            R.id.home -> navController.navigate(HomeMobileFragmentDirections.actionHomeToMovie(id = movie.id))
+                            R.id.movie -> navController.navigate(MovieMobileFragmentDirections.actionMovieToMovie(id = movie.id))
+                            R.id.tv_show -> navController.navigate(TvShowMobileFragmentDirections.actionTvShowToMovie(id = movie.id))
+                            else -> navController.navigate(NavMainGraphMobileDirections.actionGlobalMovie(id = movie.id))
                         }
-                        is MovieMobileFragment -> findNavController().navigate(MovieMobileFragmentDirections.actionMovieToMovie(id = movie.id))
-                        is TvShowMobileFragment -> findNavController().navigate(TvShowMobileFragmentDirections.actionTvShowToMovie(id = movie.id))
                     }
                 }
             }

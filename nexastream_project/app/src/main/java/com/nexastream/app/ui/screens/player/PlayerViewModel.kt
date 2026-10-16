@@ -12,6 +12,8 @@ import com.nexastream.app.models.Movie
 import com.nexastream.app.models.TvShow
 import com.nexastream.app.models.Video
 import com.nexastream.app.models.WatchItem
+import com.nexastream.app.providers.CdnLiveTvProvider
+import com.nexastream.app.providers.Provider
 import com.nexastream.app.trakt.TraktManager
 import com.nexastream.app.utils.UserDataCache
 import com.nexastream.app.utils.UserDataCache.toEpisode
@@ -58,6 +60,14 @@ class PlayerViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(PlayerUiState())
     val uiState: StateFlow<PlayerUiState> = _uiState
 
+    private val provider: Provider
+        get() {
+            if (id.startsWith("cdn:")) {
+                return CdnLiveTvProvider
+            }
+            return UserPreferences.currentProvider
+        }
+
     init {
         loadVideo()
     }
@@ -67,12 +77,12 @@ class PlayerViewModel @Inject constructor(
     }
 
     suspend fun resolveResumePosition(): Long = withContext(Dispatchers.IO) {
-        val provider = UserPreferences.currentProvider
+        val currentProvider = provider
         val currentVideoType = videoType ?: return@withContext 0L
 
         val watchItem: WatchItem? = when (currentVideoType) {
             is Video.Type.Movie -> {
-                val movie = provider?.let {
+                val movie = currentProvider?.let {
                     UserDataCache.read(context, it)?.continueWatchingMovies
                         ?.find { cachedMovie -> cachedMovie.id == currentVideoType.id }?.toMovie()
                 }

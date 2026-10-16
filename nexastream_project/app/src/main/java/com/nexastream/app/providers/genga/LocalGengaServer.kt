@@ -769,6 +769,12 @@ class LocalGengaServer(
             return null
         }
 
+        val titleUpper = title.uppercase()
+        if (titleUpper.contains("[HINDI]") || titleUpper.contains("(HINDI)") || titleUpper.contains("HINDI DUB") || titleUpper.contains("HINDI DUBBED") || titleUpper.contains("[TAMIL]") || titleUpper.contains("[TELUGU]") || titleUpper.contains("[BENGALI]")) {
+            Log.d("LocalGengaServer", "Filtered Hindi/regional dubbed card: $title ($sid)")
+            return null
+        }
+
         var posterUrl = ""
         val poster = itemData["poster"]
         if (poster is Map<*, *>) {
@@ -830,8 +836,9 @@ class LocalGengaServer(
         bodyString: String = ""
     ): String = withContext(Dispatchers.IO) {
         val prefs = context.getSharedPreferences("genga_prefs", Context.MODE_PRIVATE)
-        val spCode = prefs.getString("sp_code", "")?.takeIf { it.isNotEmpty() } ?: "404"
-        val region = prefs.getString("custom_local_iso", "")?.takeIf { it.isNotEmpty() }?.uppercase() ?: "US"
+        prefs.edit().putString("sp_code", "90101").putString("custom_local_iso", "US").apply()
+        val spCode = "90101"
+        val region = "US"
         val timezone = "America/New_York"
 
         val isCacheable = method == "GET"

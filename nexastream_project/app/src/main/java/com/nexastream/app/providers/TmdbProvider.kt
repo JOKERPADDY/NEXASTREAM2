@@ -1482,18 +1482,18 @@ class TmdbProvider(override val language: String) : Provider {
 
         Log.d("TmdbProvider", "getServers: lang=$language, simplifiedLang=$lang")
 
-        // 0. Always add MovieBox first as primary default provider
-        try {
-            servers.add(MovieBoxExtractor().server(videoType))
-        } catch (e: Exception) {
-            Log.e("TmdbProvider", "Failed to add MovieBox: ${e.message}")
-        }
-
-        // Always add VixSrc as fallback
+        // 0. Always add VixSrc first as main primary provider
         try {
             servers.add(VixSrcExtractor().server(videoType))
         } catch (e: Exception) {
             Log.e("TmdbProvider", "Failed to add VixSrc: ${e.message}")
+        }
+
+        // 1. Add MovieBox as fallback provider
+        try {
+            servers.add(MovieBoxExtractor().server(videoType))
+        } catch (e: Exception) {
+            Log.e("TmdbProvider", "Failed to add MovieBox: ${e.message}")
         }
 
         when (lang) {
@@ -1631,7 +1631,7 @@ class TmdbProvider(override val language: String) : Provider {
             // Let's stick to: Preferred > VixSrc > Others
             
             // PRIORITY 1: User's manually selected server name match
-            if (!preferredServer.isNullOrBlank() && preferredServer.uppercase() != "VIXSRC") {
+            if (!preferredServer.isNullOrBlank()) {
                 val pref = preferredServer.uppercase()
                 if (n1 == pref && n2 != pref) return@sortedWith -1
                 if (n2 == pref && n1 != pref) return@sortedWith 1
@@ -1641,13 +1641,13 @@ class TmdbProvider(override val language: String) : Provider {
                 if (n2.contains(pref) && !n1.contains(pref)) return@sortedWith 1
             }
 
-            // PRIORITY 2: MovieBox preference (Primary default server)
-            if (n1.contains("MOVIEBOX") && !n2.contains("MOVIEBOX")) return@sortedWith -1
-            if (n2.contains("MOVIEBOX") && !n1.contains("MOVIEBOX")) return@sortedWith 1
-
-            // PRIORITY 3: VixSrc preference (Fallback)
+            // PRIORITY 2: VixSrc preference (Main primary server)
             if (n1.contains("VIXSRC") && !n2.contains("VIXSRC")) return@sortedWith -1
             if (n2.contains("VIXSRC") && !n1.contains("VIXSRC")) return@sortedWith 1
+
+            // PRIORITY 3: MovieBox preference (Secondary fallback server)
+            if (n1.contains("MOVIEBOX") && !n2.contains("MOVIEBOX")) return@sortedWith -1
+            if (n2.contains("MOVIEBOX") && !n1.contains("MOVIEBOX")) return@sortedWith 1
 
             // PRIORITY 3: Specific language rules (existing logic integrated)
             if (language.startsWith("es")) {

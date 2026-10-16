@@ -107,7 +107,8 @@ interface Provider {
             FlixLatamProvider to ProviderSupport(movies = true, tvShows = true),
             FilmPalastProvider to ProviderSupport(movies = true, tvShows = false),
             LocalIptvProvider to ProviderSupport(movies = false, tvShows = true),
-            PatrickTvProvider to ProviderSupport(movies = false, tvShows = true)
+            PatrickTvProvider to ProviderSupport(movies = false, tvShows = true),
+            MagisProvider to ProviderSupport(movies = true, tvShows = true)
             // TmdbProvider to ProviderSupport(movies = true, tvShows = true) // TmdbProvider is a special case with language parameter
         )
 

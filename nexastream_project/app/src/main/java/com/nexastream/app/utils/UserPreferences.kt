@@ -64,10 +64,10 @@ object UserPreferences {
         val jsonString = Key.PROVIDER_CACHE.getString() ?: "{}"
         providerCache = runCatching { JSONObject(jsonString) }.getOrDefault(JSONObject())
         
-        // Default to MovieBox provider if no provider set yet
+        // Default to HOME provider if no provider set yet
         if (Key.CURRENT_PROVIDER.getString().isNullOrEmpty()) {
-            Key.CURRENT_PROVIDER.setString(MovieBoxProvider.name)
-            cachedProvider = MovieBoxProvider
+            Key.CURRENT_PROVIDER.setString(NexaHomeProvider.name)
+            cachedProvider = NexaHomeProvider
         }
     }
 

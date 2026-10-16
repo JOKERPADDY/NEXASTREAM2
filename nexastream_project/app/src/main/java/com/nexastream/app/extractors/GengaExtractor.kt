@@ -9,6 +9,7 @@ class GengaExtractor : Extractor() {
 
     override val name = "Genga"
     override val mainUrl = "http://127.0.0.1:3001"
+    override val aliasUrls = listOf("movie|", "tv|", "movie:", "tv:")
 
     private val api by lazy { GengaApi.create("http://127.0.0.1:3001/") }
 
@@ -72,7 +73,9 @@ class GengaExtractor : Extractor() {
         }
 
         val isTv = (type == "tv")
-        val candidate = items.firstOrNull { it.isTvShow == isTv } ?: items.first()
+        val candidate = items.firstOrNull { 
+            it.isTvShow == isTv && !it.name.contains("[Hindi]", ignoreCase = true) && !it.name.contains("(Hindi)", ignoreCase = true) 
+        } ?: items.firstOrNull { it.isTvShow == isTv } ?: items.first()
 
         Log.i("GengaExtractor", "Trying candidate subject: ${candidate.name} (ID: ${candidate.id})")
         val playInfo = api.playInfo(

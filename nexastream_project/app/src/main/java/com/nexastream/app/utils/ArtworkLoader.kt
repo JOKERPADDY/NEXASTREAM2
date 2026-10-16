@@ -185,6 +185,9 @@ private fun ImageView.loadRecoverableArtwork(
 
     fun submit(url: String?) {
         val requestedUrl = url
+        val activity = context?.toActivity()
+        if (activity != null && (activity.isDestroyed || activity.isFinishing)) return
+
         if (requestedUrl.isNullOrBlank() && !hasRequestedRepairForBlankUrl) {
             hasRequestedRepairForBlankUrl = true
             onRepair("") { refreshedUrl ->
@@ -193,8 +196,9 @@ private fun ImageView.loadRecoverableArtwork(
             }
         }
 
-        configure(Glide.with(this).load(requestedUrl))
-            .listener(object : RequestListener<Drawable> {
+        try {
+            configure(Glide.with(this).load(requestedUrl))
+                .listener(object : RequestListener<Drawable> {
                 override fun onLoadFailed(
                     e: GlideException?,
                     model: Any?,
@@ -221,6 +225,9 @@ private fun ImageView.loadRecoverableArtwork(
                 ) = false
             })
             .into(this)
+        } catch (e: Exception) {
+            android.util.Log.w("ArtworkLoader", "Glide load skipped: ${e.message}")
+        }
     }
 
     submit(initialUrl)

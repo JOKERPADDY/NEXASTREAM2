@@ -44,6 +44,12 @@ object DnsResolver : Dns {
         Log.d(TAG, "Resolving host: $hostname using provider: $providerName")
         return try {
             val addresses = _internalDoh.lookup(hostname)
+            if (hostname != "localhost" && hostname != "127.0.0.1" && addresses.all { it.isLoopbackAddress || it.hostAddress == "127.0.0.1" || it.hostAddress == "0.0.0.0" }) {
+                Log.w(TAG, "DoH returned loopback/blocked address for $hostname. Falling back to system DNS...")
+                val fallbackAddresses = Dns.SYSTEM.lookup(hostname)
+                Log.d(TAG, "System DNS resolved $hostname to: ${fallbackAddresses.joinToString { it.hostAddress ?: "" }}")
+                return fallbackAddresses
+            }
             Log.d(TAG, "Resolved $hostname to: ${addresses.joinToString { it.hostAddress ?: "" }}")
             addresses
         } catch (e: Exception) {

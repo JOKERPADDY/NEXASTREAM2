@@ -6,7 +6,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nexastream.app.debrid.RealDebridManager
 import com.nexastream.app.models.Video
+import com.nexastream.app.providers.CdnLiveTvProvider
 import com.nexastream.app.providers.IptvProvider
+import com.nexastream.app.providers.Provider
 import com.nexastream.app.utils.EpisodeManager
 import com.nexastream.app.utils.OpenSubtitles
 import com.nexastream.app.utils.SubDL
@@ -105,13 +107,21 @@ class PlayerViewModel(
         getSubtitles(episode)
     }
 
+    private val activeProvider: Provider
+        get() {
+            if (initialId.startsWith("cdn:")) {
+                return CdnLiveTvProvider
+            }
+            return UserPreferences.currentProvider
+        }
+
     private fun getServers(videoType: Video.Type, id: String) = viewModelScope.launch(Dispatchers.IO) {
         Log.d("PlayerViewModel", "Inizio ricerca server per ID: $id")
         lastVideoType = videoType
         lastId = id
         _state.emit(State.LoadingServers)
         try {
-            val servers = UserPreferences.currentProvider.getServers(id, videoType)
+            val servers = activeProvider.getServers(id, videoType)
             if (servers.isEmpty()) throw Exception("No servers found")
 
             // REORDERING logic: 
@@ -120,7 +130,7 @@ class PlayerViewModel(
             // 3. Others (Provider default order)
             val preferredName = UserPreferences.preferredServerName
             val distinctServers = servers.distinctBy { it.id }
-            val finalServers = if (UserPreferences.currentProvider is IptvProvider) {
+            val finalServers = if (activeProvider is IptvProvider) {
                 // IPTV providers already order mirrors using persisted health and latency.
                 distinctServers
             } else distinctServers.sortedWith { s1, s2 ->
@@ -135,19 +145,19 @@ class PlayerViewModel(
                     if (n2.contains(pref) && !n1.contains(pref)) return@sortedWith 1
                 }
                 
-                // Priority 1: MovieBox (our primary server)
-                if (n1.contains("MOVIEBOX") && !n2.contains("MOVIEBOX")) return@sortedWith -1
-                if (n2.contains("MOVIEBOX") && !n1.contains("MOVIEBOX")) return@sortedWith 1
-
-                // Priority 2: VixSrc (fallback)
+                // Priority 1: VixSrc (Server 2 - default primary stream server)
                 if (n1.contains("VIXSRC") && !n2.contains("VIXSRC")) return@sortedWith -1
                 if (n2.contains("VIXSRC") && !n1.contains("VIXSRC")) return@sortedWith 1
+
+                // Priority 2: MovieBox (Server 1 - fallback stream server)
+                if (n1.contains("MOVIEBOX") && !n2.contains("MOVIEBOX")) return@sortedWith -1
+                if (n2.contains("MOVIEBOX") && !n1.contains("MOVIEBOX")) return@sortedWith 1
                 
                 0
             }
             
             // LOG POTENZIATO: Mostra tutti i server disponibili per il player
-            Log.i("NexaStream", "[SERVERS LIST] -> Provider: ${UserPreferences.currentProvider.name}")
+            Log.i("NexaStream", "[SERVERS LIST] -> Provider: ${activeProvider.name}")
             Log.i("NexaStream", "[SERVERS LIST] -> Found ${finalServers.size} servers: ${finalServers.joinToString { it.name }}")
 
             Log.d("PlayerViewModel", "Ricerca server completata: ${finalServers.size} server trovati")
@@ -162,7 +172,7 @@ class PlayerViewModel(
         Log.d("PlayerViewModel", "Inizio estrazione video dal server: ${server.name}")
         _state.emit(State.LoadingVideo(server))
         try {
-            var video = UserPreferences.currentProvider.getVideo(server)
+            var video = activeProvider.getVideo(server)
             if (video.source.isEmpty()) throw Exception("No source found")
 
             // Real-Debrid Unrestrict Logic

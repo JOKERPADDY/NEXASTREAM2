@@ -106,12 +106,12 @@ object NexaHomeProvider : Provider {
         seriesBanner?.let { categories.add(it.copy(name = "Series Banner", list = it.list.safeSubList(0, 10))) }
 
         // LIVE CHANNELS
-        cdnHome.find { it.name == "CDN Live Channels" }?.let { cat ->
+        cdnHome.find { it.name == "Livestream" || it.name == "CDN Live Channels" || it.name == "Live Sports & TV" }?.let { cat ->
             val priorityOrder = listOf(
-                listOf("Sky Sport Premier", "Sky Sports Premier"),
-                listOf("Sky Sport Mix"),
-                listOf("National Geographic", "Nat Geo", "National Graphic"),
+                listOf("Sky Sports Premier", "Sky Sport Premier", "Sky Premier", "Premier League"),
                 listOf("Nickelodeon", "Nick"),
+                listOf("National Geographic", "Nat Geo", "National Graphic"),
+                listOf("Sky Sport Mix", "Sky Sports"),
                 listOf("NBA TV"),
                 listOf("Fox"),
                 listOf("ESPN"),
@@ -135,13 +135,18 @@ object NexaHomeProvider : Provider {
                 getPriorityIndex(title)
             })
 
-            categories.add(cat.copy(name = "Livestream", list = sortedList))
+            categories.add(0, cat.copy(name = "Livestream", list = sortedList))
         } ?: run {
             cdnHome.filter { it.name.contains("Sports", ignoreCase = true) || it.name.contains("News", ignoreCase = true) || it.name.contains("Entertainment", ignoreCase = true) }
                 .take(3)
                 .forEach { cat ->
                     categories.add(cat.copy(name = "Livestream · ${cat.name}"))
                 }
+        }
+
+        categories.find { it.name.equals("Livestream", ignoreCase = true) }?.let { ls ->
+            categories.remove(ls)
+            categories.add(0, ls)
         }
 
         categories
@@ -413,6 +418,16 @@ object NexaHomeProvider : Provider {
     }
 
     override suspend fun getTvShow(id: String): TvShow {
+        val homeChannel = HomeIptvChannels.channels.find { it.id == id || it.name.equals(id, ignoreCase = true) }
+        if (homeChannel != null) {
+            return TvShow(
+                id = homeChannel.id,
+                title = homeChannel.name,
+                poster = homeChannel.logo ?: "https://i.ibb.co/W1d0CxF/Logo-IPTV-All-World.jpg",
+                quality = "LIVE",
+                providerName = name
+            ).apply { itemType = AppAdapter.Type.TV_SHOW_MOBILE_ITEM }
+        }
         if (id.startsWith("cdn:")) {
             // First try CDN directly
             val cdnResult = runCatching { CdnLiveTvProvider.getTvShow(id) }
@@ -429,6 +444,13 @@ object NexaHomeProvider : Provider {
     }
 
     override suspend fun getServers(id: String, videoType: Video.Type): List<Video.Server> {
+        val homeChannel = HomeIptvChannels.channels.find { it.id == id || it.name.equals(id, ignoreCase = true) }
+        if (homeChannel != null) {
+            return listOf(
+                Video.Server(id = homeChannel.url, name = "Live 1080p (Default)", src = homeChannel.name),
+                Video.Server(id = "${homeChannel.url}#480p", name = "Live 480p", src = homeChannel.name)
+            )
+        }
         if (id.startsWith("cdn:")) {
             val cdnChannel = runCatching { CdnLiveTvProvider.getTvShow(id) }.getOrNull()
             val channelTitle = cdnChannel?.title ?: id.removePrefix("cdn:")
@@ -457,10 +479,54 @@ object NexaHomeProvider : Provider {
             if (combined.isNotEmpty()) return combined
             throw IllegalStateException("No live stream servers available for this channel.")
         }
-        return tmdb.getServers(id, videoType)
+        val servers = tmdb.getServers(id, videoType)
+        return sortHomeServers(servers)
+    }
+
+    private fun sortHomeServers(servers: List<Video.Server>): List<Video.Server> {
+        val preferredServer = UserPreferences.preferredServerName
+        return servers.distinctBy { it.id }.sortedWith { s1, s2 ->
+            val n1 = s1.name.uppercase()
+            val n2 = s2.name.uppercase()
+
+            if (!preferredServer.isNullOrBlank()) {
+                val pref = preferredServer.uppercase()
+                if (n1 == pref && n2 != pref) return@sortedWith -1
+                if (n2 == pref && n1 != pref) return@sortedWith 1
+                if (n1.contains(pref) && !n2.contains(pref)) return@sortedWith -1
+                if (n2.contains(pref) && !n1.contains(pref)) return@sortedWith 1
+            }
+
+            // Server 2 (VixSrc) as default primary stream server
+            if (n1.contains("VIXSRC") && !n2.contains("VIXSRC")) return@sortedWith -1
+            if (n2.contains("VIXSRC") && !n1.contains("VIXSRC")) return@sortedWith 1
+
+            // Server 1 (MovieBox) as fallback stream server
+            if (n1.contains("MOVIEBOX") && !n2.contains("MOVIEBOX")) return@sortedWith -1
+            if (n2.contains("MOVIEBOX") && !n1.contains("MOVIEBOX")) return@sortedWith 1
+
+            0
+        }
     }
 
     override suspend fun getVideo(server: Video.Server): Video = withContext(Dispatchers.IO) {
+        val homeChannel = HomeIptvChannels.channels.find { 
+            it.id == server.id.substringBefore("#480p") || 
+            it.url == server.id.substringBefore("#480p") || 
+            it.name.equals(server.src, ignoreCase = true) 
+        }
+        if (homeChannel != null) {
+            val url = server.id.substringBefore("#480p")
+            return@withContext Video(
+                source = url,
+                headers = mapOf(
+                    "User-Agent" to (homeChannel.userAgent ?: "Lavf/56.15.102"),
+                    "Referer" to "https://cdnlivetv.tv/",
+                    "Origin" to "https://cdnlivetv.tv"
+                )
+            )
+        }
+
         if (server.name.contains("IPTV All World")) {
             return@withContext runCatching { IptvOrgProvider.getVideo(server) }.getOrNull()
                 ?: throw IllegalStateException("IPTV stream is currently offline.")
