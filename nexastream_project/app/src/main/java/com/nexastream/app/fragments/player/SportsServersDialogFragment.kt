@@ -55,7 +55,13 @@ class SportsServersDialogFragment : DialogFragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             try {
                 Log.d("SportsServers", "Loading servers for: ${args.id}")
-                val servers = emptyList<Video.Server>()
+                val provider = com.nexastream.app.utils.UserPreferences.currentProvider
+                val videoType = args.videoType
+                val servers = runCatching {
+                    provider.getServers(args.id, videoType)
+                }.getOrElse {
+                    com.nexastream.app.providers.AkSportsLiveProvider.getServers(args.id, videoType)
+                }
                 
                 if (servers.isEmpty()) {
                     Log.w("SportsServers", "No servers found for: ${args.id}")

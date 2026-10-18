@@ -807,6 +807,12 @@ class PlayerTvFragment : Fragment() {
             requireContext().unregisterReceiver(chooserReceiver)
         } catch (ignored: Exception) {
         }
+
+        UserPreferences.previousProviderToRestore?.let { prev ->
+            UserPreferences.currentProvider = prev
+            UserPreferences.previousProviderToRestore = null
+        }
+
         _binding = null
         isSetupDone = false
     }

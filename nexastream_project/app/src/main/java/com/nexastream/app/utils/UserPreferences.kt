@@ -18,7 +18,9 @@ import com.nexastream.app.providers.Provider.Companion.providers
 import com.nexastream.app.providers.TmdbProvider
 import com.nexastream.app.providers.NexaHomeProvider
 import com.nexastream.app.providers.MovieBoxProvider
+import com.nexastream.app.providers.AkSportsLiveProvider
 import androidx.core.content.edit
+import androidx.preference.PreferenceManager
 import com.nexastream.app.database.AppDatabase
 import org.json.JSONObject
 
@@ -36,6 +38,7 @@ object UserPreferences {
     private const val DEFAULT_STREAMINGCOMMUNITY_DOMAIN = "streamingunity.dog"
     private const val DEFAULT_CUEVANA_DOMAIN = "cuevana.gs"
     private const val DEFAULT_POSEIDON_DOMAIN = "www.poseidonhd2.co"
+    private const val DEFAULT_STREAM_RESOLVER_URL = "https://streamed-pk-resolver.onrender.com"
 
     const val PROVIDER_URL = "URL"
     const val PROVIDER_LOGO = "LOGO"
@@ -59,6 +62,9 @@ object UserPreferences {
             prefsName,
             Context.MODE_PRIVATE,
         )
+        prefs.edit { remove("STREAM_RESOLVER_URL") }
+        PreferenceManager.getDefaultSharedPreferences(context)
+            .edit { remove("STREAM_RESOLVER_URL") }
         debugLog { "prefs initialized: ${prefs.hashCode()}" }
 
         val jsonString = Key.PROVIDER_CACHE.getString() ?: "{}"
@@ -73,6 +79,8 @@ object UserPreferences {
 
     @Volatile
     private var cachedProvider: Provider? = null
+
+    var previousProviderToRestore: Provider? = null
 
     var currentProvider: Provider
         get() {
@@ -97,6 +105,7 @@ object UserPreferences {
                 TmdbProvider(lang)
             }
             providerName == "HOME" -> NexaHomeProvider
+            providerName == AkSportsLiveProvider.name || providerName == "AK Sports" || providerName == "AkSports" || providerName == "AK Sports Live" -> AkSportsLiveProvider
             else -> Provider.providers.keys.find { it.name == providerName }
         }
     }
@@ -564,6 +573,9 @@ object UserPreferences {
             Key.DOH_PROVIDER_URL.setString(value)
             DnsResolver.setDnsUrl(value)
         }
+
+    val streamResolverUrl: String
+        get() = DEFAULT_STREAM_RESOLVER_URL
 
     var paddingX: Int
         get() = Key.SCREEN_PADDING_X.getInt() ?: 0

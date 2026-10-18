@@ -95,15 +95,32 @@ object NexaHomeProvider : Provider {
 
         val moviesBannerDef = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(phase0Timeout) { tmdb.getFeaturedMovies() } }.getOrNull() } }
         val seriesBannerDef = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(phase0Timeout) { tmdb.getFeaturedTvShows() } }.getOrNull() } }
+        val liveSportsMatchesDef = async { limited {
+            runCatching {
+                kotlinx.coroutines.withTimeoutOrNull(2500) {
+                    AkSportsLiveProvider.getLiveMatches()
+                }
+            }.getOrNull().orEmpty()
+        } }
 
         val cdnHome: List<Category> = cdnHomeDeferred.await() ?: emptyList()
         val moviesBanner = moviesBannerDef.await()
         val seriesBanner = seriesBannerDef.await()
+        val liveSportsMatches = liveSportsMatchesDef.await()
 
         val categories = mutableListOf<Category>()
 
         moviesBanner?.let { categories.add(it.copy(name = "Movies Banner", list = it.list.safeSubList(0, 10))) }
         seriesBanner?.let { categories.add(it.copy(name = "Series Banner", list = it.list.safeSubList(0, 10))) }
+
+        if (liveSportsMatches.isNotEmpty()) {
+            categories.add(
+                Category(
+                    name = "Live Sports",
+                    list = liveSportsMatches
+                ).apply { itemType = AppAdapter.Type.CATEGORY_MOBILE_ITEM }
+            )
+        }
 
         // LIVE CHANNELS
         cdnHome.find { it.name == "Livestream" || it.name == "CDN Live Channels" || it.name == "Live Sports & TV" }?.let { cat ->

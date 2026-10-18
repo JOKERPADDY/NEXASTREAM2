@@ -298,7 +298,7 @@
     <string name="settings_section_content_title">Content and Safety</string>
     <string name="settings_screen_content_summary">TMDb access, parental control and content restrictions</string>
     <string name="settings_category_network_title">Connection &amp; Services</string>
-    <string name="settings_screen_network_summary">DNS, TV bypass tools and subtitle service keys</string>
+    <string name="settings_screen_network_summary">DNS, sports resolver, TV bypass tools and subtitle service keys</string>
     <string name="settings_scan_resolver_qr_title">Scan TV bypass QR</string>
     <string name="settings_scan_resolver_qr_summary">Open the camera and scan the QR code shown on TV</string>
     <string name="settings_scan_resolver_invalid_qr">This QR code is not a NexaStream 2 bypass link.</string>

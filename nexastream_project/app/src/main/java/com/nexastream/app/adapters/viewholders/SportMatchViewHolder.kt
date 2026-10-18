@@ -1,12 +1,11 @@
 package com.nexastream.app.adapters.viewholders
 
-import android.view.View
+import android.widget.TextView
 import androidx.core.os.bundleOf
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewbinding.ViewBinding
 import androidx.navigation.findNavController
-import com.bumptech.glide.Glide
 import com.nexastream.app.R
 import com.nexastream.app.databinding.ItemSportMatchMobileBinding
 import com.nexastream.app.databinding.ItemSportMatchTvBinding
@@ -18,7 +17,6 @@ class SportMatchViewHolder(
     private val _binding: ViewBinding
 ) : RecyclerView.ViewHolder(_binding.root) {
 
-    private val context = itemView.context
     private lateinit var match: SportMatch
 
     fun bind(match: SportMatch) {
@@ -30,45 +28,11 @@ class SportMatchViewHolder(
     }
 
     private fun displayMobileItem(binding: ItemSportMatchMobileBinding) {
+        val processedMatch = parseLiveDetails(match)
         binding.apply {
             root.setOnClickListener {
                 it.findNavController().navigate(
-                    R.id.action_global_sports_servers,
-                    bundleOf(
-                        "id" to match.id,
-                        "title" to match.title,
-                        "subtitle" to "${match.league} - ${match.time}",
-                        "videoType" to Video.Type.Movie(
-                            id = match.id,
-                            title = match.title,
-                            releaseDate = "",
-                            poster = match.poster ?: "",
-                            imdbId = null
-                        )
-                    )
-                )
-            }
-            tvMatchLeague.text = match.league
-            tvHomeTeam.text = match.homeTeam
-            tvAwayTeam.text = match.awayTeam
-            tvMatchScore.text = match.score
-            tvMatchTime.text = match.time
-            tvMatchStatus.isVisible = match.status == "LIVE"
-
-            ivMatchPoster.loadSportMatchPoster(match) {
-                placeholder(R.drawable.glide_fallback_cover)
-                error(R.drawable.glide_fallback_cover)
-            }
-        }
-    }
-
-    private fun displayTvItem(binding: ItemSportMatchTvBinding) {
-        binding.apply {
-            val processedMatch = parseLiveDetails(match)
-            
-            root.setOnClickListener {
-                it.findNavController().navigate(
-                    R.id.action_global_sports_servers,
+                    R.id.action_global_player,
                     bundleOf(
                         "id" to processedMatch.id,
                         "title" to processedMatch.title,
@@ -88,38 +52,122 @@ class SportMatchViewHolder(
             tvAwayTeam.text = processedMatch.awayTeam
             tvMatchScore.text = processedMatch.score
             tvMatchTime.text = processedMatch.time
-            tvMatchStatus.text = processedMatch.status
-            tvMatchStatus.isVisible = processedMatch.status == "LIVE" || processedMatch.status == "PENS" || processedMatch.status == "HT"
 
-            if (processedMatch.status == "FIN") {
-                tvMatchStatus.text = "FINISHED"
-                tvMatchStatus.setBackgroundColor(android.graphics.Color.DKGRAY)
-                tvMatchStatus.isVisible = true
-            } else if (processedMatch.status == "HT") {
-                tvMatchStatus.text = "HALF TIME"
-                tvMatchStatus.setBackgroundColor(android.graphics.Color.BLUE)
+            setupStatusBadge(tvMatchStatus, processedMatch.status)
+
+            ivMatchPoster.loadSportMatchPoster(processedMatch) {
+                placeholder(R.drawable.glide_fallback_cover)
+                error(R.drawable.glide_fallback_cover)
             }
+        }
+    }
 
-            Glide.with(context)
-                .load(processedMatch.poster)
-                .placeholder(R.drawable.glide_fallback_cover)
-                .error(R.drawable.glide_fallback_cover)
-                .into(ivMatchPoster)
+    private fun displayTvItem(binding: ItemSportMatchTvBinding) {
+        val processedMatch = parseLiveDetails(match)
+        binding.apply {
+            root.setOnClickListener {
+                it.findNavController().navigate(
+                    R.id.action_global_player,
+                    bundleOf(
+                        "id" to processedMatch.id,
+                        "title" to processedMatch.title,
+                        "subtitle" to "${processedMatch.league} - ${processedMatch.time}",
+                        "videoType" to Video.Type.Movie(
+                            id = processedMatch.id,
+                            title = processedMatch.title,
+                            releaseDate = "",
+                            poster = processedMatch.poster ?: "",
+                            imdbId = null
+                        )
+                    )
+                )
+            }
+            tvMatchLeague.text = processedMatch.league
+            tvHomeTeam.text = processedMatch.homeTeam
+            tvAwayTeam.text = processedMatch.awayTeam
+            tvMatchScore.text = processedMatch.score
+            tvMatchTime.text = processedMatch.time
+
+            setupStatusBadge(tvMatchStatus, processedMatch.status)
+
+            ivMatchPoster.loadSportMatchPoster(processedMatch) {
+                placeholder(R.drawable.glide_fallback_cover)
+                error(R.drawable.glide_fallback_cover)
+            }
+        }
+    }
+
+    private fun setupStatusBadge(textView: TextView, status: String) {
+        val upper = status.uppercase().trim()
+        when {
+            upper == "LIVE" || upper.contains("LIVE") -> {
+                textView.text = "LIVE"
+                textView.setBackgroundResource(R.drawable.bg_live_badge)
+                textView.isVisible = true
+            }
+            upper == "UPCOMING" || upper == "NS" || upper == "SCHEDULED" -> {
+                textView.text = "UPCOMING"
+                textView.setBackgroundColor(android.graphics.Color.parseColor("#0288D1"))
+                textView.isVisible = true
+            }
+            upper == "HT" || upper == "HALF TIME" -> {
+                textView.text = "HALF TIME"
+                textView.setBackgroundColor(android.graphics.Color.parseColor("#1565C0"))
+                textView.isVisible = true
+            }
+            upper == "FIN" || upper == "FINISHED" || upper == "FT" -> {
+                textView.text = "FINISHED"
+                textView.setBackgroundColor(android.graphics.Color.parseColor("#424242"))
+                textView.isVisible = true
+            }
+            upper == "PENS" || upper == "PENALTIES" -> {
+                textView.text = "PENALTIES"
+                textView.setBackgroundColor(android.graphics.Color.parseColor("#D81B60"))
+                textView.isVisible = true
+            }
+            status.isNotBlank() -> {
+                textView.text = upper
+                textView.setBackgroundResource(R.drawable.bg_live_badge)
+                textView.isVisible = true
+            }
+            else -> {
+                textView.isVisible = false
+            }
         }
     }
 
     private fun parseLiveDetails(match: SportMatch): SportMatch {
         val title = match.title
-        // Simple regex to extract score from title like "Team A 2 - 1 Team B"
-        val scoreRegex = Regex("""(\d+)\s*-\s*(\d+)""")
-        val matchResult = scoreRegex.find(title)
-        
-        if (matchResult != null && match.score == "vs") {
-            val homeScore = matchResult.groupValues[1]
-            val awayScore = matchResult.groupValues[2]
-            return match.copy(score = "$homeScore - $awayScore")
+        var home = match.homeTeam
+        var away = match.awayTeam
+        var score = match.score
+
+        if (home.isBlank() || away.isBlank() || home.equals(title, ignoreCase = true)) {
+            val vsSplit = title.split(Regex("""\s+vs\.?\s+|\s+-\s+""", RegexOption.IGNORE_CASE))
+            if (vsSplit.size >= 2) {
+                home = vsSplit[0].trim()
+                away = vsSplit[1].trim()
+            }
         }
-        
-        return match
+
+        val scoreRegex = Regex("""(\d+)\s*-\s*(\d+)""")
+        val scoreMatch = scoreRegex.find(title)
+        if (scoreMatch != null && (score == "vs" || score.isBlank())) {
+            val homeScore = scoreMatch.groupValues[1]
+            val awayScore = scoreMatch.groupValues[2]
+            score = "$homeScore - $awayScore"
+        }
+
+        var league = match.league
+        if (league.isBlank() || league.equals("sports", ignoreCase = true)) {
+            league = match.sport?.uppercase() ?: "LIVE SPORTS"
+        }
+
+        return match.copy(
+            homeTeam = home,
+            awayTeam = away,
+            score = score,
+            league = league
+        )
     }
 }
