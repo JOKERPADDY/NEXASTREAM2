@@ -36,6 +36,7 @@ import com.nexastream.app.providers.FilmyOnlineCcProvider
 import com.nexastream.app.providers.IptvProvider
 import com.nexastream.app.providers.Provider
 import com.nexastream.app.ui.UpdateAppMobileDialog
+import com.nexastream.app.ui.TelegramPromptDialog
 import com.nexastream.app.utils.AppLanguageManager
 import com.nexastream.app.utils.ProviderChangeNotifier
 import com.nexastream.app.utils.ThemeManager
@@ -140,6 +141,15 @@ class MainMobileActivity : AppCompatActivity() {
 
 
         updateImmersiveMode()
+
+        if (!UserPreferences.hasShownTelegramPrompt) {
+            UserPreferences.hasShownTelegramPrompt = true
+            binding.root.postDelayed({
+                if (!isFinishing && !isDestroyed) {
+                    TelegramPromptDialog(this).show()
+                }
+            }, 1000L)
+        }
 
         val navHost =
             supportFragmentManager.findFragmentById(R.id.nav_main_fragment) as NavHostFragment

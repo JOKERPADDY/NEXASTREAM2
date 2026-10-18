@@ -3,6 +3,8 @@ package com.nexastream.app.utils
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.util.Log
 import android.widget.Toast
@@ -12,7 +14,7 @@ import com.nexastream.app.R
 object LoggingUtils {
     
     /**
-     * Displays a logging dialog with error details
+     * Displays a logging dialog with error details and a creative Telegram community prompt
      * @param context The context to show the dialog
      * @param error The throwable error to log
      */
@@ -36,11 +38,28 @@ object LoggingUtils {
         log("📜 $stackTrace:\n${Log.getStackTraceString(error)}")
 
         val logContent = logBuilder.toString()
+        
+        val creativeTelegramPrompt = "✨ ───────────────────────── ✨\n" +
+                "🚀 JOIN DEVELOPER ON TELEGRAM!\n" +
+                "Get instant support, updates, & request features:\n" +
+                "👉 https://t.me/NEXASTREAM2\n" +
+                "✨ ───────────────────────── ✨\n\n"
+
+        val fullMessage = creativeTelegramPrompt + logContent
 
         AlertDialog.Builder(context)
-            .setTitle("📝 ${context.getString(R.string.error_dialog_title)}")
-            .setMessage(logContent)
-            .setPositiveButton("OK", null)
+            .setTitle("📢 ${context.getString(R.string.error_dialog_title)} & Telegram")
+            .setMessage(fullMessage)
+            .setPositiveButton("🚀 Join Telegram") { _, _ ->
+                try {
+                    val tgIntent = Intent(Intent.ACTION_VIEW, Uri.parse("tg://resolve?domain=NEXASTREAM2"))
+                    context.startActivity(tgIntent)
+                } catch (_: Exception) {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/NEXASTREAM2"))
+                    context.startActivity(intent)
+                }
+            }
+            .setNegativeButton("Maybe Later", null)
             .setNeutralButton("📋 ${context.getString(R.string.error_dialog_copy)}") { _, _ ->
                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                 val clip = ClipData.newPlainText("Error Log", logContent)

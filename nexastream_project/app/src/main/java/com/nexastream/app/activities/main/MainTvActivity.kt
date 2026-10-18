@@ -25,6 +25,7 @@ import com.nexastream.app.databinding.ActivityMainTvBinding
 import com.nexastream.app.databinding.ContentHeaderMenuMainTvBinding
 import com.nexastream.app.fragments.player.PlayerTvFragment
 import com.nexastream.app.ui.UpdateAppTvDialog
+import com.nexastream.app.ui.TelegramPromptDialog
 import com.nexastream.app.providers.IptvProvider
 import com.nexastream.app.providers.Provider
 import com.nexastream.app.providers.FilmyOnlineCcProvider
@@ -59,6 +60,15 @@ class MainTvActivity : FragmentActivity() {
         applyThemeNavigationChrome()
 
         binding.ivSplashOverlay.visibility = View.GONE
+
+        if (!UserPreferences.hasShownTelegramPrompt) {
+            UserPreferences.hasShownTelegramPrompt = true
+            binding.root.postDelayed({
+                if (!isFinishing && !isDestroyed) {
+                    TelegramPromptDialog(this).show()
+                }
+            }, 1000L)
+        }
 
         try {
             val navHostFragment = this.supportFragmentManager

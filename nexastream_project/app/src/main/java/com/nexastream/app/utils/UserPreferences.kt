@@ -320,6 +320,12 @@ object UserPreferences {
             Key.UPDATE_CHECK_ENABLED.setBoolean(value)
         }
 
+    var hasShownTelegramPrompt: Boolean
+        get() = Key.HAS_SHOWN_TELEGRAM_PROMPT.getBoolean() ?: false
+        set(value) {
+            Key.HAS_SHOWN_TELEGRAM_PROMPT.setBoolean(value)
+        }
+
     fun unlockParentalControls() {
         parentalControlFailedAttempts = 0
         parentalControlLockedUntilMillis = 0L
@@ -652,6 +658,7 @@ object UserPreferences {
         BILINGUAL_SUBTITLES,
         FAMILY_MODE,
         AUTO_START_ON_BOOT,
+        HAS_SHOWN_TELEGRAM_PROMPT,
         CURRENT_LANGUAGE,
         CURRENT_PROVIDER,
         PLAYER_RESIZE,
