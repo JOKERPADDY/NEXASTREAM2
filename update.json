@@ -1,8 +1,8 @@
 {
-  "versionCode": 7,
-  "versionName": "1.0.6",
-  "apkUrl": "https://github.com/JOKERPADDY/NEXASTREAM2/releases/download/v1.0.6/app-debug.apk",
-  "changelog": "• Fixed MovieBox DASH video streaming\n• Bypassed 23s upgrade notice videos\n• Fixed audio language selection for English titles\n• Performance & stability enhancements",
+  "versionCode": 8,
+  "versionName": "1.0.7",
+  "apkUrl": "https://github.com/JOKERPADDY/NEXASTREAM2/releases/download/v1.0.7/app-debug.apk",
+  "changelog": "1. Fixed several minor issues.\n2. Optimized user experience.",
   "forceUpdate": false,
   "supportTelegramUrl": "https://t.me/NEXASTREAM2"
 }

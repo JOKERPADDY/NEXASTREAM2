@@ -47,6 +47,7 @@ class UpdateAppTvDialog(
         } else {
             "New release available: v${updateInfo.versionName}"
         }
+        binding.tvUpdateReleaseNotes.movementMethod = android.text.method.LinkMovementMethod.getInstance()
         binding.tvUpdateReleaseNotes.text = notes
 
         // Ensure update button gets default focus for TV remote usage

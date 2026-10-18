@@ -141,24 +141,26 @@ class HomeViewModel @Inject constructor(
 
             val categories = mutableListOf<Category>()
             
-            // 1. Featured (Hero Banner at Index 0)
+            // 1. Hero Banner (Position 0)
             val heroCategory = state.categories.find { c -> 
                 c.name == Category.FEATURED || 
                 c.name == "Movies Banner" || 
                 c.name == "Series Banner" || 
                 c.name.endsWith("Banner", ignoreCase = true) 
             }
-            
             heroCategory?.let { c ->
                 categories.add(c.copy(list = c.list.map(::mergeItem))) 
             }
 
-            // 1.5. Livestream (Priority)
-            state.categories.find { it.name == "Livestream" && it != heroCategory }?.let { c ->
+            // 2. Live Sports (Position 1)
+            val liveSportsCategory = state.categories.find { c ->
+                c.name.equals("Live Sports", ignoreCase = true) && c != heroCategory
+            }
+            liveSportsCategory?.let { c ->
                 categories.add(c.copy(list = c.list.map(::mergeItem)))
             }
-            
-            // 2. Continue Watching
+
+            // 3. Continue Watching (Position 2)
             val continueWatchingList = continueWatching.distinctBy { item ->
                 when (item) {
                     is Episode -> item.tvShow?.id ?: item.id
@@ -172,10 +174,52 @@ class HomeViewModel @Inject constructor(
                     list = continueWatchingList
                 ).apply { itemType = AppAdapter.Type.CATEGORY_MOBILE_ITEM })
             }
-            
-            // 3. Add other categories from provider (CDN, Trending Today, Genres)
-            // and insert Favorites after Trending Today
-            state.categories.filter { c -> c != heroCategory && c.name != "Livestream" }.forEach { c ->
+
+            // 4. Recommended For You (Position 3)
+            val recommendedCategory = state.categories.find { c ->
+                (c.name == "✨ Recommended For You" || 
+                 c.name == "Recommended For You" || 
+                 c.name.startsWith("Because You Watched", ignoreCase = true) ||
+                 c.name == "⭐ Recommended Vibes") && 
+                c != heroCategory && c != liveSportsCategory
+            }
+            recommendedCategory?.let { c ->
+                categories.add(c.copy(list = c.list.map(::mergeItem)))
+            }
+
+            // 5. Livestream (Position 4)
+            val livestreamCategory = state.categories.find { c ->
+                (c.name.equals("Livestream", ignoreCase = true) || 
+                 c.name.startsWith("Livestream", ignoreCase = true) ||
+                 c.name.equals("CDN Live Channels", ignoreCase = true)) && 
+                c != heroCategory && c != liveSportsCategory && c != recommendedCategory
+            }
+            livestreamCategory?.let { c ->
+                categories.add(c.copy(list = c.list.map(::mergeItem)))
+            }
+
+            // 6. Upcoming Matches (Position 5)
+            val upcomingMatchesCategory = state.categories.find { c ->
+                (c.name.equals("Upcoming Matches", ignoreCase = true) ||
+                 c.name.equals("Upcoming Sports", ignoreCase = true) ||
+                 c.name.equals("Upcoming & Recent", ignoreCase = true) ||
+                 c.name.equals("Daily Agenda", ignoreCase = true)) &&
+                c != heroCategory && c != liveSportsCategory && c != recommendedCategory && c != livestreamCategory
+            }
+            upcomingMatchesCategory?.let { c ->
+                categories.add(c.copy(list = c.list.map(::mergeItem)))
+            }
+
+            // 7. Other categories follow (Trending Today, Favorites, Networks, Genres, etc.)
+            val prioritySet = setOfNotNull(
+                heroCategory,
+                liveSportsCategory,
+                recommendedCategory,
+                livestreamCategory,
+                upcomingMatchesCategory
+            )
+
+            state.categories.filter { c -> c !in prioritySet }.forEach { c ->
                 val mergedCategory = c.copy(list = c.list.map(::mergeItem))
                 categories.add(mergedCategory)
                 

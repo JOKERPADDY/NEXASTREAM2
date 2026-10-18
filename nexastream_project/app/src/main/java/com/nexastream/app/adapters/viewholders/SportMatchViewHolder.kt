@@ -11,6 +11,9 @@ import com.nexastream.app.databinding.ItemSportMatchMobileBinding
 import com.nexastream.app.databinding.ItemSportMatchTvBinding
 import com.nexastream.app.models.SportMatch
 import com.nexastream.app.models.Video
+import com.nexastream.app.providers.AkSportsLiveProvider
+import com.nexastream.app.providers.NexaHomeProvider
+import com.nexastream.app.utils.UserPreferences
 import com.nexastream.app.utils.loadSportMatchPoster
 
 class SportMatchViewHolder(
@@ -31,21 +34,7 @@ class SportMatchViewHolder(
         val processedMatch = parseLiveDetails(match)
         binding.apply {
             root.setOnClickListener {
-                it.findNavController().navigate(
-                    R.id.action_global_player,
-                    bundleOf(
-                        "id" to processedMatch.id,
-                        "title" to processedMatch.title,
-                        "subtitle" to "${processedMatch.league} - ${processedMatch.time}",
-                        "videoType" to Video.Type.Movie(
-                            id = processedMatch.id,
-                            title = processedMatch.title,
-                            releaseDate = "",
-                            poster = processedMatch.poster ?: "",
-                            imdbId = null
-                        )
-                    )
-                )
+                openMatch(it, processedMatch)
             }
             tvMatchLeague.text = processedMatch.league
             tvHomeTeam.text = processedMatch.homeTeam
@@ -66,21 +55,7 @@ class SportMatchViewHolder(
         val processedMatch = parseLiveDetails(match)
         binding.apply {
             root.setOnClickListener {
-                it.findNavController().navigate(
-                    R.id.action_global_player,
-                    bundleOf(
-                        "id" to processedMatch.id,
-                        "title" to processedMatch.title,
-                        "subtitle" to "${processedMatch.league} - ${processedMatch.time}",
-                        "videoType" to Video.Type.Movie(
-                            id = processedMatch.id,
-                            title = processedMatch.title,
-                            releaseDate = "",
-                            poster = processedMatch.poster ?: "",
-                            imdbId = null
-                        )
-                    )
-                )
+                openMatch(it, processedMatch)
             }
             tvMatchLeague.text = processedMatch.league
             tvHomeTeam.text = processedMatch.homeTeam
@@ -95,6 +70,34 @@ class SportMatchViewHolder(
                 error(R.drawable.glide_fallback_cover)
             }
         }
+    }
+
+    private fun openMatch(view: android.view.View, match: SportMatch) {
+        val playbackId = if (UserPreferences.currentProvider == NexaHomeProvider) {
+            if (UserPreferences.previousProviderToRestore == null) {
+                UserPreferences.previousProviderToRestore = UserPreferences.currentProvider
+            }
+            UserPreferences.currentProvider = AkSportsLiveProvider
+            AkSportsLiveProvider.playbackId(match)
+        } else {
+            match.id
+        }
+
+        view.findNavController().navigate(
+            R.id.action_global_player,
+            bundleOf(
+                "id" to playbackId,
+                "title" to match.title,
+                "subtitle" to "${match.league} - ${match.time}",
+                "videoType" to Video.Type.Movie(
+                    id = playbackId,
+                    title = match.title,
+                    releaseDate = "",
+                    poster = match.poster ?: "",
+                    imdbId = null
+                )
+            )
+        )
     }
 
     private fun setupStatusBadge(textView: TextView, status: String) {

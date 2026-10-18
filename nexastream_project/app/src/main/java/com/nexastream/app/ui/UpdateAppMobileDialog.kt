@@ -47,6 +47,7 @@ class UpdateAppMobileDialog(
         } else {
             "New release available: v${updateInfo.versionName}"
         }
+        binding.tvUpdateReleaseNotes.movementMethod = android.text.method.LinkMovementMethod.getInstance()
         binding.tvUpdateReleaseNotes.text = notes
 
         window?.setLayout(

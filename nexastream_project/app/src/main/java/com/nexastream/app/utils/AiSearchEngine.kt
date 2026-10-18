@@ -87,10 +87,11 @@ object AiSearchEngine {
     )
 
     fun parseQuery(rawQuery: String): AiSearchIntent {
-        val lower = rawQuery.lowercase().trim()
-        if (lower.isBlank()) {
-            return AiSearchIntent(rawQuery)
-        }
+        try {
+            val lower = rawQuery.lowercase().trim()
+            if (lower.isBlank()) {
+                return AiSearchIntent(rawQuery)
+            }
 
         // 1. Detect Media Type
         val mediaType = when {
@@ -217,6 +218,10 @@ object AiSearchEngine {
             cleanedQuery = cleaned,
             explanation = explanation
         )
+        } catch (e: Exception) {
+            android.util.Log.e("AiSearchEngine", "parseQuery error for '$rawQuery'", e)
+            return AiSearchIntent(rawQuery = rawQuery, cleanedQuery = rawQuery)
+        }
     }
 
     suspend fun discoverByAiIntent(

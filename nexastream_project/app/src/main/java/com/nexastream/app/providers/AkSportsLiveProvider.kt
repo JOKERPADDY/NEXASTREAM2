@@ -313,7 +313,7 @@ object AkSportsLiveProvider : IptvProvider {
 
     private suspend fun getAllMatches(): List<SportMatch> = withContext(Dispatchers.IO) {
         try {
-            val body = fetchWithFallback("/api/matches/live", "/api/matches/all-today", "/matches/live", "/matches/all-today")
+            val body = fetchWithFallback("/api/matches/all-today", "/api/matches/all", "/matches/all-today", "/matches/all", "/api/matches/live")
             if (body.isBlank()) {
                 Log.w("AkSportsLiveProvider", "getAllMatches: Received empty body")
                 return@withContext emptyList()
@@ -343,13 +343,28 @@ object AkSportsLiveProvider : IptvProvider {
         }
     }
 
-    suspend fun getUpcomingMatches(): List<SportMatch> = withContext(Dispatchers.IO) {
-        val matches = getAllMatches()
+    suspend fun getUpcomingMatches(): List<SportMatch> = coroutineScope {
+        val allDeferred = async { getAllMatches() }
+        val eventsDeferred = async { getEvents() }
+        val liveDeferred = async { getLiveMatches() }
+
+        val allMatches = allDeferred.await()
+        val events = eventsDeferred.await()
+        val liveMatches = liveDeferred.await()
+
+        allMatches.forEach { persistedMatches[it.id] = it }
+        events.forEach { persistedMatches[it.id] = it }
+
+        val liveIds = liveMatches.map { it.id }.toSet()
         val now = System.currentTimeMillis()
         val threeHoursAgo = now - (3 * 60 * 60 * 1000)
-        
-        matches.filter { (it.date ?: 0) > threeHoursAgo }
-            .sortedByDescending { it.title.contains("Chelsea", ignoreCase = true) || it.league.contains("PREMIER LEAGUE", ignoreCase = true) }
+
+        val upcomingList = (allMatches + events + persistedMatches.values)
+            .filter { it.status != "LIVE" && it.id !in liveIds && ((it.date ?: 0L) == 0L || (it.date ?: 0L) > threeHoursAgo) }
+            .distinctBy { it.id }
+            .sortedBy { it.date ?: Long.MAX_VALUE }
+
+        upcomingList
     }
 
     private fun fetchWithFallback(vararg paths: String): String {

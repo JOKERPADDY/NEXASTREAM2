@@ -51,7 +51,21 @@ class SeasonViewModel @Inject constructor(
     fun getEpisodes() = viewModelScope.launch(Dispatchers.IO) {
         _state.emit(State.Loading)
         try {
-            val episodes = UserPreferences.currentProvider.getEpisodesBySeason(seasonId)
+            var episodes = runCatching { UserPreferences.currentProvider.getEpisodesBySeason(seasonId) }.getOrNull().orEmpty()
+            if (episodes.isEmpty()) {
+                for (provider in com.nexastream.app.providers.Provider.providers.keys) {
+                    if (provider == UserPreferences.currentProvider || provider == com.nexastream.app.providers.NexaHomeProvider) continue
+                    val res = runCatching { provider.getEpisodesBySeason(seasonId) }.getOrNull().orEmpty()
+                    if (res.isNotEmpty()) {
+                        UserPreferences.currentProvider = provider
+                        episodes = res
+                        break
+                    }
+                }
+            }
+            if (episodes.isEmpty()) {
+                episodes = UserPreferences.currentProvider.getEpisodesBySeason(seasonId)
+            }
             
             // Inject TV Show and Season info into episodes if missing
             val tvShowId: String = savedStateHandle.get<String>("tvShowId") ?: ""

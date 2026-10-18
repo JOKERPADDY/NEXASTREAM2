@@ -49,7 +49,7 @@ class SearchMobileFragment : Fragment() {
             onResult = { query ->
                 binding.btnSearchVoice.clearAnimation()
                 binding.etSearch.setText(query)
-                viewModel.search(query)
+                viewModel.searchImmediate(query)
             },
             onError = { msg ->
                 Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
@@ -181,7 +181,7 @@ class SearchMobileFragment : Fragment() {
                     appAdapter.submitList(categories)
                     appAdapter.onGenreClickListener = { genre ->
                         binding.etSearch.setText(genre.name)
-                        viewModel.search(genre.name)
+                        viewModel.searchImmediate(genre.name)
                     }
                 }
             }
@@ -218,7 +218,8 @@ class SearchMobileFragment : Fragment() {
                             viewModel.search(viewModel.query)
                             return@collect
                         }
-                        Toast.makeText(requireContext(), state.error.message ?: "", Toast.LENGTH_SHORT).show()
+                        val errorMsg = state.error.localizedMessage ?: state.error.message ?: getString(R.string.search_error)
+                        Toast.makeText(requireContext(), errorMsg, Toast.LENGTH_SHORT).show()
                         if (appAdapter.isLoading) {
                             appAdapter.isLoading = false
                         } else {
@@ -245,6 +246,10 @@ class SearchMobileFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        UserPreferences.previousProviderToRestore?.let { prev ->
+            UserPreferences.currentProvider = prev
+            UserPreferences.previousProviderToRestore = null
+        }
         voiceHelper.stopRecognition()
         _binding = null
     }
@@ -267,7 +272,7 @@ class SearchMobileFragment : Fragment() {
                         val currentLanguage = UserPreferences.currentProvider?.language ?: "es"
                         viewModel.searchGlobal(query, currentLanguage)
                     } else {
-                        viewModel.search(query)
+                        viewModel.searchImmediate(query)
                     }
                     return@setOnEditorActionListener true
                 }

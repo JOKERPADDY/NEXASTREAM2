@@ -262,6 +262,21 @@ class CategoryViewHolder(
         binding.btnSwiperWatchNow.apply {
             setOnClickListener {
                 val currentShow = showsList.getOrNull(category.selectedIndex) ?: initialSelected
+                val providerName = when (currentShow) {
+                    is Movie -> currentShow.providerName
+                    is TvShow -> currentShow.providerName
+                    else -> null
+                }
+                if (!providerName.isNullOrBlank() && providerName != UserPreferences.currentProvider?.name) {
+                    val prev = UserPreferences.currentProvider
+                    UserPreferences.getProviderByName(providerName)?.let {
+                        UserPreferences.currentProvider = it
+                        if (UserPreferences.previousProviderToRestore == null) {
+                            UserPreferences.previousProviderToRestore = prev
+                        }
+                        android.widget.Toast.makeText(context, context.getString(R.string.switching_to_provider, providerName), android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
                 binding.root.findNavController().navigate(
                     when (currentShow) {
                         is Movie -> HomeTvFragmentDirections.actionHomeToMovie(currentShow.id)

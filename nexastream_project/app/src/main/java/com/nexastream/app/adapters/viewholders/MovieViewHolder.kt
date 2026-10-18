@@ -167,6 +167,17 @@ class MovieViewHolder(
     }
 
     private fun checkProviderAndRun(action: () -> Unit) {
+        val providerName = movie.providerName
+        if (!providerName.isNullOrBlank() && providerName != UserPreferences.currentProvider?.name) {
+            val prev = UserPreferences.currentProvider
+            UserPreferences.getProviderByName(providerName)?.let {
+                UserPreferences.currentProvider = it
+                if (UserPreferences.previousProviderToRestore == null) {
+                    UserPreferences.previousProviderToRestore = prev
+                }
+                Toast.makeText(context, context.getString(R.string.switching_to_provider, providerName), Toast.LENGTH_SHORT).show()
+            }
+        }
         action()
     }
 

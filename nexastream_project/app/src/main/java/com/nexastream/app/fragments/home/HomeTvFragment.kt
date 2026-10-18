@@ -72,6 +72,12 @@ class HomeTvFragment : Fragment() {
         return binding.root
     }
 
+    override fun onResume() {
+        super.onResume()
+        UserPreferences.currentProvider = NexaHomeProvider
+        UserPreferences.previousProviderToRestore = null
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
@@ -384,6 +390,16 @@ class HomeTvFragment : Fragment() {
                         "Anime Banner" -> "tmdb_anime_universe" to "Anime Universe"
                         "Trending Today" -> "tmdb_movies_popular" to "Trending"
                         "✨ Recommended For You", "Recommended For You", "Recommended for you" -> "tmdb_recommended_for_you" to "Recommended For You"
+                        "Upcoming Matches", "Upcoming Sports", "Daily Agenda" -> "upcoming_matches" to category.name
+                        "Continue Watching" -> "continue_watching" to category.name
+                        "Favorite Movies" -> "favorite_movies" to category.name
+                        "Favorite TV Shows" -> "favorite_tv_shows" to category.name
+                        "⚡ Marvel Cinematic Universe", "Marvel Cinematic Universe" -> "mcu" to category.name
+                        "⚔️ Star Wars Universe", "Star Wars Universe" -> "star_wars" to category.name
+                        "🦇 DC Extended Universe", "DC Extended Universe" -> "dc" to category.name
+                        "⚡ WWE Live & Replay", "WWE Live & Replay" -> "wwe_moviebox" to category.name
+                        "🎬 Nollywood Movies", "Nollywood Movies" -> "nollywood_movies" to category.name
+                        "🌍 Kenyan Series", "Kenyan Series" -> "kenyan_series" to category.name
 
                         else -> {
                             val name = category.name
@@ -468,36 +484,7 @@ class HomeTvFragment : Fragment() {
             categories
         }
 
-        val categoriesWithLivestream = if (isHomeProvider) {
-            val liveCategories = displayCategories.filter { category ->
-                category.name.equals("Livestream", ignoreCase = true) ||
-                    category.name.equals("CDN Live Channels", ignoreCase = true) ||
-                    category.name.equals("Live Channels", ignoreCase = true) ||
-                    category.name.startsWith("Livestream · ", ignoreCase = true)
-            }
-            val liveItems = liveCategories.flatMap { it.list }
-                .distinctBy { item ->
-                    when (item) {
-                        is TvShow -> item.id
-                        else -> item.hashCode().toString()
-                    }
-                }
-            if (liveItems.isEmpty()) {
-                displayCategories
-            } else {
-                val remaining = displayCategories.filterNot { it in liveCategories }.toMutableList()
-                val heroIndex = remaining.indexOfFirst { it.name == Category.FEATURED }
-                remaining.add(
-                    (heroIndex + 1).coerceAtLeast(0),
-                    Category("Livestream", liveItems)
-                )
-                remaining
-            }
-        } else {
-            displayCategories
-        }
-
-        val tvCategories = categoriesWithLivestream
+        val tvCategories = displayCategories
         tvCategories
             .find { it.name == Category.FEATURED }
             ?.also {

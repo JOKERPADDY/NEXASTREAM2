@@ -50,7 +50,21 @@ class MovieViewModel @Inject constructor(
         _state.emit(State.Loading)
 
         try {
-            val movie = UserPreferences.currentProvider.getMovie(id)
+            var movie = runCatching { UserPreferences.currentProvider.getMovie(id) }.getOrNull()
+            if (movie == null || movie.title.isBlank()) {
+                for (provider in com.nexastream.app.providers.Provider.providers.keys) {
+                    if (provider == UserPreferences.currentProvider || provider == com.nexastream.app.providers.NexaHomeProvider) continue
+                    val res = runCatching { provider.getMovie(id) }.getOrNull()
+                    if (res != null && res.title.isNotBlank()) {
+                        UserPreferences.currentProvider = provider
+                        movie = res
+                        break
+                    }
+                }
+            }
+            if (movie == null) {
+                movie = UserPreferences.currentProvider.getMovie(id)
+            }
 
             _state.emit(State.SuccessLoading(movie))
         } catch (e: Exception) {

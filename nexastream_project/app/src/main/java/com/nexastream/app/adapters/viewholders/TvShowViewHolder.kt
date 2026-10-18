@@ -137,6 +137,17 @@ class TvShowViewHolder(
     }
 
     private fun checkProviderAndRun(action: () -> Unit) {
+        val providerName = tvShow.providerName
+        if (!providerName.isNullOrBlank() && providerName != UserPreferences.currentProvider?.name) {
+            val prev = UserPreferences.currentProvider
+            UserPreferences.getProviderByName(providerName)?.let {
+                UserPreferences.currentProvider = it
+                if (UserPreferences.previousProviderToRestore == null) {
+                    UserPreferences.previousProviderToRestore = prev
+                }
+                Toast.makeText(context, context.getString(R.string.switching_to_provider, providerName), Toast.LENGTH_SHORT).show()
+            }
+        }
         action()
     }
 
@@ -307,7 +318,7 @@ class TvShowViewHolder(
         binding.ivLivestreamPoster.scaleType = ImageView.ScaleType.FIT_CENTER
         binding.ivLivestreamPoster.setPadding(16, 16, 16, 16)
 
-        Glide.with(context)
+        Glide.with(binding.ivLivestreamPoster.context.applicationContext)
             .load(tvShow.poster ?: tvShow.banner)
             .placeholder(R.drawable.bg_livestream_card)
             .error(R.drawable.bg_livestream_card)
@@ -331,7 +342,7 @@ class TvShowViewHolder(
         binding.ivLivestreamPoster.scaleType = ImageView.ScaleType.FIT_CENTER
         binding.ivLivestreamPoster.setPadding(16, 16, 16, 16)
 
-        Glide.with(context)
+        Glide.with(binding.ivLivestreamPoster.context.applicationContext)
             .load(tvShow.poster ?: tvShow.banner)
             .placeholder(R.drawable.bg_livestream_card)
             .error(R.drawable.bg_livestream_card)

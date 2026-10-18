@@ -114,7 +114,7 @@ class GenreMobileFragment : Fragment() {
 
     private fun initializeGenre() {
         binding.rvGenre.apply {
-            if (args.id == "cdn_sports") {
+            if (args.id == "cdn_sports" || args.id == "upcoming_matches" || args.id == "cdn_all_channels" || args.id.startsWith("cdn_")) {
                 layoutManager = SafeLinearLayoutManager(context)
                 addItemDecoration(
                     SpacingItemDecoration(20.dp(requireContext()), 0)

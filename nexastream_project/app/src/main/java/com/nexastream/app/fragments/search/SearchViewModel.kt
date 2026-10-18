@@ -313,35 +313,48 @@ class SearchViewModel @Inject constructor(
                         return@withContext
                     }
                     ParentalControlUtils.filterItems(
-                        p.search(query, filters = _filters.value)
+                        try {
+                            p.search(query, filters = _filters.value)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.e("SearchViewModel", "Provider search error: ", e)
+                            emptyList()
+                        }
                     )
                 }
 
-                val topMatch = finalResults.firstOrNull { it is Movie || it is TvShow }
-                val poster = when (topMatch) {
-                    is Movie -> topMatch.poster
-                    is TvShow -> topMatch.poster
-                    else -> null
+                if (force) {
+                    try {
+                        val topMatch = finalResults.firstOrNull { it is Movie || it is TvShow }
+                        val poster = when (topMatch) {
+                            is Movie -> topMatch.poster
+                            is TvShow -> topMatch.poster
+                            else -> null
+                        }
+                        val mediaId = when (topMatch) {
+                            is Movie -> topMatch.id
+                            is TvShow -> topMatch.id
+                            else -> null
+                        }
+                        val mediaType = when (topMatch) {
+                            is Movie -> "movie"
+                            is TvShow -> "tv"
+                            else -> null
+                        }
+                        database.searchHistoryDao().insert(
+                            SearchHistory(
+                                query = query,
+                                poster = poster,
+                                mediaId = mediaId,
+                                mediaType = mediaType,
+                                timestamp = System.currentTimeMillis()
+                            )
+                        )
+                    } catch (e: Exception) {
+                        Log.e("SearchViewModel", "Error saving search history", e)
+                    }
                 }
-                val mediaId = when (topMatch) {
-                    is Movie -> topMatch.id
-                    is TvShow -> topMatch.id
-                    else -> null
-                }
-                val mediaType = when (topMatch) {
-                    is Movie -> "movie"
-                    is TvShow -> "tv"
-                    else -> null
-                }
-                database.searchHistoryDao().insert(
-                    SearchHistory(
-                        query = query,
-                        poster = poster,
-                        mediaId = mediaId,
-                        mediaType = mediaType,
-                        timestamp = System.currentTimeMillis()
-                    )
-                )
                 page = 1
                 _state.emit(SearchState.SuccessSearching(finalResults, finalResults.isNotEmpty()))
             } else {

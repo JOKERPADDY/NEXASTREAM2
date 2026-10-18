@@ -120,6 +120,10 @@
             android:id="@+id/tv_update_release_notes"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:autoLink="web"
+            android:linksClickable="true"
+            android:textColor="#FFFFFF"
+            android:textColorLink="#38BDF8"
             android:textSize="12sp"
             tools:text="- Bug fixes" />
     </ScrollView>

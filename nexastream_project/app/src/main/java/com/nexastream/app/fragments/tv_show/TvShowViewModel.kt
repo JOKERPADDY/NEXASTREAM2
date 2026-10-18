@@ -50,7 +50,21 @@ class TvShowViewModel @Inject constructor(
         _state.emit(State.Loading)
 
         try {
-            val tvShow = UserPreferences.currentProvider.getTvShow(id)
+            var tvShow = runCatching { UserPreferences.currentProvider.getTvShow(id) }.getOrNull()
+            if (tvShow == null || (tvShow.seasons.isEmpty() && !id.all { it.isDigit() })) {
+                for (provider in com.nexastream.app.providers.Provider.providers.keys) {
+                    if (provider == UserPreferences.currentProvider || provider == com.nexastream.app.providers.NexaHomeProvider) continue
+                    val res = runCatching { provider.getTvShow(id) }.getOrNull()
+                    if (res != null && (res.seasons.isNotEmpty() || res.title.isNotBlank())) {
+                        UserPreferences.currentProvider = provider
+                        tvShow = res
+                        break
+                    }
+                }
+            }
+            if (tvShow == null) {
+                tvShow = UserPreferences.currentProvider.getTvShow(id)
+            }
 
             _state.emit(State.SuccessLoading(tvShow))
         } catch (e: Exception) {

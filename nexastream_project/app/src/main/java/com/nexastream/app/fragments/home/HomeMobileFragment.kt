@@ -61,6 +61,12 @@ class HomeMobileFragment : Fragment() {
         return binding.root
     }
 
+    override fun onResume() {
+        super.onResume()
+        UserPreferences.currentProvider = com.nexastream.app.providers.NexaHomeProvider
+        UserPreferences.previousProviderToRestore = null
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
@@ -286,6 +292,16 @@ class HomeMobileFragment : Fragment() {
                         "Anime Banner" -> "tmdb_anime_universe" to "Anime Universe"
                         "Trending Today" -> "tmdb_movies_popular" to "Trending"
                         "✨ Recommended For You", "Recommended For You", "Recommended for you" -> "tmdb_recommended_for_you" to "Recommended For You"
+                        "Upcoming Matches", "Upcoming Sports", "Daily Agenda" -> "upcoming_matches" to category.name
+                        "Continue Watching" -> "continue_watching" to category.name
+                        "Favorite Movies" -> "favorite_movies" to category.name
+                        "Favorite TV Shows" -> "favorite_tv_shows" to category.name
+                        "⚡ Marvel Cinematic Universe", "Marvel Cinematic Universe" -> "mcu" to category.name
+                        "⚔️ Star Wars Universe", "Star Wars Universe" -> "star_wars" to category.name
+                        "🦇 DC Extended Universe", "DC Extended Universe" -> "dc" to category.name
+                        "⚡ WWE Live & Replay", "WWE Live & Replay" -> "wwe_moviebox" to category.name
+                        "🎬 Nollywood Movies", "Nollywood Movies" -> "nollywood_movies" to category.name
+                        "🌍 Kenyan Series", "Kenyan Series" -> "kenyan_series" to category.name
 
                         else -> {
                             val name = category.name
@@ -408,7 +424,7 @@ class HomeMobileFragment : Fragment() {
 
             fun isLiveCategory(name: String): Boolean {
                 val lower = name.lowercase()
-                return lower.contains("livestream") || lower.contains("live tv") || lower.contains("live sports") || lower.contains("live channels") || lower == "live"
+                return lower.contains("livestream") || lower.contains("live tv") || lower.contains("live sports") || lower.contains("live channels") || lower == "live" || lower.contains("upcoming matches") || lower.contains("upcoming sports") || lower.contains("daily agenda")
             }
 
             when (tabIndex) {
@@ -448,6 +464,9 @@ class HomeMobileFragment : Fragment() {
                     cat.name.isEmpty() ||
                     cat.name == "Teen Romance" ||
                     cat.name == "✨ Recommended For You" ||
+                    cat.name == "Recommended For You" ||
+                    cat.name == "Upcoming Matches" ||
+                    cat.name == "Upcoming Sports" ||
                     isLiveCategory(cat.name) ||
                     (cat.name !in moviesCategories &&
                     cat.name !in seriesCategories &&

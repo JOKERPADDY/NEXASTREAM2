@@ -51,8 +51,12 @@ class SearchTvFragment : Fragment() {
         AppAdapter().apply {
             onMovieClickListener = { movie ->
                 if (movie.providerName != UserPreferences.currentProvider.name) {
+                    val prev = UserPreferences.currentProvider
                     UserPreferences.getProviderByName(movie.providerName)?.let {
                         UserPreferences.currentProvider = it
+                        if (UserPreferences.previousProviderToRestore == null) {
+                            UserPreferences.previousProviderToRestore = prev
+                        }
                         Toast.makeText(requireContext(), getString(R.string.switching_to_provider, movie.providerName), Toast.LENGTH_SHORT).show()
                     }
                 }
@@ -62,8 +66,12 @@ class SearchTvFragment : Fragment() {
             }
             onTvShowClickListener = { tvShow ->
                 if (tvShow.providerName != UserPreferences.currentProvider.name) {
+                    val prev = UserPreferences.currentProvider
                     UserPreferences.getProviderByName(tvShow.providerName)?.let {
                         UserPreferences.currentProvider = it
+                        if (UserPreferences.previousProviderToRestore == null) {
+                            UserPreferences.previousProviderToRestore = prev
+                        }
                         Toast.makeText(requireContext(), getString(R.string.switching_to_provider, tvShow.providerName), Toast.LENGTH_SHORT).show()
                     }
                 }
@@ -220,18 +228,19 @@ class SearchTvFragment : Fragment() {
                             viewModel.search(viewModel.query)
                             return@collect
                         }
-                        Toast.makeText(requireContext(), state.error.message ?: "", Toast.LENGTH_SHORT).show()
+                        val errorMsg = state.error.localizedMessage ?: state.error.message ?: getString(R.string.search_error)
+                        Toast.makeText(requireContext(), errorMsg, Toast.LENGTH_SHORT).show()
                         if (appAdapter.isLoading) {
                             appAdapter.isLoading = false
                         } else {
                             binding.isLoading.apply {
                                 pbIsLoading.visibility = View.GONE
                                 gIsLoadingRetry.visibility = View.VISIBLE
-                                btnIsLoadingRetry.setOnClickListener { viewModel.search(viewModel.query) }
+                                btnIsLoadingRetry.setOnClickListener { viewModel.searchImmediate(viewModel.query) }
                                 btnIsLoadingClearCache.setOnClickListener {
                                     CacheUtils.clearAppCache(requireContext())
                                     Toast.makeText(requireContext(), getString(R.string.clear_cache_done), Toast.LENGTH_SHORT).show()
-                                    viewModel.search(viewModel.query)
+                                    viewModel.searchImmediate(viewModel.query)
                                 }
                                 btnIsLoadingErrorDetails.setOnClickListener {
                                     LoggingUtils.showErrorDialog(requireContext(), state.error)
@@ -249,6 +258,10 @@ class SearchTvFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        UserPreferences.previousProviderToRestore?.let { prev ->
+            UserPreferences.currentProvider = prev
+            UserPreferences.previousProviderToRestore = null
+        }
         voiceHelper.stopRecognition()
         _binding = null
     }
@@ -265,7 +278,7 @@ class SearchTvFragment : Fragment() {
             val currentLanguage = UserPreferences.currentProvider?.language ?: "es"
             viewModel.searchGlobal(query, currentLanguage)
         } else {
-            viewModel.search(query)
+            viewModel.searchImmediate(query)
         }
         return true
     }

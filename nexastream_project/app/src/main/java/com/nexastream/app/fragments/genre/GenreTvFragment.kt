@@ -109,7 +109,7 @@ class GenreTvFragment : Fragment() {
 
     private fun initializeGenre() {
         binding.vgvGenre.apply {
-            if (args.id == "cdn_sports") {
+            if (args.id == "cdn_sports" || args.id == "upcoming_matches" || args.id == "cdn_all_channels" || args.id.startsWith("cdn_")) {
                 setNumColumns(1)
             } else {
                 setNumColumns(6)

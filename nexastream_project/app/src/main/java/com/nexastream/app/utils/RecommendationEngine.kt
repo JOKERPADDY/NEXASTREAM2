@@ -124,104 +124,105 @@ object RecommendationEngine {
             return categories
         }
 
-        // Filter out any existing "Recommended For You" category to avoid duplicate rows
-        val sanitizedCategories = categories.filterNot { cat ->
-            cat.name == "✨ Recommended For You" ||
-            cat.name == "Recommended For You" ||
-            cat.name == "Recommended for you" ||
-            cat.name == "tmdb_recommended_for_you"
+        // 1. Hero Banner
+        val heroBanner = categories.find { cat ->
+            cat.name == Category.FEATURED ||
+            cat.name == "Movies Banner" ||
+            cat.name == "Series Banner" ||
+            cat.name.endsWith("Banner", ignoreCase = true)
         }
 
-        if (profile.totalInteractions == 0 || profile.genreWeights.isEmpty()) {
-            return sanitizedCategories.distinctBy { it.name }
+        // 2. Live Sports
+        val liveSports = categories.find { cat ->
+            cat.name.equals("Live Sports", ignoreCase = true) && cat != heroBanner
         }
 
-        // Separate hero banner (FEATURED) from other fixed categories
-        val (heroBanner, otherCategories) = sanitizedCategories.partition { cat ->
-            cat.name == Category.FEATURED || cat.name.isEmpty()
+        // 3. Continue Watching
+        val continueWatching = categories.find { cat ->
+            cat.name == Category.CONTINUE_WATCHING ||
+            cat.name.contains("Continue Watching", ignoreCase = true)
         }
 
-        // Separate other fixed top categories (Banner, Livestreams, Recent, Continue Watching) from general categories
-        val (fixedHead, rankable) = otherCategories.partition { cat ->
-            val nameLower = cat.name.lowercase()
-            cat.name == "Featured" ||
-            (nameLower.contains("banner") && !nameLower.contains("section")) ||
-            nameLower.contains("hero") ||
-            nameLower.contains("livestream") ||
-            nameLower.contains("recent") ||
-            nameLower.contains("continue watching")
+        // 4. Recommended For You
+        var recommended = categories.find { cat ->
+            (cat.name == "✨ Recommended For You" ||
+             cat.name == "Recommended For You" ||
+             cat.name.startsWith("Because You Watched", ignoreCase = true) ||
+             cat.name == "⭐ Recommended Vibes") &&
+            cat != heroBanner && cat != liveSports
         }
 
-        // Score rankable categories
-        val scoredCategories = rankable.map { category ->
-            var catScore = 0.0
-            val items = category.list
-            if (items.isNotEmpty()) {
-                val avgItemScore = items.map { scoreItem(it, profile) }.average()
-                catScore += avgItemScore
-            }
+        if (recommended == null && profile.totalInteractions > 0 && profile.genreWeights.isNotEmpty()) {
+            val allItems = categories.flatMap { it.list }
+                .distinctBy { when (it) {
+                    is Movie -> "movie:${it.id}"
+                    is TvShow -> "tv:${it.id}"
+                    else -> it.hashCode().toString()
+                } }
+                .sortedByDescending { scoreItem(it, profile) }
+                .take(15)
 
-            profile.genreWeights.forEach { (genre, weight) ->
-                if (category.name.lowercase().contains(genre.lowercase())) {
-                    catScore += weight * 2.0
-                }
-            }
-
-            category to catScore
-        }
-
-        val sortedRankable = scoredCategories.sortedByDescending { it.second }.map { it.first }
-
-        // Gather top personalized items across rankable categories
-        val allItems = rankable.flatMap { it.list }
-            .distinctBy { when (it) {
-                is Movie -> "movie:${it.id}"
-                is TvShow -> "tv:${it.id}"
-                else -> it.hashCode().toString()
-            } }
-            .sortedByDescending { scoreItem(it, profile) }
-            .take(15)
-
-        val resolvedHeroBanner = if (heroBanner.isNotEmpty()) {
-            heroBanner
-        } else {
-            val fallbackItems = allItems.take(5).ifEmpty { sortedRankable.firstOrNull()?.list.orEmpty().take(5) }
-            if (fallbackItems.isNotEmpty()) {
-                listOf(Category(name = Category.FEATURED, list = fallbackItems))
-            } else {
-                emptyList()
-            }
-        }
-
-        val result = mutableListOf<Category>()
-
-        // 1. Hero Banner FIRST (at the very top, index 0)
-        result.addAll(resolvedHeroBanner.filter { !it.name.startsWith("Livestream", ignoreCase = true) })
-        if (result.isEmpty()) {
-            val fallbackItems = allItems.take(5).ifEmpty { sortedRankable.firstOrNull()?.list.orEmpty().take(5) }
-            if (fallbackItems.isNotEmpty()) {
-                result.add(Category(name = Category.FEATURED, list = fallbackItems))
-            }
-        }
-
-        // 2. Livestream SECOND (right below Hero Banner)
-        sanitizedCategories.find { it.name.equals("Livestream", ignoreCase = true) || it.name.startsWith("Livestream", ignoreCase = true) }?.let { ls ->
-            result.add(ls)
-        }
-
-        // 3. Recommended section THIRD
-        if (allItems.isNotEmpty()) {
-            result.add(
-                Category(
+            if (allItems.isNotEmpty()) {
+                recommended = Category(
                     name = "✨ Recommended For You",
                     list = allItems
                 ).apply { itemType = AppAdapter.Type.CATEGORY_MOBILE_ITEM }
-            )
+            }
         }
 
-        // 4. Other fixed & rankable categories
-        result.addAll(fixedHead.filter { !it.name.startsWith("Livestream", ignoreCase = true) && it.name != Category.FEATURED })
-        result.addAll(sortedRankable.filter { !it.name.startsWith("Livestream", ignoreCase = true) })
+        // 5. Livestream
+        val livestream = categories.find { cat ->
+            (cat.name.equals("Livestream", ignoreCase = true) ||
+             cat.name.startsWith("Livestream", ignoreCase = true) ||
+             cat.name.equals("CDN Live Channels", ignoreCase = true)) &&
+            cat != heroBanner && cat != liveSports && cat != recommended
+        }
+
+        // 6. Upcoming Matches
+        val upcomingMatches = categories.find { cat ->
+            (cat.name.equals("Upcoming Matches", ignoreCase = true) ||
+             cat.name.equals("Upcoming Sports", ignoreCase = true) ||
+             cat.name.equals("Upcoming & Recent", ignoreCase = true) ||
+             cat.name.equals("Daily Agenda", ignoreCase = true)) &&
+            cat != heroBanner && cat != liveSports && cat != recommended && cat != livestream
+        }
+
+        val prioritySet = setOfNotNull(
+            heroBanner,
+            liveSports,
+            continueWatching,
+            recommended,
+            livestream,
+            upcomingMatches
+        )
+
+        val remaining = categories.filter { it !in prioritySet }
+
+        val sortedRemaining = if (profile.totalInteractions > 0 && profile.genreWeights.isNotEmpty()) {
+            remaining.sortedByDescending { category ->
+                var score = 0.0
+                if (category.list.isNotEmpty()) {
+                    score += category.list.map { scoreItem(it, profile) }.average()
+                }
+                profile.genreWeights.forEach { (genre, weight) ->
+                    if (category.name.lowercase().contains(genre.lowercase())) {
+                        score += weight * 2.0
+                    }
+                }
+                score
+            }
+        } else {
+            remaining
+        }
+
+        val result = mutableListOf<Category>()
+        heroBanner?.let { result.add(it) }
+        liveSports?.let { result.add(it) }
+        continueWatching?.let { result.add(it) }
+        recommended?.let { result.add(it) }
+        livestream?.let { result.add(it) }
+        upcomingMatches?.let { result.add(it) }
+        result.addAll(sortedRemaining)
 
         return result.distinctBy { it.name }
     }
