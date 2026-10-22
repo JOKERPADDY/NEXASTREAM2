@@ -16,10 +16,17 @@ import com.nexastream.app.models.Video
 import com.nexastream.app.utils.SportsSecurityUtils
 import com.nexastream.app.utils.UserPreferences
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import okhttp3.Request
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -38,6 +45,8 @@ object AkSportsLiveProvider : IptvProvider {
     )
     private const val SERVER_NAME_PREFIX = "AK Sports - "
     private const val LOCAL_RESOLVER_SERVER_PREFIX = "nexastream-resolver:"
+    private const val RESOLVER_STREAM_CACHE_TTL_MS = 60_000L
+    private const val MAX_PREFETCH_SOURCES = 12
     
     private val client = com.nexastream.app.utils.NetworkClient.compatibleTrustAll.newBuilder()
         .connectTimeout(3, TimeUnit.SECONDS)
@@ -53,6 +62,11 @@ object AkSportsLiveProvider : IptvProvider {
     private val sourceCache = ConcurrentHashMap<String, List<SportMatch.MatchSource>>()
     private val persistedMatches = ConcurrentHashMap<String, SportMatch>()
     private val categoryMetadata = ConcurrentHashMap<String, String>()
+    private data class ResolverStreamCacheEntry(val streams: List<SportStream>, val cachedAtMs: Long)
+    private val resolverStreamCache = ConcurrentHashMap<String, ResolverStreamCacheEntry>()
+    private val resolverStreamLocks = ConcurrentHashMap<String, Mutex>()
+    private val resolverPrefetchScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val resolverPrefetchSemaphore = Semaphore(3)
 
     override val baseUrl: String get() = activeHost
     override val name: String = "AK Sports Live"
@@ -688,31 +702,30 @@ object AkSportsLiveProvider : IptvProvider {
 
     override suspend fun getServers(id: String, videoType: Video.Type): List<Video.Server> = coroutineScope {
         val request = try { SportsPlaybackId.decode(id) } catch(e: Exception) { SportsPlaybackRequest(id, emptyList()) }
-        
-        val liveMatchesDeferred = async { getLiveMatches() }
-        val upcomingMatchesDeferred = async { getUpcomingMatches() }
-        
-        val liveMatches = liveMatchesDeferred.await()
-        val upcomingMatches = upcomingMatchesDeferred.await()
-        val allMatches = liveMatches + upcomingMatches
 
-        var matchInfo = allMatches.find { it.id == request.matchId }
-        
-        if (matchInfo == null && videoType is Video.Type.Movie) {
-            val targetTitle = normalizeTeam(videoType.title)
-            matchInfo = allMatches.find { m ->
-                val currentTitle = normalizeTeam(m.title)
-                currentTitle == targetTitle || currentTitle.contains(targetTitle) || targetTitle.contains(currentTitle)
+        var matchInfo = persistedMatches[request.matchId]
+        var resolvedSources = request.sources.ifEmpty {
+            sourceCache[request.matchId] ?: matchInfo?.sources.orEmpty()
+        }
+
+        if (resolvedSources.isEmpty()) {
+            val liveMatchesDeferred = async { getLiveMatches() }
+            val upcomingMatchesDeferred = async { getUpcomingMatches() }
+            val allMatches = liveMatchesDeferred.await() + upcomingMatchesDeferred.await()
+
+            matchInfo = allMatches.find { it.id == request.matchId } ?: matchInfo
+            if (matchInfo == null && videoType is Video.Type.Movie) {
+                val targetTitle = normalizeTeam(videoType.title)
+                matchInfo = allMatches.find { m ->
+                    val currentTitle = normalizeTeam(m.title)
+                    currentTitle == targetTitle || currentTitle.contains(targetTitle) || targetTitle.contains(currentTitle)
+                }
             }
+
+            resolvedSources = sourceCache[request.matchId] ?: matchInfo?.sources.orEmpty()
         }
 
         val servers = mutableListOf<Video.Server>()
-        
-        val sources = request.sources.ifEmpty {
-            sourceCache[request.matchId] ?: matchInfo?.sources ?: emptyList()
-        }
-
-        val resolvedSources = sources
 
         try {
             val normalSources = resolvedSources.filter { !it.source.startsWith("event-") }
@@ -742,6 +755,33 @@ object AkSportsLiveProvider : IptvProvider {
         }
         
         servers.distinctBy { it.id }
+    }
+
+    fun prefetchResolverStreams(matches: List<SportMatch>) {
+        val sources = matches.asSequence()
+            .flatMap { it.sources.asSequence() }
+            .filter { it.source.isNotBlank() && it.id.isNotBlank() && !it.source.startsWith("event-") }
+            .distinctBy { it.source to it.id }
+            .take(MAX_PREFETCH_SOURCES)
+            .toList()
+        if (sources.isEmpty()) return
+
+        resolverPrefetchScope.launch {
+            sources.map { source ->
+                async {
+                    resolverPrefetchSemaphore.withPermit {
+                        try {
+                            getResolverStreams(source.source, source.id)
+                        } catch (e: Exception) {
+                            Log.w(
+                                "AkSportsLiveProvider",
+                                "Resolver stream prefetch failed for ${source.source}/${source.id}: ${e.message}"
+                            )
+                        }
+                    }
+                }
+            }.awaitAll()
+        }
     }
 
     private fun normalizeTeam(value: String): String =
@@ -955,28 +995,43 @@ object AkSportsLiveProvider : IptvProvider {
     }
 
     private suspend fun getResolverStreams(source: String, id: String): List<SportStream> = withContext(Dispatchers.IO) {
-        val resolverUrl = UserPreferences.streamResolverUrl.trimEnd('/')
-        val url = "$resolverUrl/api/streams?source=${android.net.Uri.encode(source)}&id=${android.net.Uri.encode(id)}"
-        val body = executeRequest(url)
-        val streamArray = JSONObject(body).optJSONArray("streams")
-            ?: throw IOException("Resolver response did not contain a streams array")
+        val cacheKey = "$source\u0000$id"
+        val now = System.currentTimeMillis()
+        resolverStreamCache[cacheKey]
+            ?.takeIf { now - it.cachedAtMs < RESOLVER_STREAM_CACHE_TTL_MS }
+            ?.let { return@withContext it.streams }
 
-        buildList {
-            for (index in 0 until streamArray.length()) {
-                val item = streamArray.optJSONObject(index) ?: continue
-                val streamId = item.optString("id").takeIf { it.isNotBlank() } ?: continue
-                val streamSource = item.optString("source").takeIf { it.isNotBlank() } ?: source
-                add(
-                    SportStream(
-                        id = streamId,
-                        streamNo = item.optInt("streamNo", index + 1),
-                        language = item.optString("language").ifBlank { "Unknown" },
-                        hd = item.optBoolean("hd", true),
-                        embedUrl = item.optString("embedUrl"),
-                        source = streamSource
+        resolverStreamLocks.computeIfAbsent(cacheKey) { Mutex() }.withLock {
+            val checkedAt = System.currentTimeMillis()
+            resolverStreamCache[cacheKey]
+                ?.takeIf { checkedAt - it.cachedAtMs < RESOLVER_STREAM_CACHE_TTL_MS }
+                ?.let { return@withLock it.streams }
+
+            val resolverUrl = UserPreferences.streamResolverUrl.trimEnd('/')
+            val url = "$resolverUrl/api/streams?source=${android.net.Uri.encode(source)}&id=${android.net.Uri.encode(id)}"
+            val body = executeRequest(url)
+            val streamArray = JSONObject(body).optJSONArray("streams")
+                ?: throw IOException("Resolver response did not contain a streams array")
+
+            val streams = buildList {
+                for (index in 0 until streamArray.length()) {
+                    val item = streamArray.optJSONObject(index) ?: continue
+                    val streamId = item.optString("id").takeIf { it.isNotBlank() } ?: continue
+                    val streamSource = item.optString("source").takeIf { it.isNotBlank() } ?: source
+                    add(
+                        SportStream(
+                            id = streamId,
+                            streamNo = item.optInt("streamNo", index + 1),
+                            language = item.optString("language").ifBlank { "Unknown" },
+                            hd = item.optBoolean("hd", true),
+                            embedUrl = item.optString("embedUrl"),
+                            source = streamSource
+                        )
                     )
-                )
+                }
             }
+            resolverStreamCache[cacheKey] = ResolverStreamCacheEntry(streams, System.currentTimeMillis())
+            streams
         }
     }
 

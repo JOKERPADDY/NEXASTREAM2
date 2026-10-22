@@ -210,21 +210,39 @@ class LocalGengaServer(
                     val data = responseMap["data"] as? Map<String, Any?>
                     var mapped = if (data != null) mapItem(data) else null
                     if (mapped == null) {
-                        mapped = getMockTrending().find { it["id"] == subjectId } ?: getMockTrending().first()
+                        mapped = getMockTrending().find { it["id"] == subjectId || it["subjectId"] == subjectId }
                     }
-                    val responseBody = mapOf(
-                        "code" to 0,
-                        "data" to mapped
-                    )
-                    Pair(200, toJsonString(responseBody))
+                    if (mapped == null) {
+                        val responseBody = mapOf(
+                            "code" to 404,
+                            "msg" to "Subject not found",
+                            "data" to null
+                        )
+                        Pair(404, toJsonString(responseBody))
+                    } else {
+                        val responseBody = mapOf(
+                            "code" to 0,
+                            "data" to mapped
+                        )
+                        Pair(200, toJsonString(responseBody))
+                    }
                 } catch (e: Exception) {
                     Log.w("LocalGengaServer", "Detail error: ${e.message}")
-                    val fallback = getMockTrending().find { it["id"] == subjectId } ?: getMockTrending().first()
-                    val responseBody = mapOf(
-                        "code" to 0,
-                        "data" to fallback
-                    )
-                    Pair(200, toJsonString(responseBody))
+                    val fallback = getMockTrending().find { it["id"] == subjectId || it["subjectId"] == subjectId }
+                    if (fallback != null) {
+                        val responseBody = mapOf(
+                            "code" to 0,
+                            "data" to fallback
+                        )
+                        Pair(200, toJsonString(responseBody))
+                    } else {
+                        val responseBody = mapOf(
+                            "code" to 404,
+                            "msg" to "Subject detail error: ${e.message}",
+                            "data" to null
+                        )
+                        Pair(404, toJsonString(responseBody))
+                    }
                 }
             }
             path.startsWith("/episodes/") -> {
@@ -293,32 +311,27 @@ class LocalGengaServer(
                         }
                     }
                     if (mappedSeasons.isEmpty()) {
-                        mappedSeasons.add(
-                            mapOf(
-                                "seasonNumber" to 1,
-                                "episodeList" to listOf(
-                                    mapOf("episodeNumber" to 1, "title" to "Episode 1", "id" to "${seriesId}_1_1"),
-                                    mapOf("episodeNumber" to 2, "title" to "Episode 2", "id" to "${seriesId}_1_2")
-                                )
-                            )
+                        val responseBody = mapOf(
+                            "code" to 404,
+                            "msg" to "No seasons found",
+                            "data" to null
                         )
+                        Pair(404, toJsonString(responseBody))
+                    } else {
+                        val responseBody = mapOf(
+                            "code" to 0,
+                            "data" to mapOf("seasons" to mappedSeasons)
+                        )
+                        Pair(200, toJsonString(responseBody))
                     }
-                    val responseBody = mapOf(
-                        "code" to 0,
-                        "data" to mapOf("seasons" to mappedSeasons)
-                    )
-                    Pair(200, toJsonString(responseBody))
                 } catch (e: Exception) {
                     Log.w("LocalGengaServer", "Episodes error: ${e.message}")
-                    val fallbackSeasons = listOf(
-                        mapOf(
-                            "seasonNumber" to 1,
-                            "episodeList" to listOf(
-                                mapOf("episodeNumber" to 1, "title" to "Episode 1", "id" to "${seriesId}_1_1")
-                            )
-                        )
+                    val responseBody = mapOf(
+                        "code" to 404,
+                        "msg" to "Episodes error: ${e.message}",
+                        "data" to null
                     )
-                    Pair(200, toJsonString(mapOf("code" to 0, "data" to mapOf("seasons" to fallbackSeasons))))
+                    Pair(404, toJsonString(responseBody))
                 }
             }
             path.startsWith("/stream/") -> {

@@ -598,8 +598,14 @@ object UserPreferences {
         }
 
     var preferredServerName: String?
-        get() = Key.PREFERRED_SERVER_NAME.getString()
-        set(value) = Key.PREFERRED_SERVER_NAME.setString(value)
+        get() = Key.PREFERRED_SERVER_NAME.getString().takeIf { !it.isNullOrBlank() && !it.equals("MovieBox", true) && !it.equals("Genga", true) }
+        set(value) {
+            if (value != null && (value.equals("MovieBox", true) || value.equals("Genga", true))) {
+                Key.PREFERRED_SERVER_NAME.setString(null)
+            } else {
+                Key.PREFERRED_SERVER_NAME.setString(value)
+            }
+        }
 
     var lastUpdateCheckMillis: Long
         get() = Key.LAST_UPDATE_CHECK_MILLIS.getLong() ?: 0L

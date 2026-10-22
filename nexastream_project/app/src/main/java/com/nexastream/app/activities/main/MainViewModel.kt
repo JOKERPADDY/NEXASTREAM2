@@ -31,7 +31,7 @@ class MainViewModel : ViewModel() {
 
         data object InstallingUpdate : State()
 
-        data class FailedUpdate(val error: Exception) : State()
+        data class FailedUpdate(val error: Exception, val apkUrl: String? = null) : State()
     }
 
     fun checkUpdate() = viewModelScope.launch(Dispatchers.IO) {
@@ -74,7 +74,7 @@ class MainViewModel : ViewModel() {
             _state.emit(State.SuccessDownloadingUpdate(apk))
         } catch (e: Exception) {
             Log.e("MainViewModel", "downloadUpdate failed: ${e.message}", e)
-            _state.emit(State.FailedUpdate(e))
+            _state.emit(State.FailedUpdate(e, apkUrl))
         }
     }
 

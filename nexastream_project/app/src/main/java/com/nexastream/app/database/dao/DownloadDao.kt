@@ -6,10 +6,10 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface DownloadDao {
-    @Query("SELECT * FROM downloads ORDER BY createdAt DESC")
+    @Query("SELECT * FROM downloads WHERE id NOT LIKE 'local_%' ORDER BY createdAt DESC")
     fun getAll(): Flow<List<Download>>
 
-    @Query("SELECT * FROM downloads ORDER BY createdAt DESC")
+    @Query("SELECT * FROM downloads WHERE id NOT LIKE 'local_%' ORDER BY createdAt DESC")
     suspend fun getAllSnapshot(): List<Download>
 
     @Query("SELECT * FROM downloads WHERE id = :id")

@@ -42,10 +42,16 @@ class UpdateAppTvDialog(
         binding.tvUpdateCurrentVersion.text = BuildConfig.VERSION_NAME
         binding.tvUpdateNewVersion.text = updateInfo.versionName
 
-        val notes = if (updateInfo.changelog.isNotBlank()) {
+        var notes = if (updateInfo.changelog.isNotBlank()) {
             updateInfo.changelog
         } else {
             "New release available: v${updateInfo.versionName}"
+        }
+        if (!notes.contains("nexastream.app") && updateInfo.websiteUrl.isNotBlank()) {
+            notes += "\n\n🌐 Or download through our website: ${updateInfo.websiteUrl}"
+        }
+        if (!notes.contains("t.me") && updateInfo.supportTelegramUrl.isNotBlank()) {
+            notes += "\n💬 Join our Telegram: ${updateInfo.supportTelegramUrl}"
         }
         binding.tvUpdateReleaseNotes.movementMethod = android.text.method.LinkMovementMethod.getInstance()
         binding.tvUpdateReleaseNotes.text = notes
@@ -57,6 +63,16 @@ class UpdateAppTvDialog(
             context.resources.displayMetrics.widthPixels,
             WindowManager.LayoutParams.WRAP_CONTENT
         )
+    }
+
+    fun setProgress(progress: Int) {
+        binding.pbUpdateIsLoading.visibility = View.VISIBLE
+        if (progress > 0) {
+            binding.pbUpdateIsLoading.isIndeterminate = false
+            binding.pbUpdateIsLoading.progress = progress
+        } else {
+            binding.pbUpdateIsLoading.isIndeterminate = true
+        }
     }
 
     fun setOnUpdateClickListener(listener: (view: View) -> Unit) {

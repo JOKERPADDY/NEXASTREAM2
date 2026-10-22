@@ -1,5 +1,6 @@
 package com.nexastream.app.extractors
 
+import android.util.Log
 import com.nexastream.app.models.Video
 
 class MovieBoxExtractor : Extractor() {
@@ -15,7 +16,20 @@ class MovieBoxExtractor : Extractor() {
     }
 
     fun servers(videoType: Video.Type): List<Video.Server> {
-        return listOf(server(videoType))
+        val servers = mutableListOf<Video.Server>()
+        // 1. VixSrc as default primary server
+        try {
+            servers.add(VixSrcExtractor().server(videoType))
+        } catch (e: Exception) {
+            Log.e("MovieBoxExtractor", "Failed to add VixSrc: ${e.message}")
+        }
+        // 2. MovieBox as first fallback
+        try {
+            servers.add(server(videoType))
+        } catch (e: Exception) {
+            Log.e("MovieBoxExtractor", "Failed to add MovieBox: ${e.message}")
+        }
+        return servers
     }
 
     override suspend fun extract(link: String): Video {

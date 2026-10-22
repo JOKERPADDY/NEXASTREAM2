@@ -2,6 +2,7 @@ package com.nexastream.app.activities.main
 
 import android.app.Activity
 import android.content.Intent
+import android.net.Uri
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
@@ -175,6 +176,12 @@ class MainMobileActivity : AppCompatActivity() {
         viewModel.checkUpdate()
 
         binding.bnvMain.setupWithNavController(navController)
+        binding.bnvMain.setOnItemSelectedListener { item ->
+            if (item.itemId == R.id.downloads || item.itemId == R.id.home || item.itemId == R.id.search) {
+                binding.ablMain.visibility = View.GONE
+            }
+            androidx.navigation.ui.NavigationUI.onNavDestinationSelected(item, navController)
+        }
         updateNavigationVisibility()
         updateBottomNavigationVisibility(navController.currentDestination?.id)
         updateToolbarLogo()
@@ -187,11 +194,11 @@ class MainMobileActivity : AppCompatActivity() {
 
             updateNavigationVisibility(destination.id)
             updateBottomNavigationVisibility(destination.id)
-            binding.ablMain.visibility = if (isTopLevelProviderDestination(destination.id) && destination.id != R.id.home && destination.id != R.id.search) View.VISIBLE else View.GONE
+            binding.ablMain.visibility = if (isTopLevelProviderDestination(destination.id) && destination.id != R.id.home && destination.id != R.id.search && destination.id != R.id.downloads) View.VISIBLE else View.GONE
             updateToolbarLogo()
 
             val params = binding.navMainFragment.layoutParams as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
-            if (destination.id == R.id.home || destination.id == R.id.search) {
+            if (destination.id == R.id.home || destination.id == R.id.search || destination.id == R.id.downloads) {
                 binding.ablMain.setBackgroundColor(android.graphics.Color.TRANSPARENT)
                 binding.toolbarMain.setBackgroundColor(android.graphics.Color.TRANSPARENT)
                 binding.ablMain.elevation = 0f
@@ -231,7 +238,10 @@ class MainMobileActivity : AppCompatActivity() {
                         showUpdateDialog(state)
                     }
 
-                    is MainViewModel.State.DownloadingUpdate -> updateAppDialog?.isLoading = true
+                    is MainViewModel.State.DownloadingUpdate -> {
+                        updateAppDialog?.isLoading = true
+                        updateAppDialog?.setProgress(state.progress)
+                    }
                     is MainViewModel.State.SuccessDownloadingUpdate -> {
                         dismissUpdateDialog()
                         viewModel.installUpdate(this@MainMobileActivity, state.apk)
@@ -240,7 +250,11 @@ class MainMobileActivity : AppCompatActivity() {
                     MainViewModel.State.InstallingUpdate -> updateAppDialog?.isLoading = true
                     is MainViewModel.State.FailedUpdate -> {
                         updateAppDialog?.isLoading = false
-                        // Silent failure for background check
+                        val url = state.apkUrl.takeIf { !it.isNullOrBlank() } ?: "https://github.com/JOKERPADDY/NEXASTREAM2/releases"
+                        Toast.makeText(this@MainMobileActivity, "Opening update download link...", Toast.LENGTH_SHORT).show()
+                        try {
+                            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                        } catch (_: Exception) {}
                     }
 
                     else -> {}
@@ -358,6 +372,10 @@ class MainMobileActivity : AppCompatActivity() {
     }
 
     private fun updateNavigationVisibility(currentDestinationId: Int? = null) {
+        val destId = currentDestinationId ?: (supportFragmentManager.findFragmentById(R.id.nav_main_fragment) as? NavHostFragment)?.navController?.currentDestination?.id
+        val showAbl = isTopLevelProviderDestination(destId) && destId != R.id.home && destId != R.id.search && destId != R.id.downloads
+        binding.ablMain.visibility = if (showAbl) View.VISIBLE else View.GONE
+
         val provider = UserPreferences.currentProvider ?: return
         val supportsMovies = Provider.supportsMovies(provider)
         val supportsTvShows = Provider.supportsTvShows(provider)

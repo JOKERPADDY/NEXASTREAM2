@@ -46,6 +46,7 @@ object GengaProvider : Provider {
                     overview = subject.description,
                     rating = subject.rating?.toDoubleOrNull(),
                     released = subject.year,
+                    providerName = "MovieBox"
                 )
             } else {
                 Movie(
@@ -56,6 +57,7 @@ object GengaProvider : Provider {
                     overview = subject.description,
                     rating = subject.rating?.toDoubleOrNull(),
                     released = subject.year,
+                    providerName = "MovieBox"
                 )
             }
         }
@@ -126,6 +128,13 @@ object GengaProvider : Provider {
         return parseSubjects(items)
     }
 
+    suspend fun getCategory(category: String, page: Int = 1): List<AppAdapter.Item> {
+        ensureServerRunning()
+        val response = try { api.getCategory(category, page) } catch (_: Exception) { null }
+        val items = response?.data?.items ?: response?.data?.list ?: emptyList()
+        return parseSubjects(items)
+    }
+
     override suspend fun getMovies(page: Int): List<Movie> {
         ensureServerRunning()
         val response = try { api.getCategory("movies", page) } catch (_: Exception) { null }
@@ -135,6 +144,11 @@ object GengaProvider : Provider {
 
     override suspend fun getTvShows(page: Int): List<TvShow> {
         ensureServerRunning()
+        val westernResponse = try { api.getCategory("western", page) } catch (_: Exception) { null }
+        val westernItems = westernResponse?.data?.items ?: westernResponse?.data?.list ?: emptyList()
+        val tvShows = parseSubjects(westernItems).filterIsInstance<TvShow>()
+        if (tvShows.isNotEmpty()) return tvShows
+
         val response = try { api.getCategory("anime", page) } catch (_: Exception) { null }
         val items = response?.data?.items ?: response?.data?.list ?: emptyList()
         return parseSubjects(items).filterIsInstance<TvShow>()
@@ -142,7 +156,11 @@ object GengaProvider : Provider {
 
     override suspend fun getMovie(id: String): Movie {
         ensureServerRunning()
-        val detailResponse = api.getDetail(id)
+        val detailResponse = try {
+            api.getDetail(id)
+        } catch (e: Exception) {
+            throw IllegalStateException("Movie not found on MovieBox: $id", e)
+        }
         val subject = detailResponse.data ?: throw IllegalStateException("Movie not found: $id")
         return Movie(
             id = subject.id,
@@ -157,7 +175,11 @@ object GengaProvider : Provider {
 
     override suspend fun getTvShow(id: String): TvShow {
         ensureServerRunning()
-        val detailResponse = api.getDetail(id)
+        val detailResponse = try {
+            api.getDetail(id)
+        } catch (e: Exception) {
+            throw IllegalStateException("TvShow not found on MovieBox: $id", e)
+        }
         val subject = detailResponse.data ?: throw IllegalStateException("TvShow not found: $id")
 
         val episodesResp = try {

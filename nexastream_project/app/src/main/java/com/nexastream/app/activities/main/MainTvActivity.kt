@@ -1,6 +1,7 @@
 package com.nexastream.app.activities.main
 
 import android.content.Intent
+import android.net.Uri
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -155,7 +156,10 @@ class MainTvActivity : FragmentActivity() {
                     is MainViewModel.State.SuccessCheckingUpdate -> {
                         showUpdateDialog(state)
                     }
-                    is MainViewModel.State.DownloadingUpdate -> updateAppDialog?.isLoading = true
+                    is MainViewModel.State.DownloadingUpdate -> {
+                        updateAppDialog?.isLoading = true
+                        updateAppDialog?.setProgress(state.progress)
+                    }
                     is MainViewModel.State.SuccessDownloadingUpdate -> {
                         dismissUpdateDialog()
                         viewModel.installUpdate(this@MainTvActivity, state.apk)
@@ -163,6 +167,11 @@ class MainTvActivity : FragmentActivity() {
                     MainViewModel.State.InstallingUpdate -> updateAppDialog?.isLoading = true
                     is MainViewModel.State.FailedUpdate -> {
                         updateAppDialog?.isLoading = false
+                        val url = state.apkUrl.takeIf { !it.isNullOrBlank() } ?: "https://github.com/JOKERPADDY/NEXASTREAM2/releases"
+                        Toast.makeText(this@MainTvActivity, "Opening update download link...", Toast.LENGTH_SHORT).show()
+                        try {
+                            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                        } catch (_: Exception) {}
                     }
                     else -> {}
                 }

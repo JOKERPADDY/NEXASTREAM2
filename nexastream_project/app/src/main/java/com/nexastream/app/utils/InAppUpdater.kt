@@ -21,8 +21,9 @@ object InAppUpdater {
 
     private const val TAG = "InAppUpdater"
 
-    // Primary & Fallback Update Configuration URLs
+    // Primary Production & Fallback Update Configuration URLs
     private val UPDATE_CONFIG_URLS = listOf(
+        "https://nexastream.app/update.json",
         "https://nexastream-73801.web.app/update.json",
         "https://raw.githubusercontent.com/JOKERPADDY/NEXASTREAM2/main/update.json",
         "https://raw.githubusercontent.com/THWAYNESHOP/NEXASTREAM2/main/update.json"
@@ -30,8 +31,11 @@ object InAppUpdater {
 
     private val httpClient by lazy {
         OkHttpClient.Builder()
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
+            .connectTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(120, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .followRedirects(true)
+            .followSslRedirects(true)
             .build()
     }
 
@@ -103,6 +107,7 @@ object InAppUpdater {
                             versionCode = BuildConfig.VERSION_CODE + 1,
                             versionName = releaseVersion,
                             apkUrl = apkAsset.browserDownloadUrl,
+                            websiteUrl = "https://nexastream.app",
                             changelog = release.body ?: "New release available: v$releaseVersion",
                             forceUpdate = false,
                             supportTelegramUrl = "https://t.me/NEXASTREAM2"

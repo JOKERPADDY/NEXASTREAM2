@@ -1,7 +1,7 @@
 package com.nexastream.app.providers
 
 import com.nexastream.app.adapters.AppAdapter
-import com.nexastream.app.extractors.GengaExtractor
+
 import com.nexastream.app.models.Category
 import com.nexastream.app.models.Episode
 import com.nexastream.app.models.Genre
@@ -18,9 +18,11 @@ object MovieBoxProvider : Provider {
     override val logo = "https://www.moviebox.ph/favicon.ico"
     override val language = "en"
 
-    private val extractor by lazy { GengaExtractor() }
+
 
     override suspend fun getHome(): List<Category> = GengaProvider.getHome()
+
+    suspend fun getCategory(category: String, page: Int = 1): List<AppAdapter.Item> = GengaProvider.getCategory(category, page)
 
     override suspend fun search(
         query: String,
@@ -47,6 +49,6 @@ object MovieBoxProvider : Provider {
     }
 
     override suspend fun getVideo(server: Video.Server): Video {
-        return extractor.extract(server.src)
+        return com.nexastream.app.extractors.Extractor.extract(server.src)
     }
 }

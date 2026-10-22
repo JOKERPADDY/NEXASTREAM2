@@ -47,6 +47,22 @@
         app:layout_constraintTop_toTopOf="parent"
         tools:ignore="SmallSp,HardcodedText" />
 
+    <ImageView
+        android:id="@+id/iv_match_notify"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:layout_margin="8dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:clickable="true"
+        android:focusable="true"
+        android:padding="4dp"
+        android:src="@drawable/ic_notification_bell"
+        android:visibility="gone"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        tools:visibility="visible"
+        android:contentDescription="@null" />
+
     <TextView
         android:id="@+id/tv_match_league"
         android:layout_width="0dp"
