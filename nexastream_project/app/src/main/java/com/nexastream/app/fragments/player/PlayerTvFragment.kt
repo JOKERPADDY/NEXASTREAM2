@@ -1987,6 +1987,7 @@ class PlayerTvFragment : Fragment() {
 
     private fun showLivestreamOffline(message: String? = null) {
         if (!isAdded || _binding == null) return
+        if (player.isPlaying) return
         binding.layoutLivestreamStatusOverlay.isVisible = true
         binding.pbLivestreamStatus.isVisible = false
         binding.tvLivestreamStatusTitle.text = getString(R.string.livestream_offline_title)
