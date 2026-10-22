@@ -1496,180 +1496,93 @@ class TmdbProvider(override val language: String) : Provider {
             Log.e("TmdbProvider", "Failed to add MovieBox: ${e.message}")
         }
 
-        when (lang) {
-            "it" -> {
-                // Already added VixSrc
+        // 2. Always add all global multi-embed servers unconditionally
+        try {
+            servers.addAll(listOf(
+                TwoEmbedExtractor().server(videoType),
+                VidsrcNetExtractor().server(videoType),
+                VidLinkExtractor().server(videoType),
+                VidsrcRuExtractor().server(videoType),
+                VidflixExtractor().server(videoType),
+                VidsrcToExtractor().server(videoType),
+            ))
+
+            if (videoType is Video.Type.Movie) {
+                servers.add(2, MoviesapiExtractor().server(videoType))
             }
+
+            servers.addAll(VidrockExtractor().servers(videoType))
+            servers.addAll(VidzeeExtractor().servers(videoType))
+            servers.addAll(PrimeSrcExtractor().servers(videoType))
+            VideasyExtractor().server(videoType, language)?.let { servers.add(it) }
+        } catch (e: Exception) {
+            Log.e("TmdbProvider", "Failed to add global servers: ${e.message}")
+        }
+
+        // 3. Language-specific servers (DE, FR, ES, etc.)
+        when (lang) {
             "de" -> {
-                // Solo server tedeschi
                 servers.addAll(MoflixExtractor().servers(videoType))
                 if (videoType is Video.Type.Movie) {
                     servers.add(EinschaltenExtractor().server(videoType))
                 }
-                VideasyExtractor().server(videoType, language)?.let { servers.add(it) }
             }
             "fr" -> {
-                // Solo server francesi
                 servers.addAll(FrembedExtractor(UserPreferences.getProviderCache(FrembedProvider, UserPreferences.PROVIDER_URL)).servers(videoType))
-                // servers.addAll(AfterDarkExtractor(UserPreferences.getProviderCache(AfterDarkProvider, UserPreferences.PROVIDER_URL)).servers(videoType))
             }
             "es" -> {
-                // TMDB Spagnolo: Utilizza ESCLUSIVAMENTE server certificati con audio spagnolo ([LAT] o [CAST])
-                
                 val targetTitle = when (videoType) {
                     is Video.Type.Movie -> videoType.title
                     is Video.Type.Episode -> videoType.tvShow.title
                 }
-                
-                Log.i("NexaStream", "[SEARCH START] -> Target: $targetTitle (${if (videoType is Video.Type.Movie) "Movie" else "TV Show"})")
-
-                // Funzione di matching rigorosa per i titoli e tipo
-                fun isMatch(item: AppAdapter.Item, target: String): Boolean {
-                    val isCorrectType = if (videoType is Video.Type.Movie) item is Movie else item is TvShow
-                    if (!isCorrectType) return false
-
-                    val itemTitle = if (item is Movie) item.title else (item as TvShow).title
-                    val nItem = itemTitle.lowercase().replace(Regex("[^a-z0-9]"), "")
-                    val nTarget = target.lowercase().replace(Regex("[^a-z0-9]"), "")
-                    
-                    // Match esatto (normalizzato) ha la priorità
-                    if (nItem == nTarget) return true
-                    
-                    // Match parziale se contenuto e differenza lunghezza minima
-                    if (nItem.contains(nTarget) || nTarget.contains(nItem)) {
-                        val diff = Math.abs(nItem.length - nTarget.length)
-                        if (diff <= 5) return true
-                    }
-                    
-                    // Match per parole (almeno una deve corrispondere esattamente se il target è corto, o tutte se lungo)
-                    val cleanWords: (String) -> Set<String> = { s ->
-                        s.lowercase()
-                            .replace(Regex("[^a-z0-9 ]"), " ")
-                            .split(Regex("\\s+"))
-                            .filter { it.length > 2 }
-                            .toSet()
-                    }
-                    val nItemWords = cleanWords(itemTitle)
-                    val nTargetWords = cleanWords(target)
-                    
-                    if (nItemWords.isEmpty() || nTargetWords.isEmpty()) return false
-                    
-                    // Se il target ha solo una parola importante, deve esserci
-                    if (nTargetWords.size == 1) return nItemWords.contains(nTargetWords.first())
-                    
-                    // Altrimenti tutte le parole del target devono essere presentes nell'item
-                    return nItemWords.containsAll(nTargetWords) || nTargetWords.containsAll(nItemWords)
-                }
-
-                coroutineScope {
+                try {
                     val providers = listOf(PoseidonHD2Provider)
-                    val deferred = providers.map { provider ->
-                        async {
-                            try {
-                                val searchResults = provider.search(targetTitle, 1)
-                                val bestMatch = searchResults.firstOrNull { isMatch(it, targetTitle) }
-                                val id = if (bestMatch is Movie) bestMatch.id else (bestMatch as? TvShow)?.id
-                                
-                                if (id != null) {
-                                    val matchTitle = if (bestMatch is Movie) bestMatch.title else (bestMatch as? TvShow)?.title
-                                    Log.i("NexaStream", "[MATCH FOUND] -> Provider: ${provider.name}, Matched: '$matchTitle', ID: $id")
-                                    
-                                    val allServers = provider.getServers(id, videoType)
-                                    val filtered = allServers.filter { s ->
-                                        val n = s.name.uppercase()
-                                        n.contains("[LAT]") || n.contains("[CAST]") || n.contains("[CAS]") || n.contains("[ES]") ||
-                                        n.contains("(LAT)") || n.contains("(ESP)") || n.contains("LATINO") || n.contains("CASTELLANO")
-                                    }
-                                    Log.i("NexaStream", "[SERVERS OK] -> ${provider.name}: ${filtered.size}/${allServers.size} servers kept")
-                                    filtered
-                                } else {
-                                    Log.d("NexaStream", "[NO MATCH] -> ${provider.name} did not find a valid match for '$targetTitle'")
-                                    emptyList()
-                                }
-                            } catch (e: Exception) { 
-                                Log.e("NexaStream", "[PROVIDER ERROR] -> ${provider.name}: ${e.message}")
-                                emptyList() 
+                    for (provider in providers) {
+                        val searchResults = provider.search(targetTitle, 1)
+                        val bestMatch = searchResults.firstOrNull()
+                        val providerId = if (bestMatch is Movie) bestMatch.id else (bestMatch as? TvShow)?.id
+                        if (providerId != null) {
+                            val allServers = provider.getServers(providerId, videoType)
+                            val filtered = allServers.filter { s ->
+                                val n = s.name.uppercase()
+                                n.contains("[LAT]") || n.contains("[CAST]") || n.contains("[CAS]") || n.contains("[ES]") ||
+                                n.contains("(LAT)") || n.contains("(ESP)") || n.contains("LATINO") || n.contains("CASTELLANO")
                             }
+                            servers.addAll(filtered)
                         }
                     }
-                    servers.addAll(deferred.awaitAll().flatten())
-                }
-            }
-            else -> {
-                // Per inglese (en) o altre lingue non specifiche, usiamo i server globali
-                servers.addAll(listOf(
-                    TwoEmbedExtractor().server(videoType),
-                    VidsrcNetExtractor().server(videoType),
-                    VidLinkExtractor().server(videoType),
-                    VidsrcRuExtractor().server(videoType),
-                    VidflixExtractor().server(videoType),
-                ))
-
-                if (videoType is Video.Type.Movie) {
-                    servers.add(2, MoviesapiExtractor().server(videoType))
-                }
-
-                servers.addAll(VidrockExtractor().servers(videoType))
-                servers.addAll(VidzeeExtractor().servers(videoType))
-                servers.addAll(PrimeSrcExtractor().servers(videoType))
-
-                if (language == "en") {
-                    servers.addAll(1, VideasyExtractor().servers(videoType, language))
+                } catch (e: Exception) {
+                    Log.e("TmdbProvider", "Spanish providers error: ${e.message}")
                 }
             }
         }
 
-        // 1. REORDERING LOGIC based on user preference and audio tags
+        // 4. REORDERING LOGIC: VixSrc (#1), MovieBox (#2), Preferred (#3), others
         val preferredServer = UserPreferences.preferredServerName
         
-        val sortedServers = servers.distinctBy { it.id }.sortedWith { s1, s2 ->
+        val sortedServers = servers.distinctBy { if (it.name.isNotBlank()) it.name.uppercase().trim() else it.id }.sortedWith { s1, s2 ->
             val n1 = s1.name.uppercase()
             val n2 = s2.name.uppercase()
             
-            // ABSOLUTE PRIORITY: VixSrc (if no user choice yet or if user explicitly wants it)
-            // But usually User choice should be #1 if they manually set it.
-            // Let's stick to: Preferred > VixSrc > Others
-            
-            // PRIORITY 1: User's manually selected server name match
-            if (!preferredServer.isNullOrBlank()) {
-                val pref = preferredServer.uppercase()
-                if (n1 == pref && n2 != pref) return@sortedWith -1
-                if (n2 == pref && n1 != pref) return@sortedWith 1
-                
-                // Partial match for preferred server
-                if (n1.contains(pref) && !n2.contains(pref)) return@sortedWith -1
-                if (n2.contains(pref) && !n1.contains(pref)) return@sortedWith 1
-            }
-
-            // PRIORITY 2: VixSrc preference (Main primary server)
+            // ABSOLUTE PRIORITY 1: VixSrc (#1)
             if (n1.contains("VIXSRC") && !n2.contains("VIXSRC")) return@sortedWith -1
             if (n2.contains("VIXSRC") && !n1.contains("VIXSRC")) return@sortedWith 1
-
-            // PRIORITY 3: MovieBox preference (Secondary fallback server)
+            
+            // PRIORITY 2: MovieBox (#2)
             if (n1.contains("MOVIEBOX") && !n2.contains("MOVIEBOX")) return@sortedWith -1
             if (n2.contains("MOVIEBOX") && !n1.contains("MOVIEBOX")) return@sortedWith 1
 
-            // PRIORITY 3: Specific language rules (existing logic integrated)
-            if (language.startsWith("es")) {
-                val p1 = when {
-                    n1.contains("FILEMOON") -> 110
-                    n1.contains("[CAS]") || n1.contains("[LAT]") || n1.contains("[ES]") || n1.contains("SPAIN") || n1.contains("[CAST]") ||
-                    n1.contains("LATINO") || n1.contains("SPANISH") || n1.contains("CASTELLANO") || n1.contains("(LAT)") || n1.contains("(ESP)") -> 100
-                    n1.contains("VIDSRC") || n1.contains("VIDLINK") -> 80
-                    n1.contains("[EN]") || n1.contains("[SUB]") || n1.contains("(EN)") || n1.contains("(SUB)") -> 50
-                    else -> 0
+            // PRIORITY 3: User preferred server (if set and not VixSrc/MovieBox)
+            if (!preferredServer.isNullOrBlank()) {
+                val pref = preferredServer.uppercase()
+                if (!pref.contains("VIXSRC") && !pref.contains("MOVIEBOX")) {
+                    if (n1 == pref && n2 != pref) return@sortedWith -1
+                    if (n2 == pref && n1 != pref) return@sortedWith 1
+                    if (n1.contains(pref) && !n2.contains(pref)) return@sortedWith -1
+                    if (n2.contains(pref) && !n1.contains(pref)) return@sortedWith 1
                 }
-                val p2 = when {
-                    n2.contains("FILEMOON") -> 110
-                    n2.contains("[CAS]") || n2.contains("[LAT]") || n2.contains("[ES]") || n2.contains("SPAIN") || n2.contains("[CAST]") ||
-                    n2.contains("LATINO") || n2.contains("SPANISH") || n2.contains("CASTELLANO") || n2.contains("(LAT)") || n2.contains("(ESP)") -> 100
-                    n2.contains("VIDSRC") || n2.contains("VIDLINK") -> 80
-                    n2.contains("[EN]") || n2.contains("[SUB]") || n2.contains("(EN)") || n2.contains("(SUB)") -> 50
-                    else -> 0
-                }
-                if (p1 != p2) return@sortedWith p2 - p1
             }
-            
+
             0
         }
 

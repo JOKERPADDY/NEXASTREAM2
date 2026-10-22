@@ -93,8 +93,12 @@ object NexaHomeProvider : Provider {
             }
         } }
 
-        val moviesBannerDef = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(phase0Timeout) { tmdb.getFeaturedMovies() } }.getOrNull() } }
-        val seriesBannerDef = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(phase0Timeout) { tmdb.getFeaturedTvShows() } }.getOrNull() } }
+        val moviesBannerDef = async { limited {
+            runCatching { kotlinx.coroutines.withTimeoutOrNull(phase0Timeout) { tmdb.getFeaturedMovies() } }.getOrNull()
+        } }
+        val seriesBannerDef = async { limited {
+            runCatching { kotlinx.coroutines.withTimeoutOrNull(phase0Timeout) { tmdb.getFeaturedTvShows() } }.getOrNull()
+        } }
         val liveSportsMatchesDef = async { limited {
             runCatching {
                 kotlinx.coroutines.withTimeoutOrNull(2500) {
@@ -115,6 +119,7 @@ object NexaHomeProvider : Provider {
         val seriesBanner = seriesBannerDef.await()
         val liveSportsMatches = liveSportsMatchesDef.await()
         val upcomingSportsMatches = upcomingSportsMatchesDef.await()
+        AkSportsLiveProvider.prefetchResolverStreams((liveSportsMatches + upcomingSportsMatches).take(8))
 
         val categories = mutableListOf<Category>()
 
@@ -186,12 +191,18 @@ object NexaHomeProvider : Provider {
     suspend fun getHomePhase1(phase0Categories: List<Category>): List<Category> = coroutineScope {
         val timeout = if (isTvUi()) PHASE0_TIMEOUT_TV_MS else PHASE0_TIMEOUT_MOBILE_MS
         // Phase 1: Core Content (Trending, Popular, Cinema, New Seasons)
+        val movieBoxHomeDeferred = async { limited {
+            runCatching {
+                kotlinx.coroutines.withTimeoutOrNull(timeout) { MovieBoxProvider.getHome() }
+            }.getOrDefault(emptyList())
+        } }
+
         val tmdbHomeDeferred = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(timeout) { tmdb.getHome() } }.getOrElse { emptyList() } ?: emptyList() } }
         val latestMoviesDeferred = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(timeout) { tmdb.getLatestMovies() } }.getOrNull() } }
         val allCinemaDeferred = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(timeout) { tmdb.getAllCinema() } }.getOrNull() } }
         val newSeasonDeferred = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(timeout) { tmdb.getNewSeasonsAndEpisodes() } }.getOrNull() } }
 
-        val tmdbHome = tmdbHomeDeferred.await()
+        val tmdbHome = tmdbHomeDeferred.await() ?: emptyList()
         val latestMovies = latestMoviesDeferred.await()
         val allCinema = allCinemaDeferred.await()
         val newSeasonAndEpisodes = newSeasonDeferred.await()
@@ -199,14 +210,12 @@ object NexaHomeProvider : Provider {
         val categories = mutableListOf<Category>()
         categories.addAll(phase0Categories)
 
-        // FEATURED BANNER from tmdbHome if not present
         tmdbHome.find { it.name == Category.FEATURED }?.let {
             if (categories.none { cat -> cat.name == Category.FEATURED }) {
                 categories.add(0, it)
             }
         }
 
-        // TRENDING / RECOMMENDED
         tmdbHome.find { it.name == "Trending" || it.name == "Di tendenza" || it.name == "Tendencias" }?.let { 
             categories.add(it.copy(name = "Trending Today")) 
         }
@@ -214,12 +223,11 @@ object NexaHomeProvider : Provider {
         tmdbHome.find { it.name == "Popular Movies" || it.name == "Film popolari" || it.name == "Películas populares" }?.let {
             categories.add(it)
         }
-        
+
         tmdbHome.find { it.name == "Popular TV Shows" || it.name == "Serie TV popolari" || it.name == "Series de TV populares" }?.let {
             categories.add(it.copy(name = "Trending Series"))
         }
 
-        // LATEST CONTENT
         latestMovies?.let { categories.add(it) }
         allCinema?.let { categories.add(it) }
         newSeasonAndEpisodes?.let { categories.add(it) }
@@ -247,37 +255,72 @@ object NexaHomeProvider : Provider {
         com.nexastream.app.utils.RecommendationEngine.rankCategories(categories, profile)
     }
 
+    private suspend fun fetchMovieBoxCategory(
+        name: String,
+        query: String,
+        isMovie: Boolean? = null,
+        tmdbFallback: suspend () -> Category?
+    ): Category = coroutineScope {
+        val tmdbCat = runCatching { tmdbFallback() }.getOrNull()
+        tmdbCat ?: Category(name = name, list = emptyList())
+    }
+
     suspend fun getHomePhase2(phase1Categories: List<Category>): List<Category> = coroutineScope {
         val isTv = try {
             NexastreamApp.instance.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
         } catch (_: Exception) { false }
 
         // Secondary Rows Parallel Fetching (Phase 2)
-        val kidsContentDef = async { limited { runCatching { tmdb.getKidsContent() }.getOrNull() } }
-        val animeContentDef = async { limited { runCatching { tmdb.getAnimeContent() }.getOrNull() } }
+        val kidsContentDef = async { limited {
+            val mbKids = runCatching { MovieBoxProvider.getCategory("kids", 1) }.getOrNull().orEmpty()
+            if (mbKids.isNotEmpty()) {
+                Category(name = "Kids Section", list = mbKids)
+            } else {
+                runCatching { tmdb.getKidsContent() }.getOrNull()
+            }
+        } }
+
+        val animeContentDef = async { limited {
+            val mbAnime = runCatching { MovieBoxProvider.getCategory("anime", 1) }.getOrNull().orEmpty()
+            if (mbAnime.isNotEmpty()) {
+                Category(name = "Anime Section", list = mbAnime)
+            } else {
+                runCatching { tmdb.getAnimeContent() }.getOrNull()
+            }
+        } }
+
         val trendingTeenRomanceDef = async { limited { runCatching { fetchTeenRomanceFromMovieBox(isMovie = false, name = "Teen Romance") }.getOrNull() } }
         val animeRowsDef = async { fetchAnimeRows() }
         val kidsRowsDef = async { fetchKidsRows() }
         val seriesRowsDef = async { fetchSeriesMegaRows() }
         val movieRowsDef = async { fetchMovieMegaRows() }
 
-        val topRatedMoviesDef = async { limited { runCatching { 
+        val topRatedMoviesDef = async { limited { fetchMovieBoxCategory("Top Rated Movies", "Top Rated Movies", true) {
             val results = TMDb3.Discover.movie(language = "en", sortBy = TMDb3.Params.SortBy.Movie.VOTE_AVERAGE_DESC, voteCount = TMDb3.Params.Range(gte = 500)).results.mapNotNull { tmdb.mapMulti(it) }
             Category(name = "Top Rated Movies", list = results)
-        }.getOrNull() } }
-        val topRatedTvDef = async { limited { runCatching { 
+        } } }
+
+        val topRatedTvDef = async { limited { fetchMovieBoxCategory("Top Rated TV Shows", "Top Rated TV Shows", false) {
             val results = TMDb3.TvSeriesLists.topRated(language = "en").results.mapNotNull { tmdb.mapMulti(it) }
             Category(name = "Top Rated TV Shows", list = results)
-        }.getOrNull() } }
+        } } }
 
-        val actionDef = async { limited { runCatching { tmdb.getGenre("28") }.getOrNull() } }
-        val comedyDef = if (!isTv) async { limited { runCatching { tmdb.getGenre("35") }.getOrNull() } } else null
+        val actionDef = async { limited { fetchMovieBoxCategory("Action & Adventure", "Action", null) {
+            val cat = tmdb.getGenre("28")
+            Category(name = "Action & Adventure", list = cat.shows)
+        } } }
+
+        val comedyDef = if (!isTv) async { limited { fetchMovieBoxCategory("Comedy", "Comedy", null) {
+            val cat = tmdb.getGenre("35")
+            Category(name = "Comedy", list = cat.shows)
+        } } } else null
 
         val cinematicUniversesDef = async { limited { runCatching { fetchCinematicUniversesRows() }.getOrNull().orEmpty() } }
         val watchAgainDef = async { limited { runCatching { fetchWatchAgainRow() }.getOrNull() } }
         val wweRowDef = async { limited { runCatching { fetchWweMovieBoxRow() }.getOrNull() } }
         val nollywoodRowDef = async { limited { runCatching { fetchNollywoodMovieBoxRow() }.getOrNull() } }
         val kenyanRowDef = async { limited { runCatching { fetchKenyanSeriesMovieBoxRow() }.getOrNull() } }
+        val shortTvRowDef = async { limited { runCatching { fetchShortTvRow() }.getOrNull() } }
 
         val kidsContent = kidsContentDef.await()
         val animeContent = animeContentDef.await()
@@ -288,13 +331,14 @@ object NexaHomeProvider : Provider {
         val movieRows = movieRowsDef.await()
         val topRatedMovies = topRatedMoviesDef.await()
         val topRatedTv = topRatedTvDef.await()
-        val actionGenre = actionDef.await()
-        val comedyGenre = comedyDef?.await()
+        val actionCategory = actionDef.await()
+        val comedyCategory = comedyDef?.await()
         val cinematicUniverses = cinematicUniversesDef.await()
         val watchAgain = watchAgainDef.await()
         val wweRow = wweRowDef.await()
         val nollywoodRow = nollywoodRowDef.await()
         val kenyanRow = kenyanRowDef.await()
+        val shortTvRow = shortTvRowDef.await()
 
         val categories = mutableListOf<Category>()
         categories.addAll(phase1Categories)
@@ -304,6 +348,7 @@ object NexaHomeProvider : Provider {
         wweRow?.let { categories.add(it) }
         nollywoodRow?.let { categories.add(it) }
         kenyanRow?.let { categories.add(it) }
+        shortTvRow?.let { categories.add(it) }
 
         kidsContent?.let { 
             if (categories.none { cat -> cat.name == "Kids Banner" }) {
@@ -317,8 +362,8 @@ object NexaHomeProvider : Provider {
         }
 
         trendingTeenRomance?.let { categories.add(it) }
-        topRatedMovies?.let { categories.add(it) }
-        topRatedTv?.let { categories.add(it) }
+        topRatedMovies.let { categories.add(it) }
+        topRatedTv.let { categories.add(it) }
 
         seriesRows.let { categories.addAll(it.filterNotNull()) }
         movieRows.let { categories.addAll(it.filterNotNull()) }
@@ -329,11 +374,11 @@ object NexaHomeProvider : Provider {
         animeRows.let { categories.addAll(it.filterNotNull()) }
         kidsRows.let { categories.addAll(it.filterNotNull()) }
 
-        actionGenre?.shows?.takeIf { it.isNotEmpty() }?.let {
-            categories.add(Category(name = "Action & Adventure", list = it))
+        actionCategory.let { cat ->
+            if (cat.list.isNotEmpty()) categories.add(cat)
         }
-        comedyGenre?.shows?.takeIf { it.isNotEmpty() }?.let {
-            categories.add(Category(name = "Comedy", list = it))
+        comedyCategory?.let { cat ->
+            if (cat.list.isNotEmpty()) categories.add(cat)
         }
 
         animeRows.let { rows ->
@@ -356,106 +401,97 @@ object NexaHomeProvider : Provider {
 
     private suspend fun fetchAnimeRows(): List<Category?> = coroutineScope {
         listOf(
-            async { limited { runCatching { tmdb.getAnimeMovies() }.getOrNull() } },
-            async { limited { runCatching { tmdb.getJapaneseAnime() }.getOrNull() } },
-            async { limited { runCatching { tmdb.getWesternAnime() }.getOrNull() } },
-            async { limited { runCatching { tmdb.getAnimeAge7to12() }.getOrNull() } },
-            async { limited { runCatching { tmdb.getSearchContent("Dragon Ball", "Dragon Ball") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getSearchContent("Naruto", "Naruto") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getSearchContent("One Piece", "One Piece") }.getOrNull() } }
+            async { limited { fetchMovieBoxCategory("Anime Movies", "Anime Movie", true) { tmdb.getAnimeMovies() } } },
+            async { limited { fetchMovieBoxCategory("Japanese Anime", "Japanese Anime", null) { tmdb.getJapaneseAnime() } } },
+            async { limited { fetchMovieBoxCategory("Western Anime", "Animation", null) { tmdb.getWesternAnime() } } },
+            async { limited { fetchMovieBoxCategory("Dragon Ball", "Dragon Ball", null) { tmdb.getSearchContent("Dragon Ball", "Dragon Ball") } } },
+            async { limited { fetchMovieBoxCategory("Naruto", "Naruto", null) { tmdb.getSearchContent("Naruto", "Naruto") } } },
+            async { limited { fetchMovieBoxCategory("One Piece", "One Piece", null) { tmdb.getSearchContent("One Piece", "One Piece") } } }
         ).awaitAll()
     }
 
     private suspend fun fetchKidsRows(): List<Category?> = coroutineScope {
         listOf(
-            async { limited { runCatching { tmdb.getCartoonMovies() }.getOrNull() } },
-            async { limited { runCatching { tmdb.getCartoonSeries() }.getOrNull() } },
-            async { limited { runCatching { tmdb.getKeywordContent("Baby", 10229) }.getOrNull() } },
-            async { limited { runCatching { tmdb.getKidsContent().copy(name = "Age 2-6") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getStudioContent("Pixar", 3) }.getOrNull() } },
-            async { limited { runCatching { tmdb.getStudioContent("DreamWorks", 521) }.getOrNull() } },
-            async { limited { runCatching { tmdb.getStudioContent("Blue Sky Studios", 10378) }.getOrNull() } },
-            async { limited { runCatching { tmdb.getStudioContent("Illumination", 6704) }.getOrNull() } },
-            async { limited { runCatching { tmdb.getKeywordContent("Toys", 11134) }.getOrNull() } },
-            async { limited { runCatching { tmdb.getSearchContent("Kung Fu Panda", "Kung Fu Panda") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getSearchContent("Cars", "Cars") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getSearchContent("Frozen", "Frozen") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getSearchContent("Minions", "Minions") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getSearchContent("Peppa Pig", "Peppa Pig") }.getOrNull() } }
+            async { limited { fetchMovieBoxCategory("Cartoon Movies", "Cartoon Movie", true) { tmdb.getCartoonMovies() } } },
+            async { limited { fetchMovieBoxCategory("Cartoon Series", "Cartoon Series", false) { tmdb.getCartoonSeries() } } },
+            async { limited { fetchMovieBoxCategory("Pixar Studio", "Pixar", true) { tmdb.getStudioContent("Pixar", 3) } } },
+            async { limited { fetchMovieBoxCategory("DreamWorks Studio", "DreamWorks", true) { tmdb.getStudioContent("DreamWorks", 521) } } },
+            async { limited { fetchMovieBoxCategory("Illumination Studio", "Illumination", true) { tmdb.getStudioContent("Illumination", 6704) } } },
+            async { limited { fetchMovieBoxCategory("Kung Fu Panda", "Kung Fu Panda", null) { tmdb.getSearchContent("Kung Fu Panda", "Kung Fu Panda") } } },
+            async { limited { fetchMovieBoxCategory("Cars", "Cars", null) { tmdb.getSearchContent("Cars", "Cars") } } },
+            async { limited { fetchMovieBoxCategory("Frozen", "Frozen", null) { tmdb.getSearchContent("Frozen", "Frozen") } } },
+            async { limited { fetchMovieBoxCategory("Minions", "Minions", null) { tmdb.getSearchContent("Minions", "Minions") } } }
         ).awaitAll()
     }
 
     private suspend fun fetchSeriesMegaRows(): List<Category?> = coroutineScope {
         listOf(
-            async { limited { runCatching { 
+            async { limited { fetchMovieBoxCategory("Top Rated TV Shows", "Top Rated", false) { 
                 val results = TMDb3.TvSeriesLists.topRated(language = "en").results.mapNotNull { tmdb.mapMulti(it) }
                 Category(name = "Top Rated TV Shows", list = results)
-            }.getOrNull() } },
-            async { limited { runCatching { 
+            } } },
+            async { limited { fetchMovieBoxCategory("Trending Series", "Popular Series", false) { 
                 val results = TMDb3.TvSeriesLists.popular(language = "en").results.mapNotNull { tmdb.mapMulti(it) }
                 Category(name = "Trending Series", list = results)
-            }.getOrNull() } },
+            } } },
             async { limited { runCatching { tmdb.getNewSeasonsAndEpisodes() }.getOrNull() } },
             
             // Networks
-            async { limited { runCatching { tmdb.getNetworkTv(213, "Netflix Series") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getNetworkTv(1024, "Prime Video Series") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getNetworkTv(2739, "Disney+ Series") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getNetworkTv(49, "Max Series") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getNetworkTv(4330, "Paramount+ Series") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getNetworkTv(2552, "Apple TV Series") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getNetworkTv(453, "Hulu Series") }.getOrNull() } },
+            async { limited { fetchMovieBoxCategory("Netflix Series", "Netflix", false) { tmdb.getNetworkTv(213, "Netflix Series") } } },
+            async { limited { fetchMovieBoxCategory("Prime Video Series", "Prime Video", false) { tmdb.getNetworkTv(1024, "Prime Video Series") } } },
+            async { limited { fetchMovieBoxCategory("Disney+ Series", "Disney+", false) { tmdb.getNetworkTv(2739, "Disney+ Series") } } },
+            async { limited { fetchMovieBoxCategory("Max Series", "HBO Max", false) { tmdb.getNetworkTv(49, "Max Series") } } },
+            async { limited { fetchMovieBoxCategory("Paramount+ Series", "Paramount+", false) { tmdb.getNetworkTv(4330, "Paramount+ Series") } } },
+            async { limited { fetchMovieBoxCategory("Apple TV Series", "Apple TV", false) { tmdb.getNetworkTv(2552, "Apple TV Series") } } },
+            async { limited { fetchMovieBoxCategory("Hulu Series", "Hulu", false) { tmdb.getNetworkTv(453, "Hulu Series") } } },
             
             // Genres
-            async { limited { runCatching { tmdb.getGenreTv(10759, "Action & Adventure Series") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getGenreTv(35, "Comedy Series") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getGenreTv(80, "Crime Series") }.getOrNull() } },
-            async { limited { runCatching { fetchTeenRomanceFromMovieBox(isMovie = false, name = "Teen Romance Series") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getGenreTv(99, "Documentary Series") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getGenreTv(18, "Drama Series") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getGenreTv(10751, "Family Series") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getGenreTv(10765, "Sci-Fi & Fantasy Series") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getGenreTv(27, "Horror Series") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getGenreTv(9648, "Mystery Series") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getGenreTv(10749, "Romance Series") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getGenreTv(53, "Thriller Series") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getGenreTv(10768, "War & Politics Series") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getBiography(false, "Biography Series") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getGenreTv(10764, "Reality TV") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getSport(false, "Sport Series") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getGenreTv(37, "Western Series") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getSearchContent("Musical Series", "Musical") }.getOrNull() } },
-            async { limited { runCatching { Category(name = "All TV Shows", list = tmdb.getTvShows(1)) }.getOrNull() } }
+            async { limited { fetchMovieBoxCategory("Action & Adventure Series", "Action Series", false) { tmdb.getGenreTv(10759, "Action & Adventure Series") } } },
+            async { limited { fetchMovieBoxCategory("Comedy Series", "Comedy Series", false) { tmdb.getGenreTv(35, "Comedy Series") } } },
+            async { limited { fetchMovieBoxCategory("Crime Series", "Crime Series", false) { tmdb.getGenreTv(80, "Crime Series") } } },
+            async { limited { fetchMovieBoxCategory("Teen Romance Series", "Teen Romance Series", false) { fetchTeenRomanceFromMovieBox(isMovie = false, name = "Teen Romance Series") } } },
+            async { limited { fetchMovieBoxCategory("Documentary Series", "Documentary Series", false) { tmdb.getGenreTv(99, "Documentary Series") } } },
+            async { limited { fetchMovieBoxCategory("Drama Series", "Drama Series", false) { tmdb.getGenreTv(18, "Drama Series") } } },
+            async { limited { fetchMovieBoxCategory("Family Series", "Family Series", false) { tmdb.getGenreTv(10751, "Family Series") } } },
+            async { limited { fetchMovieBoxCategory("Sci-Fi & Fantasy Series", "Sci-Fi Series", false) { tmdb.getGenreTv(10765, "Sci-Fi & Fantasy Series") } } },
+            async { limited { fetchMovieBoxCategory("Horror Series", "Horror Series", false) { tmdb.getGenreTv(27, "Horror Series") } } },
+            async { limited { fetchMovieBoxCategory("Mystery Series", "Mystery Series", false) { tmdb.getGenreTv(9648, "Mystery Series") } } },
+            async { limited { fetchMovieBoxCategory("Romance Series", "Romance Series", false) { tmdb.getGenreTv(10749, "Romance Series") } } },
+            async { limited { fetchMovieBoxCategory("Thriller Series", "Thriller Series", false) { tmdb.getGenreTv(53, "Thriller Series") } } },
+            async { limited { fetchMovieBoxCategory("War & Politics Series", "War Series", false) { tmdb.getGenreTv(10768, "War & Politics Series") } } },
+            async { limited { fetchMovieBoxCategory("Biography Series", "Biography Series", false) { tmdb.getBiography(false, "Biography Series") } } },
+            async { limited { fetchMovieBoxCategory("Reality TV", "Reality TV", false) { tmdb.getGenreTv(10764, "Reality TV") } } },
+            async { limited { fetchMovieBoxCategory("Sport Series", "Sport Series", false) { tmdb.getSport(false, "Sport Series") } } },
+            async { limited { fetchMovieBoxCategory("Western Series", "Western Series", false) { tmdb.getGenreTv(37, "Western Series") } } }
         ).awaitAll()
     }
 
     private suspend fun fetchMovieMegaRows(): List<Category?> = coroutineScope {
         listOf(
-            async { limited { runCatching { tmdb.getLatestMovies() }.getOrNull() } },
-            async { limited { runCatching { tmdb.getAllCinema() }.getOrNull() } },
-            async { limited { runCatching { tmdb.getWatchProviderMovies(8, "Netflix Movies") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getWatchProviderMovies(337, "Disney+ Movies") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getWatchProviderMovies(531, "Paramount+ Movies") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getGenreMovies(28, "Action Movies") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getGenreMovies(80, "Crime Movies") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getGenreMovies(18, "Drama Movies") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getGenreMovies(12, "Adventure Movies") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getGenreMovies(35, "Comedy Movies") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getGenreMovies(53, "Thriller Movies") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getGenreMovies(10749, "Romance Movies") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getGenreMovies(878, "Sci-Fi Movies") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getGenreMovies(99, "Documentary Movies") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getGenreMovies(27, "Horror Movies") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getGenreMovies(14, "Fantasy Movies") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getGenreMovies(10751, "Family Movies") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getGenreMovies(36, "History Movies") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getGenreMovies(9648, "Mystery Movies") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getGenreMovies(10752, "War Movies") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getBiography(true, "Biography Movies") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getSport(true, "Sport Movies") }.getOrNull() } },
-            async { limited { runCatching { tmdb.getGenreMovies(37, "Western Movies") }.getOrNull() } },
-            async { limited { runCatching { fetchTeenRomanceFromMovieBox(isMovie = true, name = "Teen Romance Movies") }.getOrNull() } },
-            async { limited { runCatching { Category(name = "All Movies", list = tmdb.getMovies(1)) }.getOrNull() } }
+            async { limited { fetchMovieBoxCategory("Latest Movies", "Latest Movies", true) { tmdb.getLatestMovies() } } },
+            async { limited { fetchMovieBoxCategory("All Cinema", "Blockbuster Movies", true) { tmdb.getAllCinema() } } },
+            async { limited { fetchMovieBoxCategory("Netflix Movies", "Netflix Movies", true) { tmdb.getWatchProviderMovies(8, "Netflix Movies") } } },
+            async { limited { fetchMovieBoxCategory("Disney+ Movies", "Disney Movies", true) { tmdb.getWatchProviderMovies(337, "Disney+ Movies") } } },
+            async { limited { fetchMovieBoxCategory("Paramount+ Movies", "Paramount Movies", true) { tmdb.getWatchProviderMovies(531, "Paramount+ Movies") } } },
+            async { limited { fetchMovieBoxCategory("Action Movies", "Action Movies", true) { tmdb.getGenreMovies(28, "Action Movies") } } },
+            async { limited { fetchMovieBoxCategory("Crime Movies", "Crime Movies", true) { tmdb.getGenreMovies(80, "Crime Movies") } } },
+            async { limited { fetchMovieBoxCategory("Drama Movies", "Drama Movies", true) { tmdb.getGenreMovies(18, "Drama Movies") } } },
+            async { limited { fetchMovieBoxCategory("Adventure Movies", "Adventure Movies", true) { tmdb.getGenreMovies(12, "Adventure Movies") } } },
+            async { limited { fetchMovieBoxCategory("Comedy Movies", "Comedy Movies", true) { tmdb.getGenreMovies(35, "Comedy Movies") } } },
+            async { limited { fetchMovieBoxCategory("Thriller Movies", "Thriller Movies", true) { tmdb.getGenreMovies(53, "Thriller Movies") } } },
+            async { limited { fetchMovieBoxCategory("Romance Movies", "Romance Movies", true) { tmdb.getGenreMovies(10749, "Romance Movies") } } },
+            async { limited { fetchMovieBoxCategory("Sci-Fi Movies", "Sci-Fi Movies", true) { tmdb.getGenreMovies(878, "Sci-Fi Movies") } } },
+            async { limited { fetchMovieBoxCategory("Documentary Movies", "Documentary Movies", true) { tmdb.getGenreMovies(99, "Documentary Movies") } } },
+            async { limited { fetchMovieBoxCategory("Horror Movies", "Horror Movies", true) { tmdb.getGenreMovies(27, "Horror Movies") } } },
+            async { limited { fetchMovieBoxCategory("Fantasy Movies", "Fantasy Movies", true) { tmdb.getGenreMovies(14, "Fantasy Movies") } } },
+            async { limited { fetchMovieBoxCategory("Family Movies", "Family Movies", true) { tmdb.getGenreMovies(10751, "Family Movies") } } },
+            async { limited { fetchMovieBoxCategory("History Movies", "History Movies", true) { tmdb.getGenreMovies(36, "History Movies") } } },
+            async { limited { fetchMovieBoxCategory("Mystery Movies", "Mystery Movies", true) { tmdb.getGenreMovies(9648, "Mystery Movies") } } },
+            async { limited { fetchMovieBoxCategory("War Movies", "War Movies", true) { tmdb.getGenreMovies(10752, "War Movies") } } },
+            async { limited { fetchMovieBoxCategory("Biography Movies", "Biography Movies", true) { tmdb.getBiography(true, "Biography Movies") } } },
+            async { limited { fetchMovieBoxCategory("Sport Movies", "Sport Movies", true) { tmdb.getSport(true, "Sport Movies") } } },
+            async { limited { fetchMovieBoxCategory("Western Movies", "Western Movies", true) { tmdb.getGenreMovies(37, "Western Movies") } } },
+            async { limited { fetchMovieBoxCategory("Teen Romance Movies", "Teen Romance Movies", true) { fetchTeenRomanceFromMovieBox(isMovie = true, name = "Teen Romance Movies") } } }
         ).awaitAll()
     }
 
@@ -482,7 +518,7 @@ object NexaHomeProvider : Provider {
             val matchingIptv = iptvChannels.firstOrNull() as? TvShow
             return matchingIptv ?: cdnChannel
         }
-        return tmdb.getTvShow(id)
+        return runCatching { MovieBoxProvider.getTvShow(id) }.getOrElse { tmdb.getTvShow(id) }
     }
 
     override suspend fun getServers(id: String, videoType: Video.Type): List<Video.Server> {
@@ -521,31 +557,36 @@ object NexaHomeProvider : Provider {
             if (combined.isNotEmpty()) return combined
             throw IllegalStateException("No live stream servers available for this channel.")
         }
-        val servers = tmdb.getServers(id, videoType)
+        val mbServers = runCatching { MovieBoxProvider.getServers(id, videoType) }.getOrElse { emptyList() }
+        val tmdbServers = runCatching { tmdb.getServers(id, videoType) }.getOrElse { emptyList() }
+        val servers = mbServers + tmdbServers
         return sortHomeServers(servers)
     }
 
     private fun sortHomeServers(servers: List<Video.Server>): List<Video.Server> {
         val preferredServer = UserPreferences.preferredServerName
-        return servers.distinctBy { it.id }.sortedWith { s1, s2 ->
+        return servers.distinctBy { if (it.name.isNotBlank()) it.name.uppercase().trim() else it.id }.sortedWith { s1, s2 ->
             val n1 = s1.name.uppercase()
             val n2 = s2.name.uppercase()
 
-            if (!preferredServer.isNullOrBlank()) {
-                val pref = preferredServer.uppercase()
-                if (n1 == pref && n2 != pref) return@sortedWith -1
-                if (n2 == pref && n1 != pref) return@sortedWith 1
-                if (n1.contains(pref) && !n2.contains(pref)) return@sortedWith -1
-                if (n2.contains(pref) && !n1.contains(pref)) return@sortedWith 1
-            }
-
-            // Server 2 (VixSrc) as default primary stream server
+            // 1. VixSrc ALWAYS takes absolute top precedence as default server (#1)
             if (n1.contains("VIXSRC") && !n2.contains("VIXSRC")) return@sortedWith -1
             if (n2.contains("VIXSRC") && !n1.contains("VIXSRC")) return@sortedWith 1
 
-            // Server 1 (MovieBox) as fallback stream server
+            // 2. MovieBox as fallback stream server (#2)
             if (n1.contains("MOVIEBOX") && !n2.contains("MOVIEBOX")) return@sortedWith -1
             if (n2.contains("MOVIEBOX") && !n1.contains("MOVIEBOX")) return@sortedWith 1
+
+            // 3. User preferred server (if set and not VixSrc/MovieBox)
+            if (!preferredServer.isNullOrBlank()) {
+                val pref = preferredServer.uppercase()
+                if (!pref.contains("VIXSRC") && !pref.contains("MOVIEBOX")) {
+                    if (n1 == pref && n2 != pref) return@sortedWith -1
+                    if (n2 == pref && n1 != pref) return@sortedWith 1
+                    if (n1.contains(pref) && !n2.contains(pref)) return@sortedWith -1
+                    if (n2.contains(pref) && !n1.contains(pref)) return@sortedWith 1
+                }
+            }
 
             0
         }
@@ -620,11 +661,26 @@ object NexaHomeProvider : Provider {
         }
     }
 
-    override suspend fun search(query: String, page: Int, filters: SearchFilters?): List<AppAdapter.Item> = tmdb.search(query, page, filters)
-    override suspend fun getMovies(page: Int): List<Movie> = tmdb.getMovies(page)
-    override suspend fun getTvShows(page: Int): List<TvShow> = tmdb.getTvShows(page)
-    override suspend fun getMovie(id: String): Movie = tmdb.getMovie(id)
-    override suspend fun getEpisodesBySeason(seasonId: String): List<Episode> = tmdb.getEpisodesBySeason(seasonId)
+    override suspend fun search(query: String, page: Int, filters: SearchFilters?): List<AppAdapter.Item> = coroutineScope {
+        runCatching { tmdb.search(query, page, filters) }.getOrElse { emptyList() }
+    }
+
+    override suspend fun getMovies(page: Int): List<Movie> = coroutineScope {
+        runCatching { tmdb.getMovies(page) }.getOrElse { emptyList() }
+    }
+
+    override suspend fun getTvShows(page: Int): List<TvShow> = coroutineScope {
+        runCatching { tmdb.getTvShows(page) }.getOrElse { emptyList() }
+    }
+
+    override suspend fun getMovie(id: String): Movie = coroutineScope {
+        tmdb.getMovie(id)
+    }
+
+    override suspend fun getEpisodesBySeason(seasonId: String): List<Episode> = coroutineScope {
+        val mbEps = runCatching { MovieBoxProvider.getEpisodesBySeason(seasonId) }.getOrElse { emptyList() }
+        if (mbEps.isNotEmpty()) mbEps else tmdb.getEpisodesBySeason(seasonId)
+    }
     override suspend fun getGenre(id: String, page: Int): Genre = when {
         id == "cdn_all_channels" -> {
             runCatching { CdnLiveTvProvider.getGenre(id, page) }.getOrElse {
@@ -730,10 +786,47 @@ object NexaHomeProvider : Provider {
             Genre(id = id, name = "Nollywood Movies", shows = items)
         }
         id == "kenyan_series" -> {
-            val queries = listOf("Kenyan", "Nairobi", "African", "Blood Sisters", "Shanty Town", "Crime and Justice")
+            val queries = listOf("jiji", "mpakani", "kash money", "MTV shuga mashariki", "VOLUME", "MO-faya", "country 49", "country queen", "subterranea", "Kenyan", "Nairobi", "African", "Blood Sisters", "Shanty Town", "Crime and Justice")
             val items = queries.flatMap { q ->
                 runCatching { MovieBoxProvider.search(q, page, null) }.getOrElse { emptyList() }
-            }.filterIsInstance<TvShow>().distinctBy { it.id }
+            }.filter { item ->
+                val title = when (item) {
+                    is Movie -> item.title
+                    is TvShow -> item.title
+                    else -> ""
+                }.lowercase()
+                val overview = when (item) {
+                    is Movie -> item.overview
+                    is TvShow -> item.overview
+                    else -> ""
+                }?.lowercase().orEmpty()
+
+                val combined = "$title $overview"
+                !combined.contains("music") &&
+                !combined.contains("song") &&
+                !combined.contains("album") &&
+                !combined.contains("audio") &&
+                !combined.contains("concert") &&
+                !combined.contains("remix") &&
+                !combined.contains("mixtape") &&
+                !combined.contains("dj ") &&
+                !combined.contains("ft.") &&
+                !combined.contains("feat.") &&
+                !combined.contains("official video") &&
+                !combined.contains("soundtrack")
+            }.map { item ->
+                when (item) {
+                    is Movie -> item.copy().apply { providerName = "MovieBox" }
+                    is TvShow -> item.copy().apply { providerName = "MovieBox" }
+                    else -> item
+                }
+            }.distinctBy { 
+                when (it) {
+                    is Movie -> it.id
+                    is TvShow -> it.id
+                    else -> it.hashCode().toString()
+                }
+            }
             Genre(id = id, name = "Kenyan Series", shows = items)
         }
         id == "upcoming_matches" || id.equals("Upcoming Matches", ignoreCase = true) || id.equals("Upcoming Sports", ignoreCase = true) || id.equals("Daily Agenda", ignoreCase = true) -> {
@@ -797,23 +890,56 @@ object NexaHomeProvider : Provider {
             }
         }
         id == "tmdb_movies_popular" -> {
-            val results = TMDb3.MovieLists.popular(page = page, language = "en").results.mapNotNull { tmdb.mapMulti(it) }
-            Genre(id = id, name = "Popular Movies", shows = results)
+            val mbMovies = runCatching { MovieBoxProvider.getMovies(page) }.getOrElse { emptyList() }
+            val shows = if (mbMovies.isNotEmpty()) mbMovies else {
+                TMDb3.MovieLists.popular(page = page, language = "en").results.mapNotNull { tmdb.mapMulti(it) }
+            }
+            Genre(id = id, name = "Popular Movies", shows = shows)
         }
         id == "tmdb_tv_top_rated" -> {
-            val results = TMDb3.TvSeriesLists.topRated(page = page, language = "en").results.mapNotNull { tmdb.mapMulti(it) }
-            Genre(id = id, name = "Top Rated TV Shows", shows = results)
+            val mbShows = runCatching { MovieBoxProvider.getCategory("western", page).filterIsInstance<TvShow>() }.getOrElse { emptyList() }
+            val shows = if (mbShows.isNotEmpty()) mbShows else {
+                TMDb3.TvSeriesLists.topRated(page = page, language = "en").results.mapNotNull { tmdb.mapMulti(it) }
+            }
+            Genre(id = id, name = "Top Rated TV Shows", shows = shows)
         }
         id == "tmdb_tv_popular" -> {
-            val results = TMDb3.TvSeriesLists.popular(page = page, language = "en").results.mapNotNull { tmdb.mapMulti(it) }
-            Genre(id = id, name = "Popular TV Shows", shows = results)
+            val mbShows = runCatching { MovieBoxProvider.getTvShows(page) }.getOrElse { emptyList() }
+            val shows = if (mbShows.isNotEmpty()) mbShows else {
+                TMDb3.TvSeriesLists.popular(page = page, language = "en").results.mapNotNull { tmdb.mapMulti(it) }
+            }
+            Genre(id = id, name = "Popular TV Shows", shows = shows)
         }
-        id == "tmdb_kids_family" -> tmdb.getKidsContent().let { Genre(id = id, name = it.name, shows = it.list) }
-        id == "tmdb_anime_universe" -> tmdb.getAnimeContent().let { Genre(id = id, name = it.name, shows = it.list) }
-        id == "tmdb_cartoon_movies" -> tmdb.getCartoonMovies().let { Genre(id = id, name = it.name, shows = it.list) }
-        id == "tmdb_cartoon_series" -> tmdb.getCartoonSeries().let { Genre(id = id, name = it.name, shows = it.list) }
-        id == "tmdb_japanese_anime" -> tmdb.getJapaneseAnime().let { Genre(id = id, name = it.name, shows = it.list) }
-        id == "tmdb_western_anime" -> tmdb.getWesternAnime().let { Genre(id = id, name = it.name, shows = it.list) }
+        id == "tmdb_kids_family" -> {
+            val mbKids = runCatching { MovieBoxProvider.getCategory("kids", page) }.getOrElse { emptyList() }
+            val list = if (mbKids.isNotEmpty()) mbKids else tmdb.getKidsContent().list
+            Genre(id = id, name = "Kids & Family", shows = list)
+        }
+        id == "tmdb_anime_universe" -> {
+            val mbAnime = runCatching { MovieBoxProvider.getCategory("anime", page) }.getOrElse { emptyList() }
+            val list = if (mbAnime.isNotEmpty()) mbAnime else tmdb.getAnimeContent().list
+            Genre(id = id, name = "Anime", shows = list)
+        }
+        id == "tmdb_cartoon_movies" -> {
+            val mbKids = runCatching { MovieBoxProvider.getCategory("kids", page).filterIsInstance<Movie>() }.getOrElse { emptyList() }
+            val list = if (mbKids.isNotEmpty()) mbKids else tmdb.getCartoonMovies().list
+            Genre(id = id, name = "Cartoon Movies", shows = list)
+        }
+        id == "tmdb_cartoon_series" -> {
+            val mbKids = runCatching { MovieBoxProvider.getCategory("kids", page).filterIsInstance<TvShow>() }.getOrElse { emptyList() }
+            val list = if (mbKids.isNotEmpty()) mbKids else tmdb.getCartoonSeries().list
+            Genre(id = id, name = "Cartoon Series", shows = list)
+        }
+        id == "tmdb_japanese_anime" -> {
+            val mbAnime = runCatching { MovieBoxProvider.getCategory("anime", page) }.getOrElse { emptyList() }
+            val list = if (mbAnime.isNotEmpty()) mbAnime else tmdb.getJapaneseAnime().list
+            Genre(id = id, name = "Japanese Anime", shows = list)
+        }
+        id == "tmdb_western_anime" -> {
+            val mbAnime = runCatching { MovieBoxProvider.getCategory("anime", page) }.getOrElse { emptyList() }
+            val list = if (mbAnime.isNotEmpty()) mbAnime else tmdb.getWesternAnime().list
+            Genre(id = id, name = "Western Anime", shows = list)
+        }
         id == "tmdb_anime_age_7_12" -> tmdb.getAnimeAge7to12().let { Genre(id = id, name = it.name, shows = it.list) }
         id == "upcoming_releases" || id == "tmdb_upcoming_movies" || id == "Upcoming & Most Anticipated" || id == "Coming Soon" || id == "📅 Coming Soon" -> {
             val cat = tmdb.getUpcomingMovies()
@@ -1162,16 +1288,88 @@ object NexaHomeProvider : Provider {
     }
 
     private suspend fun fetchKenyanSeriesMovieBoxRow(): Category? = coroutineScope {
-        val queries = listOf("Kenyan", "Nairobi", "African", "Blood Sisters", "Shanty Town", "Crime and Justice")
+        val queries = listOf("jiji", "mpakani", "kash money", "MTV shuga mashariki", "VOLUME", "MO-faya", "country 49", "country queen", "subterranea", "Kenyan", "Nairobi", "African", "Blood Sisters", "Shanty Town", "Crime and Justice")
         val items = queries.flatMap { q ->
             runCatching { MovieBoxProvider.search(q, 1, null) }.getOrElse { emptyList() }
-        }.filter { it is TvShow }.map { item ->
-            (item as? TvShow)?.copy()?.apply { providerName = "MovieBox" } ?: item
-        }.distinctBy { (it as? TvShow)?.id ?: it.hashCode().toString() }
+        }.filter { item ->
+            val title = when (item) {
+                is Movie -> item.title
+                is TvShow -> item.title
+                else -> ""
+            }.lowercase()
+            val overview = when (item) {
+                is Movie -> item.overview
+                is TvShow -> item.overview
+                else -> ""
+            }?.lowercase().orEmpty()
+
+            val combined = "$title $overview"
+            !combined.contains("music") &&
+            !combined.contains("song") &&
+            !combined.contains("album") &&
+            !combined.contains("audio") &&
+            !combined.contains("concert") &&
+            !combined.contains("remix") &&
+            !combined.contains("mixtape") &&
+            !combined.contains("dj ") &&
+            !combined.contains("ft.") &&
+            !combined.contains("feat.") &&
+            !combined.contains("official video") &&
+            !combined.contains("soundtrack")
+        }.map { item ->
+            when (item) {
+                is Movie -> item.copy().apply { providerName = "MovieBox" }
+                is TvShow -> item.copy().apply { providerName = "MovieBox" }
+                else -> item
+            }
+        }.distinctBy { 
+            when (it) {
+                is Movie -> it.id
+                is TvShow -> it.id
+                else -> it.hashCode().toString()
+            }
+        }
 
         if (items.isNotEmpty()) {
             Category(name = "🌍 Kenyan Series", list = items).apply { itemType = AppAdapter.Type.CATEGORY_MOBILE_ITEM }
         } else null
+    }
+
+    private suspend fun fetchShortTvRow(): Category? = coroutineScope {
+        val queries = listOf("Short Drama", "Vertical Drama", "Mini Series", "Reels", "Short TV", "Drama Short", "Shorts")
+        val items = queries.flatMap { q ->
+            runCatching { MovieBoxProvider.search(q, 1, null) }.getOrElse { emptyList() }
+        }.map { item ->
+            when (item) {
+                is Movie -> item.copy().apply { providerName = "MovieBox" }
+                is TvShow -> item.copy().apply { providerName = "MovieBox" }
+                else -> item
+            }
+        }.distinctBy {
+            when (it) {
+                is Movie -> it.id
+                is TvShow -> it.id
+                else -> it.hashCode().toString()
+            }
+        }
+
+        if (items.isNotEmpty()) {
+            Category(name = "📱 Short TV & Dramas", list = items).apply { itemType = AppAdapter.Type.CATEGORY_MOBILE_ITEM }
+        } else {
+            val homeCats = runCatching { MovieBoxProvider.getHome() }.getOrDefault(emptyList())
+            val fallbackList = homeCats.firstOrNull()?.list.orEmpty().take(15).map { item ->
+                when (item) {
+                    is Movie -> item.copy().apply { providerName = "MovieBox" }
+                    is TvShow -> item.copy().apply { providerName = "MovieBox" }
+                    else -> item
+                }
+            }
+            if (fallbackList.isNotEmpty()) {
+                Category(name = "📱 Short TV & Dramas", list = fallbackList).apply { itemType = AppAdapter.Type.CATEGORY_MOBILE_ITEM }
+            } else {
+                null
+            }
+        }
     }
 
     override suspend fun getPeople(id: String, page: Int): People = tmdb.getPeople(id, page)

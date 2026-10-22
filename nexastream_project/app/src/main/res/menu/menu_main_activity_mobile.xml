@@ -9,6 +9,11 @@
         android:title="@string/main_menu_home" />
 
     <item
+        android:id="@+id/short_tv"
+        android:icon="@drawable/ic_menu_home"
+        android:title="@string/main_menu_shorts" />
+
+    <item
         android:id="@+id/downloads"
         android:icon="@drawable/ic_download"
         android:title="@string/main_menu_downloads" />

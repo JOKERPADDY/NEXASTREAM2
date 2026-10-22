@@ -629,4 +629,21 @@
     <string name="livestream_offline_message">This stream is currently offline or unavailable. Please try again later.</string>
     <string name="livestream_retry_button">Try Again</string>
     <string name="livestream_back_button">Go Back</string>
+
+    <!-- Watch While Downloading & New Features -->
+    <string name="download_notification_channel_name">Media Downloads</string>
+    <string name="download_notification_channel_description">Notifications for background media downloads</string>
+    <string name="download_play_while_downloading">Play While Downloading</string>
+
+    <!-- JS Resource Sniffer -->
+    <string name="resource_sniffer_title">Web Resource Sniffer</string>
+    <string name="resource_sniffer_status_detecting">Detecting media streams…</string>
+    <string name="resource_sniffer_streams_found">%1$d stream(s) detected</string>
+    <string name="resource_sniffer_select_stream">Select Stream to Play</string>
+
+    <!-- ShortTV / Reels -->
+    <string name="main_menu_shorts">Shorts</string>
+    <string name="shorttv_watch_full_movie">Watch Full Movie</string>
+    <string name="shorttv_like">Like</string>
+    <string name="shorttv_share">Share</string>
 </resources>

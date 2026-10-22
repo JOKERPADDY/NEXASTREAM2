@@ -124,39 +124,36 @@ class PlayerViewModel(
             val servers = activeProvider.getServers(id, videoType)
             if (servers.isEmpty()) throw Exception("No servers found")
 
-            // REORDERING logic: 
-            // 1. User Preferred Server (if available)
-            // 2. VixSrc (as default requested by user)
-            // 3. Others (Provider default order)
             val preferredName = UserPreferences.preferredServerName
-            val distinctServers = servers.distinctBy { it.id }
+            val distinctServers = servers.distinctBy { if (it.name.isNotBlank()) it.name.uppercase().trim() else it.id }
             val finalServers = if (activeProvider is IptvProvider) {
-                // IPTV providers already order mirrors using persisted health and latency.
                 distinctServers
             } else distinctServers.sortedWith { s1, s2 ->
                 val n1 = s1.name.uppercase()
                 val n2 = s2.name.uppercase()
                 
-                if (!preferredName.isNullOrBlank() && preferredName.uppercase() != "VIXSRC") {
-                    val pref = preferredName.uppercase()
-                    if (n1 == pref && n2 != pref) return@sortedWith -1
-                    if (n2 == pref && n1 != pref) return@sortedWith 1
-                    if (n1.contains(pref) && !n2.contains(pref)) return@sortedWith -1
-                    if (n2.contains(pref) && !n1.contains(pref)) return@sortedWith 1
-                }
-                
-                // Priority 1: VixSrc (Server 2 - default primary stream server)
+                // 1. ABSOLUTE TOP PRIORITY: VixSrc (#1)
                 if (n1.contains("VIXSRC") && !n2.contains("VIXSRC")) return@sortedWith -1
                 if (n2.contains("VIXSRC") && !n1.contains("VIXSRC")) return@sortedWith 1
 
-                // Priority 2: MovieBox (Server 1 - fallback stream server)
+                // 2. SECOND PRIORITY: MovieBox (#2)
                 if (n1.contains("MOVIEBOX") && !n2.contains("MOVIEBOX")) return@sortedWith -1
                 if (n2.contains("MOVIEBOX") && !n1.contains("MOVIEBOX")) return@sortedWith 1
+
+                // 3. User preferred server (if set and not VixSrc/MovieBox)
+                if (!preferredName.isNullOrBlank()) {
+                    val pref = preferredName.uppercase()
+                    if (!pref.contains("VIXSRC") && !pref.contains("MOVIEBOX")) {
+                        if (n1 == pref && n2 != pref) return@sortedWith -1
+                        if (n2 == pref && n1 != pref) return@sortedWith 1
+                        if (n1.contains(pref) && !n2.contains(pref)) return@sortedWith -1
+                        if (n2.contains(pref) && !n1.contains(pref)) return@sortedWith 1
+                    }
+                }
                 
                 0
             }
             
-            // LOG POTENZIATO: Mostra tutti i server disponibili per il player
             Log.i("NexaStream", "[SERVERS LIST] -> Provider: ${activeProvider.name}")
             Log.i("NexaStream", "[SERVERS LIST] -> Found ${finalServers.size} servers: ${finalServers.joinToString { it.name }}")
 
@@ -175,7 +172,6 @@ class PlayerViewModel(
             var video = activeProvider.getVideo(server)
             if (video.source.isEmpty()) throw Exception("No source found")
 
-            // Real-Debrid Unrestrict Logic
             if (UserPreferences.realDebridToken.isNotBlank() && !video.source.contains("m3u8") && !video.source.contains("mp4")) {
                 val unrestrictedLink = RealDebridManager.unrestrict(video.source)
                 if (unrestrictedLink != null) {
@@ -184,10 +180,6 @@ class PlayerViewModel(
                 }
             }
 
-            // LOGICA SOTTOTITOLI GLOBALE: 
-            // Se il provider non ha già impostato un default (es. i "forced" in spagnolo),
-            // allora proviamo ad attivare l'ultimo sottotitolo usato dall'utente.
-            // MA: se siamo su un provider spagnolo e non ci sono forced, non dobbiamo attivare nulla.
             val currentProviderLang = UserPreferences.currentProvider?.language ?: ""
             val hasDefaultAlready = video.subtitles.any { it.default }
 
@@ -196,11 +188,10 @@ class PlayerViewModel(
                     video.subtitles
                         .firstOrNull { it.label.startsWith(UserPreferences.subtitleName ?: "") }
                         ?.default = true
-		}
+                }
             }
 
             Log.d("PlayerViewModel", "Estrazione video completata con successo")
-            // Save as preferred server if it works
             UserPreferences.preferredServerName = server.name
             _state.emit(State.SuccessLoadingVideo(video, server))
         } catch (e: Exception) {
@@ -306,7 +297,6 @@ class PlayerViewModel(
         }
 
         try {
-            // Try OpenSubtitles first
             val openSubtitles = when (videoType) {
                 is Video.Type.Episode -> {
                     OpenSubtitles.search(
@@ -326,7 +316,6 @@ class PlayerViewModel(
                 return@launch
             }
 
-            // Fallback to SubDL if OpenSubtitles has no results
             val subDlSubtitles = when (videoType) {
                 is Video.Type.Episode -> {
                     SubDL.search(
