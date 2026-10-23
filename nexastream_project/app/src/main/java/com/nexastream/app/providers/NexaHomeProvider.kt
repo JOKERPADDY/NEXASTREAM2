@@ -289,7 +289,7 @@ object NexaHomeProvider : Provider {
             }
         } }
 
-        val trendingTeenRomanceDef = async { limited { runCatching { fetchTeenRomanceFromMovieBox(isMovie = false, name = "Teen Romance") }.getOrNull() } }
+        val trendingTeenRomanceDef = async { limited { runCatching { tmdb.getTeenRomance(isMovie = false, name = "Teen Romance") }.getOrNull() } }
         val animeRowsDef = async { fetchAnimeRows() }
         val kidsRowsDef = async { fetchKidsRows() }
         val seriesRowsDef = async { fetchSeriesMegaRows() }
@@ -320,7 +320,6 @@ object NexaHomeProvider : Provider {
         val wweRowDef = async { limited { runCatching { fetchWweMovieBoxRow() }.getOrNull() } }
         val nollywoodRowDef = async { limited { runCatching { fetchNollywoodMovieBoxRow() }.getOrNull() } }
         val kenyanRowDef = async { limited { runCatching { fetchKenyanSeriesMovieBoxRow() }.getOrNull() } }
-        val shortTvRowDef = async { limited { runCatching { fetchShortTvRow() }.getOrNull() } }
 
         val kidsContent = kidsContentDef.await()
         val animeContent = animeContentDef.await()
@@ -338,7 +337,6 @@ object NexaHomeProvider : Provider {
         val wweRow = wweRowDef.await()
         val nollywoodRow = nollywoodRowDef.await()
         val kenyanRow = kenyanRowDef.await()
-        val shortTvRow = shortTvRowDef.await()
 
         val categories = mutableListOf<Category>()
         categories.addAll(phase1Categories)
@@ -348,7 +346,6 @@ object NexaHomeProvider : Provider {
         wweRow?.let { categories.add(it) }
         nollywoodRow?.let { categories.add(it) }
         kenyanRow?.let { categories.add(it) }
-        shortTvRow?.let { categories.add(it) }
 
         kidsContent?.let { 
             if (categories.none { cat -> cat.name == "Kids Banner" }) {
@@ -449,7 +446,7 @@ object NexaHomeProvider : Provider {
             async { limited { fetchMovieBoxCategory("Action & Adventure Series", "Action Series", false) { tmdb.getGenreTv(10759, "Action & Adventure Series") } } },
             async { limited { fetchMovieBoxCategory("Comedy Series", "Comedy Series", false) { tmdb.getGenreTv(35, "Comedy Series") } } },
             async { limited { fetchMovieBoxCategory("Crime Series", "Crime Series", false) { tmdb.getGenreTv(80, "Crime Series") } } },
-            async { limited { fetchMovieBoxCategory("Teen Romance Series", "Teen Romance Series", false) { fetchTeenRomanceFromMovieBox(isMovie = false, name = "Teen Romance Series") } } },
+            async { limited { fetchMovieBoxCategory("Teen Romance Series", "Teen Romance Series", false) { tmdb.getTeenRomance(isMovie = false, name = "Teen Romance Series") } } },
             async { limited { fetchMovieBoxCategory("Documentary Series", "Documentary Series", false) { tmdb.getGenreTv(99, "Documentary Series") } } },
             async { limited { fetchMovieBoxCategory("Drama Series", "Drama Series", false) { tmdb.getGenreTv(18, "Drama Series") } } },
             async { limited { fetchMovieBoxCategory("Family Series", "Family Series", false) { tmdb.getGenreTv(10751, "Family Series") } } },
@@ -491,7 +488,7 @@ object NexaHomeProvider : Provider {
             async { limited { fetchMovieBoxCategory("Biography Movies", "Biography Movies", true) { tmdb.getBiography(true, "Biography Movies") } } },
             async { limited { fetchMovieBoxCategory("Sport Movies", "Sport Movies", true) { tmdb.getSport(true, "Sport Movies") } } },
             async { limited { fetchMovieBoxCategory("Western Movies", "Western Movies", true) { tmdb.getGenreMovies(37, "Western Movies") } } },
-            async { limited { fetchMovieBoxCategory("Teen Romance Movies", "Teen Romance Movies", true) { fetchTeenRomanceFromMovieBox(isMovie = true, name = "Teen Romance Movies") } } }
+            async { limited { fetchMovieBoxCategory("Teen Romance Movies", "Teen Romance Movies", true) { tmdb.getTeenRomance(isMovie = true, name = "Teen Romance Movies") } } }
         ).awaitAll()
     }
 
@@ -705,13 +702,24 @@ object NexaHomeProvider : Provider {
             val profile = com.nexastream.app.utils.RecommendationEngine.buildUserInterestProfile(db)
             val topGenres = profile.genreWeights.entries.sortedByDescending { it.value }.take(3).map { it.key }
 
-            val results = if (topGenres.isNotEmpty()) {
+            val baseResults = if (topGenres.isNotEmpty()) {
                 val aiIntent = com.nexastream.app.utils.AiSearchEngine.parseQuery(topGenres.joinToString(" "))
                 com.nexastream.app.utils.AiSearchEngine.discoverByAiIntent(aiIntent, language = "en", page = page)
             } else {
                 TMDb3.Trending.all(TMDb3.Params.TimeWindow.WEEK, page = page, language = "en").results.mapNotNull { tmdb.mapMulti(it) }
             }
-            Genre(id = id, name = "Recommended For You", shows = results.filterIsInstance<com.nexastream.app.models.Show>())
+
+            val nollywoodFeatured = runCatching { fetchNollywoodMovieBoxRow()?.list.orEmpty().take(3) }.getOrDefault(emptyList())
+            val kenyanFeatured = runCatching { fetchKenyanSeriesMovieBoxRow()?.list.orEmpty().take(3) }.getOrDefault(emptyList())
+
+            val combined = (baseResults + nollywoodFeatured + kenyanFeatured).distinctBy { item ->
+                when (item) {
+                    is com.nexastream.app.models.Movie -> "movie:${item.id}"
+                    is com.nexastream.app.models.TvShow -> "tv:${item.id}"
+                    else -> item.hashCode().toString()
+                }
+            }
+            Genre(id = id, name = "Recommended For You", shows = combined.filterIsInstance<com.nexastream.app.models.Show>())
         }
         id.startsWith("tmdb_movies_genre_") -> {
             val cat = tmdb.getGenreMovies(id.substringAfter("tmdb_movies_genre_").toInt(), "")
@@ -764,11 +772,11 @@ object NexaHomeProvider : Provider {
             }
         }
         id == "teen_romance_movies" -> {
-            val cat = fetchTeenRomanceFromMovieBox(isMovie = true, name = "Teen Romance Movies")
+            val cat = tmdb.getTeenRomance(isMovie = true, page = page, name = "Teen Romance Movies")
             Genre(id = id, name = cat.name, shows = cat.list)
         }
         id == "teen_romance_series" -> {
-            val cat = fetchTeenRomanceFromMovieBox(isMovie = false, name = "Teen Romance Series")
+            val cat = tmdb.getTeenRomance(isMovie = false, page = page, name = "Teen Romance Series")
             Genre(id = id, name = cat.name, shows = cat.list)
         }
         id == "wwe_moviebox" -> {
@@ -779,55 +787,82 @@ object NexaHomeProvider : Provider {
             Genre(id = id, name = "WWE Live & Replay", shows = items)
         }
         id == "nollywood_movies" -> {
-            val queries = listOf("Nollywood", "Nigerian", "Lagos", "Anikulapo", "King of Boys", "The Wedding Party", "Brotherhood")
-            val items = queries.flatMap { q ->
+            val tmdbCat = runCatching { tmdb.getNollywoodMovies(page = page, name = "Nollywood Movies") }.getOrNull()
+            val tmdbItems = tmdbCat?.list.orEmpty().filterIsInstance<Movie>()
+
+            val queries = listOf("Nollywood", "Nigerian", "Lagos", "Anikulapo", "King of Boys", "The Wedding Party", "Brotherhood", "Gangs of Lagos", "The Black Book", "A Tribe Called Judah", "Jagun Jagun", "Lisabi", "Breath of Life")
+            val mbItems = queries.flatMap { q ->
                 runCatching { MovieBoxProvider.search(q, page, null) }.getOrElse { emptyList() }
-            }.filterIsInstance<Movie>().distinctBy { it.id }
-            Genre(id = id, name = "Nollywood Movies", shows = items)
+            }.filterIsInstance<Movie>().map { item ->
+                item.copy().apply { providerName = "MovieBox" }
+            }
+
+            val existingNormalizedTitles = tmdbItems.mapTo(mutableSetOf()) {
+                it.title.lowercase().replace(Regex("[^a-z0-9]"), "")
+            }
+
+            val extraMbItems = mbItems.filter { item ->
+                val norm = item.title.lowercase().replace(Regex("[^a-z0-9]"), "")
+                norm.isNotEmpty() && existingNormalizedTitles.add(norm)
+            }
+
+            val combined = (tmdbItems + extraMbItems).distinctBy { it.id }
+            Genre(id = id, name = "Nollywood Movies", shows = combined)
         }
         id == "kenyan_series" -> {
-            val queries = listOf("jiji", "mpakani", "kash money", "MTV shuga mashariki", "VOLUME", "MO-faya", "country 49", "country queen", "subterranea", "Kenyan", "Nairobi", "African", "Blood Sisters", "Shanty Town", "Crime and Justice")
-            val items = queries.flatMap { q ->
+            val tmdbCat = runCatching { tmdb.getKenyanContent(page = page, name = "Kenyan Movies & Series") }.getOrNull()
+            val tmdbItems = tmdbCat?.list.orEmpty().filterIsInstance<com.nexastream.app.models.Show>()
+
+            val queries = listOf(
+                "Country Queen", "Country 49", "Crime and Justice", "Single Kiasi", "Pepeta",
+                "Subterranea", "Volume", "Mpakani", "Kash Money", "Nairobi Half Life", "Click Click Bang",
+                "Disconnect", "Poacher", "Kina", "Salem", "Selina", "Zora", "Njoro Wa Uba",
+                "Softie", "Supa Modo", "Kati Kati", "Faithless"
+            )
+            val mbItems = queries.flatMap { q ->
                 runCatching { MovieBoxProvider.search(q, page, null) }.getOrElse { emptyList() }
             }.filter { item ->
-                val title = when (item) {
-                    is Movie -> item.title
-                    is TvShow -> item.title
-                    else -> ""
-                }.lowercase()
-                val overview = when (item) {
-                    is Movie -> item.overview
-                    is TvShow -> item.overview
-                    else -> ""
-                }?.lowercase().orEmpty()
-
+                val title = when (item) { is Movie -> item.title; is TvShow -> item.title; else -> "" }.lowercase()
+                val overview = when (item) { is Movie -> item.overview; is TvShow -> item.overview; else -> "" }?.lowercase().orEmpty()
                 val combined = "$title $overview"
-                !combined.contains("music") &&
-                !combined.contains("song") &&
-                !combined.contains("album") &&
-                !combined.contains("audio") &&
-                !combined.contains("concert") &&
-                !combined.contains("remix") &&
-                !combined.contains("mixtape") &&
-                !combined.contains("dj ") &&
-                !combined.contains("ft.") &&
-                !combined.contains("feat.") &&
-                !combined.contains("official video") &&
-                !combined.contains("soundtrack")
+                !combined.contains("plug") && !combined.contains("news") && !combined.contains("vlog") &&
+                !combined.contains("interview") && !combined.contains("podcast") && !combined.contains("reaction") &&
+                !combined.contains("tiktok") && !combined.contains("short") && !combined.contains("skit") &&
+                !combined.contains("part ") && !combined.contains("full video") && !combined.contains("whatsapp") &&
+                !combined.contains("status") && !combined.contains("funny") && !combined.contains("prank") &&
+                !combined.contains("gossip") && !combined.contains("viral") && !combined.contains("update") &&
+                !combined.contains("music") && !combined.contains("song") && !combined.contains("album") &&
+                !combined.contains("audio") && !combined.contains("concert") && !combined.contains("remix") &&
+                !combined.contains("mixtape") && !combined.contains("dj ") && !combined.contains("ft.") &&
+                !combined.contains("feat.") && !combined.contains("official video") && !combined.contains("soundtrack") &&
+                !combined.contains("amejibeba") && !combined.contains("waithira") && !combined.contains("local news")
             }.map { item ->
                 when (item) {
                     is Movie -> item.copy().apply { providerName = "MovieBox" }
                     is TvShow -> item.copy().apply { providerName = "MovieBox" }
                     else -> item
                 }
-            }.distinctBy { 
-                when (it) {
-                    is Movie -> it.id
-                    is TvShow -> it.id
-                    else -> it.hashCode().toString()
+            }
+
+            val existingNormalizedTitles = tmdbItems.mapTo(mutableSetOf()) { item ->
+                val title = when (item) { is Movie -> item.title; is TvShow -> item.title; else -> "" }
+                title.lowercase().replace(Regex("[^a-z0-9]"), "")
+            }
+
+            val extraMbItems = mbItems.filter { item ->
+                val title = when (item) { is Movie -> item.title; is TvShow -> item.title; else -> "" }
+                val norm = title.lowercase().replace(Regex("[^a-z0-9]"), "")
+                norm.isNotEmpty() && existingNormalizedTitles.add(norm)
+            }
+
+            val combined = (tmdbItems + extraMbItems).distinctBy { item ->
+                when (item) {
+                    is Movie -> "movie:${item.id}"
+                    is TvShow -> "tv:${item.id}"
+                    else -> item.hashCode().toString()
                 }
             }
-            Genre(id = id, name = "Kenyan Series", shows = items)
+            Genre(id = id, name = "Kenyan Movies & Series", shows = combined)
         }
         id == "upcoming_matches" || id.equals("Upcoming Matches", ignoreCase = true) || id.equals("Upcoming Sports", ignoreCase = true) || id.equals("Daily Agenda", ignoreCase = true) -> {
             val matches = runCatching { AkSportsLiveProvider.getUpcomingMatches() }.getOrDefault(emptyList())
@@ -1056,7 +1091,7 @@ object NexaHomeProvider : Provider {
         val profile = com.nexastream.app.utils.RecommendationEngine.buildUserInterestProfile(db)
         val topGenres = profile.genreWeights.entries.sortedByDescending { it.value }.take(3).map { it.key }
 
-        val results: List<AppAdapter.Item> = if (topGenres.isNotEmpty()) {
+        val baseResults: List<AppAdapter.Item> = if (topGenres.isNotEmpty()) {
             val aiIntent = com.nexastream.app.utils.AiSearchEngine.parseQuery(topGenres.joinToString(" "))
             com.nexastream.app.utils.AiSearchEngine.discoverByAiIntent(aiIntent, language = "en", page = 1)
         } else {
@@ -1065,8 +1100,19 @@ object NexaHomeProvider : Provider {
             }.getOrNull().orEmpty()
         }
 
-        if (results.isNotEmpty()) {
-            Category(name = "✨ Recommended For You", list = results.filterIsInstance<com.nexastream.app.models.Show>())
+        val nollywoodFeatured = runCatching { fetchNollywoodMovieBoxRow()?.list.orEmpty().take(3) }.getOrDefault(emptyList())
+        val kenyanFeatured = runCatching { fetchKenyanSeriesMovieBoxRow()?.list.orEmpty().take(3) }.getOrDefault(emptyList())
+
+        val combinedResults = (baseResults + nollywoodFeatured + kenyanFeatured).distinctBy { item ->
+            when (item) {
+                is com.nexastream.app.models.Movie -> "movie:${item.id}"
+                is com.nexastream.app.models.TvShow -> "tv:${item.id}"
+                else -> item.hashCode().toString()
+            }
+        }
+
+        if (combinedResults.isNotEmpty()) {
+            Category(name = "✨ Recommended For You", list = combinedResults.filterIsInstance<com.nexastream.app.models.Show>())
                 .apply { itemType = AppAdapter.Type.CATEGORY_MOBILE_ITEM }
         } else null
     }
@@ -1163,93 +1209,7 @@ object NexaHomeProvider : Provider {
         } else null
     }
 
-    private suspend fun fetchTeenRomanceFromMovieBox(isMovie: Boolean, name: String): Category = coroutineScope {
-        val seedQueries = if (isMovie) {
-            listOf("Culpa Mia", "Through My Window", "The Kissing Booth", "To All the Boys", "Purple Hearts", "The Tearsmith", "My Fault", "After Ever Happy", "The Inbetween", "Purple Hearts", "After We Collided")
-        } else {
-            listOf("My Life with the Walter Boys", "XO Kitty", "Euphoria", "Heartbreak High", "Maxton Hall", "The Summer I Turned Pretty", "Off Campus", "Fallen", "Never Have I Ever", "Ginny & Georgia")
-        }
 
-        val movieBoxSearchDef = async {
-            seedQueries.flatMap { query ->
-                runCatching { MovieBoxProvider.search(query, 1, null) }.getOrElse { emptyList() }
-            }.filter { item ->
-                if (isMovie) item is Movie else item is TvShow
-            }.filter { item ->
-                val title = when (item) {
-                    is Movie -> item.title
-                    is TvShow -> item.title
-                    else -> ""
-                }.lowercase()
-                val overview = when (item) {
-                    is Movie -> item.overview
-                    is TvShow -> item.overview
-                    else -> ""
-                }?.lowercase().orEmpty()
-
-                val combined = "$title $overview"
-                !combined.contains("anime") &&
-                !combined.contains("animation") &&
-                !combined.contains("cartoon") &&
-                !combined.contains("animated") &&
-                !combined.contains("manga")
-            }.onEach { item ->
-                when (item) {
-                    is Movie -> item.providerName = "MovieBox"
-                    is TvShow -> item.providerName = "MovieBox"
-                }
-            }.sortedByDescending { item ->
-                when (item) {
-                    is Movie -> item.rating ?: 0.0
-                    is TvShow -> item.rating ?: 0.0
-                    else -> 0.0
-                }
-            }
-        }
-
-        val tmdbCategoryDef = async {
-            runCatching { tmdb.getTeenRomance(isMovie = isMovie, name = name) }.getOrNull()
-        }
-
-        val movieBoxItems = movieBoxSearchDef.await()
-        val tmdbCategory = tmdbCategoryDef.await()
-        val tmdbItems = tmdbCategory?.list.orEmpty().filter { item ->
-            val title = when (item) {
-                is Movie -> item.title
-                is TvShow -> item.title
-                else -> ""
-            }.lowercase()
-            val overview = when (item) {
-                is Movie -> item.overview
-                is TvShow -> item.overview
-                else -> ""
-            }?.lowercase().orEmpty()
-
-            !title.contains("anime") &&
-            !title.contains("animation") &&
-            !title.contains("cartoon") &&
-            !title.contains("animated") &&
-            !overview.contains("anime") &&
-            !overview.contains("animation") &&
-            !overview.contains("cartoon")
-        }
-
-        val combinedList = (movieBoxItems + tmdbItems).distinctBy { item ->
-            when (item) {
-                is Movie -> item.title.lowercase().replace(Regex("[^a-z0-9]"), "")
-                is TvShow -> item.title.lowercase().replace(Regex("[^a-z0-9]"), "")
-                else -> item.hashCode().toString()
-            }
-        }.sortedByDescending { item ->
-            when (item) {
-                is Movie -> item.rating ?: 0.0
-                is TvShow -> item.rating ?: 0.0
-                else -> 0.0
-            }
-        }
-
-        Category(name = name, list = combinedList)
-    }
 
     private suspend fun fetchWweMovieBoxRow(): Category? = coroutineScope {
         val queries = listOf("WWE", "WrestleMania", "WWE Raw", "WWE SmackDown", "AEW", "Wrestling")
@@ -1275,101 +1235,89 @@ object NexaHomeProvider : Provider {
     }
 
     private suspend fun fetchNollywoodMovieBoxRow(): Category? = coroutineScope {
-        val queries = listOf("Nollywood", "Nigerian", "Lagos", "Anikulapo", "King of Boys", "The Wedding Party", "Brotherhood")
-        val items = queries.flatMap { q ->
-            runCatching { MovieBoxProvider.search(q, 1, null) }.getOrElse { emptyList() }
-        }.filter { it is Movie }.map { item ->
-            (item as? Movie)?.copy()?.apply { providerName = "MovieBox" } ?: item
-        }.distinctBy { (it as? Movie)?.id ?: it.hashCode().toString() }
+        val tmdbCat = runCatching { tmdb.getNollywoodMovies(page = 1, name = "🎬 Nollywood Movies") }.getOrNull()
+        val tmdbItems = tmdbCat?.list.orEmpty().filterIsInstance<Movie>()
 
-        if (items.isNotEmpty()) {
-            Category(name = "🎬 Nollywood Movies", list = items).apply { itemType = AppAdapter.Type.CATEGORY_MOBILE_ITEM }
+        val queries = listOf("Nollywood", "Nigerian", "Lagos", "Anikulapo", "King of Boys", "The Wedding Party", "Brotherhood", "Gangs of Lagos", "The Black Book", "A Tribe Called Judah", "Jagun Jagun", "Lisabi", "Breath of Life")
+        val mbItems = queries.flatMap { q ->
+            runCatching { MovieBoxProvider.search(q, 1, null) }.getOrElse { emptyList() }
+        }.filterIsInstance<Movie>().map { item ->
+            item.copy().apply { providerName = "MovieBox" }
+        }
+
+        val existingNormalizedTitles = tmdbItems.mapTo(mutableSetOf()) {
+            it.title.lowercase().replace(Regex("[^a-z0-9]"), "")
+        }
+
+        val extraMbItems = mbItems.filter { item ->
+            val norm = item.title.lowercase().replace(Regex("[^a-z0-9]"), "")
+            norm.isNotEmpty() && existingNormalizedTitles.add(norm)
+        }
+
+        val combined = (tmdbItems + extraMbItems).distinctBy { it.id }
+
+        if (combined.isNotEmpty()) {
+            Category(name = "🎬 Nollywood Movies", list = combined).apply { itemType = AppAdapter.Type.CATEGORY_MOBILE_ITEM }
         } else null
     }
 
     private suspend fun fetchKenyanSeriesMovieBoxRow(): Category? = coroutineScope {
-        val queries = listOf("jiji", "mpakani", "kash money", "MTV shuga mashariki", "VOLUME", "MO-faya", "country 49", "country queen", "subterranea", "Kenyan", "Nairobi", "African", "Blood Sisters", "Shanty Town", "Crime and Justice")
-        val items = queries.flatMap { q ->
+        val tmdbCat = runCatching { tmdb.getKenyanContent(page = 1, name = "🌍 Kenyan Movies & Series") }.getOrNull()
+        val tmdbItems = tmdbCat?.list.orEmpty().filterIsInstance<com.nexastream.app.models.Show>()
+
+        val queries = listOf(
+            "Country Queen", "Country 49", "Crime and Justice", "Single Kiasi", "Pepeta",
+            "Subterranea", "Volume", "Mpakani", "Kash Money", "Nairobi Half Life", "Click Click Bang",
+            "Disconnect", "Poacher", "Kina", "Salem", "Selina", "Zora", "Njoro Wa Uba",
+            "Softie", "Supa Modo", "Kati Kati", "Faithless"
+        )
+        val mbItems = queries.flatMap { q ->
             runCatching { MovieBoxProvider.search(q, 1, null) }.getOrElse { emptyList() }
         }.filter { item ->
-            val title = when (item) {
-                is Movie -> item.title
-                is TvShow -> item.title
-                else -> ""
-            }.lowercase()
-            val overview = when (item) {
-                is Movie -> item.overview
-                is TvShow -> item.overview
-                else -> ""
-            }?.lowercase().orEmpty()
-
+            val title = when (item) { is Movie -> item.title; is TvShow -> item.title; else -> "" }.lowercase()
+            val overview = when (item) { is Movie -> item.overview; is TvShow -> item.overview; else -> "" }?.lowercase().orEmpty()
             val combined = "$title $overview"
-            !combined.contains("music") &&
-            !combined.contains("song") &&
-            !combined.contains("album") &&
-            !combined.contains("audio") &&
-            !combined.contains("concert") &&
-            !combined.contains("remix") &&
-            !combined.contains("mixtape") &&
-            !combined.contains("dj ") &&
-            !combined.contains("ft.") &&
-            !combined.contains("feat.") &&
-            !combined.contains("official video") &&
-            !combined.contains("soundtrack")
+            !combined.contains("plug") && !combined.contains("news") && !combined.contains("vlog") &&
+            !combined.contains("interview") && !combined.contains("podcast") && !combined.contains("reaction") &&
+            !combined.contains("tiktok") && !combined.contains("short") && !combined.contains("skit") &&
+            !combined.contains("part ") && !combined.contains("full video") && !combined.contains("whatsapp") &&
+            !combined.contains("status") && !combined.contains("funny") && !combined.contains("prank") &&
+            !combined.contains("gossip") && !combined.contains("viral") && !combined.contains("update") &&
+            !combined.contains("music") && !combined.contains("song") && !combined.contains("album") &&
+            !combined.contains("audio") && !combined.contains("concert") && !combined.contains("remix") &&
+            !combined.contains("mixtape") && !combined.contains("dj ") && !combined.contains("ft.") &&
+            !combined.contains("feat.") && !combined.contains("official video") && !combined.contains("soundtrack") &&
+            !combined.contains("amejibeba") && !combined.contains("waithira") && !combined.contains("local news")
         }.map { item ->
             when (item) {
                 is Movie -> item.copy().apply { providerName = "MovieBox" }
                 is TvShow -> item.copy().apply { providerName = "MovieBox" }
                 else -> item
             }
-        }.distinctBy { 
-            when (it) {
-                is Movie -> it.id
-                is TvShow -> it.id
-                else -> it.hashCode().toString()
+        }
+
+        val existingNormalizedTitles = tmdbItems.mapTo(mutableSetOf()) { item ->
+            val title = when (item) { is Movie -> item.title; is TvShow -> item.title; else -> "" }
+            title.lowercase().replace(Regex("[^a-z0-9]"), "")
+        }
+
+        val extraMbItems = mbItems.filter { item ->
+            val title = when (item) { is Movie -> item.title; is TvShow -> item.title; else -> "" }
+            val norm = title.lowercase().replace(Regex("[^a-z0-9]"), "")
+            norm.isNotEmpty() && existingNormalizedTitles.add(norm)
+        }
+
+        val combined = (tmdbItems + extraMbItems).distinctBy { item ->
+            when (item) {
+                is Movie -> "movie:${item.id}"
+                is TvShow -> "tv:${item.id}"
+                else -> item.hashCode().toString()
             }
         }
 
-        if (items.isNotEmpty()) {
-            Category(name = "🌍 Kenyan Series", list = items).apply { itemType = AppAdapter.Type.CATEGORY_MOBILE_ITEM }
+        if (combined.isNotEmpty()) {
+            Category(name = "🌍 Kenyan Movies & Series", list = combined).apply { itemType = AppAdapter.Type.CATEGORY_MOBILE_ITEM }
         } else null
-    }
-
-    private suspend fun fetchShortTvRow(): Category? = coroutineScope {
-        val queries = listOf("Short Drama", "Vertical Drama", "Mini Series", "Reels", "Short TV", "Drama Short", "Shorts")
-        val items = queries.flatMap { q ->
-            runCatching { MovieBoxProvider.search(q, 1, null) }.getOrElse { emptyList() }
-        }.map { item ->
-            when (item) {
-                is Movie -> item.copy().apply { providerName = "MovieBox" }
-                is TvShow -> item.copy().apply { providerName = "MovieBox" }
-                else -> item
-            }
-        }.distinctBy {
-            when (it) {
-                is Movie -> it.id
-                is TvShow -> it.id
-                else -> it.hashCode().toString()
-            }
-        }
-
-        if (items.isNotEmpty()) {
-            Category(name = "📱 Short TV & Dramas", list = items).apply { itemType = AppAdapter.Type.CATEGORY_MOBILE_ITEM }
-        } else {
-            val homeCats = runCatching { MovieBoxProvider.getHome() }.getOrDefault(emptyList())
-            val fallbackList = homeCats.firstOrNull()?.list.orEmpty().take(15).map { item ->
-                when (item) {
-                    is Movie -> item.copy().apply { providerName = "MovieBox" }
-                    is TvShow -> item.copy().apply { providerName = "MovieBox" }
-                    else -> item
-                }
-            }
-            if (fallbackList.isNotEmpty()) {
-                Category(name = "📱 Short TV & Dramas", list = fallbackList).apply { itemType = AppAdapter.Type.CATEGORY_MOBILE_ITEM }
-            } else {
-                null
-            }
-        }
     }
 
     override suspend fun getPeople(id: String, page: Int): People = tmdb.getPeople(id, page)

@@ -301,7 +301,7 @@ class HomeMobileFragment : Fragment() {
                         "🦇 DC Extended Universe", "DC Extended Universe" -> "dc" to category.name
                         "⚡ WWE Live & Replay", "WWE Live & Replay" -> "wwe_moviebox" to category.name
                         "🎬 Nollywood Movies", "Nollywood Movies" -> "nollywood_movies" to category.name
-                        "🌍 Kenyan Series", "Kenyan Series" -> "kenyan_series" to category.name
+                        "🌍 Kenyan Movies & Series", "Kenyan Movies & Series", "🌍 Kenyan Series", "Kenyan Series" -> "kenyan_series" to category.name
 
                         else -> {
                             val name = category.name
@@ -409,6 +409,8 @@ class HomeMobileFragment : Fragment() {
                 "Thriller Movies", "Romance Movies", "Sci-Fi Movies", "Documentary Movies",
                 "Horror Movies", "Fantasy Movies", "Family Movies", "History Movies",
                 "Mystery Movies", "War Movies", "Biography Movies", "Sport Movies", "Western Movies", "Teen Romance Movies",
+                "🎬 Nollywood Movies", "Nollywood Movies",
+                "🌍 Kenyan Movies & Series", "Kenyan Movies & Series", "🌍 Kenyan Series", "Kenyan Series",
                 "All Movies", "Top Movies", "At Cinema"
             )
             val seriesCategories = listOf(
@@ -419,6 +421,7 @@ class HomeMobileFragment : Fragment() {
                 "Documentary Series", "Drama Series", "Family Series", "Sci-Fi & Fantasy Series",
                 "History Series", "Horror Series", "Mystery Series", "Romance Series",
                 "Thriller Series", "War & Politics Series", "Biography Series", "Reality TV", "Reality Series", "Sport Series", "Western Series",
+                "🌍 Kenyan Movies & Series", "Kenyan Movies & Series", "🌍 Kenyan Series", "Kenyan Series",
                 "All TV Shows", "Top TV Shows", "New Season & Episode", "Musical Series"
             )
 
@@ -467,6 +470,12 @@ class HomeMobileFragment : Fragment() {
                     cat.name == "Recommended For You" ||
                     cat.name == "Upcoming Matches" ||
                     cat.name == "Upcoming Sports" ||
+                    cat.name == "🎬 Nollywood Movies" ||
+                    cat.name == "Nollywood Movies" ||
+                    cat.name == "🌍 Kenyan Movies & Series" ||
+                    cat.name == "🌍 Kenyan Series" ||
+                    cat.name == "Kenyan Movies & Series" ||
+                    cat.name == "Kenyan Series" ||
                     isLiveCategory(cat.name) ||
                     (cat.name !in moviesCategories &&
                     cat.name !in seriesCategories &&

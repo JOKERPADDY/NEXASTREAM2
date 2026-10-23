@@ -279,9 +279,4 @@
         android:id="@+id/settings_about"
         android:name="com.nexastream.app.fragments.settings.about.SettingsAboutMobileFragment"
         android:label="fragment_settings_about_mobile" />
-    <fragment
-        android:id="@+id/short_tv"
-        android:name="com.nexastream.app.fragments.shorttv.ShortTvFragment"
-        android:label="@string/main_menu_shorts"
-        tools:layout="@layout/fragment_short_tv" />
 </navigation>

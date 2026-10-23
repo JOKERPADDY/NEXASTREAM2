@@ -262,7 +262,7 @@ object DownloadQualityFormatter {
         }
     }
 
-    private val serverNameMap = java.util.concurrent.ConcurrentHashMap<String, String>()
+   private val serverNameMap = java.util.concurrent.ConcurrentHashMap<String, String>()
     private val serverCounter = java.util.concurrent.atomic.AtomicInteger(1)
 
     fun anonymizeName(rawName: String): String {

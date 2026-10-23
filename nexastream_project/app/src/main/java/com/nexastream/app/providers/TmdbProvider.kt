@@ -691,6 +691,101 @@ class TmdbProvider(override val language: String) : Provider {
         Category(name = name, list = results)
     }
 
+    suspend fun getNollywoodMovies(page: Int = 1, name: String = "Nollywood Movies"): Category = coroutineScope {
+        val targetPage = if (page < 1) 1 else page
+        val p1 = async {
+            runCatching {
+                TMDb3.Discover.movie(
+                    language = language,
+                    withOriginCountry = TMDb3.Params.WithBuilder<String>("NG"),
+                    sortBy = TMDb3.Params.SortBy.Movie.POPULARITY_DESC,
+                    page = targetPage
+                ).results.mapNotNull { mapMulti(it) }
+            }.getOrElse { emptyList() }
+        }
+        val p2 = async {
+            runCatching {
+                TMDb3.Discover.movie(
+                    language = language,
+                    withKeywords = TMDb3.Params.WithBuilder<TMDb3.Keyword.KeywordId>(10683),
+                    sortBy = TMDb3.Params.SortBy.Movie.POPULARITY_DESC,
+                    page = targetPage
+                ).results.mapNotNull { mapMulti(it) }
+            }.getOrElse { emptyList() }
+        }
+        val p3 = async {
+            runCatching {
+                TMDb3.Discover.movie(
+                    language = language,
+                    withOriginalLanguage = TMDb3.Params.WithBuilder<String>("yo"),
+                    sortBy = TMDb3.Params.SortBy.Movie.POPULARITY_DESC,
+                    page = targetPage
+                ).results.mapNotNull { mapMulti(it) }
+            }.getOrElse { emptyList() }
+        }
+        val seeds = if (targetPage == 1) async {
+            runCatching {
+                listOf("Nollywood", "A Tribe Called Judah", "The Black Book", "Gangs of Lagos", "Anikulapo", "Jagun Jagun", "King of Boys", "Brotherhood", "Lisabi", "Breath of Life", "Farmer's Bride")
+                    .flatMap { TMDb3.Search.multi(query = it, language = language).results }
+                    .filterIsInstance<TMDb3.Movie>()
+                    .mapNotNull { mapMulti(it) }
+            }.getOrElse { emptyList() }
+        } else null
+
+        val allItems = (p1.await() + p2.await() + p3.await() + (seeds?.await() ?: emptyList()))
+            .filterIsInstance<Movie>()
+            .distinctBy { it.id }
+
+        Category(name = name, list = allItems)
+    }
+
+    suspend fun getKenyanContent(page: Int = 1, name: String = "Kenyan Movies & Series"): Category = coroutineScope {
+        val targetPage = if (page < 1) 1 else page
+        val moviesDef = async {
+            runCatching {
+                TMDb3.Discover.movie(
+                    language = language,
+                    withOriginCountry = TMDb3.Params.WithBuilder<String>("KE"),
+                    sortBy = TMDb3.Params.SortBy.Movie.POPULARITY_DESC,
+                    page = targetPage
+                ).results.mapNotNull { mapMulti(it) }
+            }.getOrElse { emptyList() }
+        }
+        val tvDef = async {
+            runCatching {
+                TMDb3.Discover.tv(
+                    language = language,
+                    withOriginCountry = TMDb3.Params.WithBuilder<String>("KE"),
+                    sortBy = TMDb3.Params.SortBy.Tv.POPULARITY_DESC,
+                    page = targetPage
+                ).results.mapNotNull { mapMulti(it) }
+            }.getOrElse { emptyList() }
+        }
+        val swahiliDef = async {
+            runCatching {
+                TMDb3.Discover.movie(
+                    language = language,
+                    withOriginalLanguage = TMDb3.Params.WithBuilder<String>("sw"),
+                    sortBy = TMDb3.Params.SortBy.Movie.POPULARITY_DESC,
+                    page = targetPage
+                ).results.mapNotNull { mapMulti(it) }
+            }.getOrElse { emptyList() }
+        }
+        val seeds = if (targetPage == 1) async {
+            runCatching {
+                listOf("Country Queen", "Country 49", "Crime and Justice", "Nairobi Half Life", "Click Click Bang", "Supa Modo", "Disconnect", "Poacher", "Single Kiasi", "Pepeta", "Subterranea", "Softie", "Kati Kati", "Faithless")
+                    .flatMap { TMDb3.Search.multi(query = it, language = language).results }
+                    .mapNotNull { mapMulti(it) }
+            }.getOrElse { emptyList() }
+        } else null
+
+        val items = (moviesDef.await() + tvDef.await() + swahiliDef.await() + (seeds?.await() ?: emptyList()))
+            .filterIsInstance<com.nexastream.app.models.Show>()
+            .distinctBy { when (it) { is Movie -> "movie:${it.id}"; is TvShow -> "tv:${it.id}"; else -> it.id } }
+
+        Category(name = name, list = items)
+    }
+
     suspend fun getBiography(isMovie: Boolean, name: String = "Biography"): Category = coroutineScope {
         val results = if (isMovie) {
             TMDb3.Discover.movie(

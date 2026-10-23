@@ -399,7 +399,7 @@ class HomeTvFragment : Fragment() {
                         "🦇 DC Extended Universe", "DC Extended Universe" -> "dc" to category.name
                         "⚡ WWE Live & Replay", "WWE Live & Replay" -> "wwe_moviebox" to category.name
                         "🎬 Nollywood Movies", "Nollywood Movies" -> "nollywood_movies" to category.name
-                        "🌍 Kenyan Series", "Kenyan Series" -> "kenyan_series" to category.name
+                        "🌍 Kenyan Movies & Series", "Kenyan Movies & Series", "🌍 Kenyan Series", "Kenyan Series" -> "kenyan_series" to category.name
 
                         else -> {
                             val name = category.name
