@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:paddingStart="24dp"
+    android:paddingTop="12dp"
+    android:paddingEnd="24dp"
+    android:paddingBottom="16dp"
+    android:clipChildren="false"
+    android:clipToPadding="false">
+
+    <!-- Guideline splitting Left Hero Card (52%) and Right Content (48%) -->
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/guideline_hero_split"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        app:layout_constraintGuide_percent="0.52" />
+
+    <!-- Left Hero Composite Box: 16:9 Banner + Quick Filter Tiles -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/cv_hero_left_block"
+        android:layout_width="0dp"
+        android:layout_height="280dp"
+        app:cardBackgroundColor="#141414"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="6dp"
+        app:layout_constraintEnd_toStartOf="@id/guideline_hero_split"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <!-- Banner Poster/Fanart Image -->
+            <ImageView
+                android:id="@+id/iv_hero_banner_image"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:scaleType="centerCrop"
+                app:layout_constraintBottom_toTopOf="@id/ll_quick_chips"
+                app:layout_constraintTop_toTopOf="parent"
+                tools:ignore="ContentDescription"
+                tools:src="@drawable/bg_tv_default" />
+
+            <!-- Dark Gradient Vignette Overlay -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:background="@drawable/bg_tv_show_banner_gradient"
+                app:layout_constraintBottom_toTopOf="@id/ll_quick_chips"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <!-- Quick Action Filter Tiles Row -->
+            <LinearLayout
+                android:id="@+id/ll_quick_chips"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:background="#101010"
+                android:orientation="horizontal"
+                android:padding="4dp"
+                app:layout_constraintBottom_toBottomOf="parent">
+
+                <TextView
+                    android:id="@+id/btn_chip_genre"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="3dp"
+                    android:background="@drawable/bg_item_tv_quick_chip"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:text="Genre"
+                    android:textColor="#FFFFFF"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/btn_chip_new"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:layout_marginStart="2dp"
+                    android:layout_marginEnd="2dp"
+                    android:background="@drawable/bg_item_tv_quick_chip"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:text="New 2026"
+                    android:textColor="#FFFFFF"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/btn_chip_trending"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:layout_marginStart="2dp"
+                    android:layout_marginEnd="2dp"
+                    android:background="@drawable/bg_item_tv_quick_chip"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:text="Trending"
+                    android:textColor="#FFFFFF"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/btn_chip_all"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:layout_marginStart="3dp"
+                    android:background="@drawable/bg_item_tv_quick_chip"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:text="All"
+                    android:textColor="#FFFFFF"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+            </LinearLayout>
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+    </androidx.cardview.widget.CardView>
+
+    <!-- Right Side Info & Posters Container -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/cl_hero_right_info"
+        android:layout_width="0dp"
+        android:layout_height="280dp"
+        android:layout_marginStart="20dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@id/guideline_hero_split"
+        app:layout_constraintTop_toTopOf="@id/cv_hero_left_block">
+
+        <!-- Title -->
+        <TextView
+            android:id="@+id/tv_hero_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="#FFFFFF"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            tools:text="By Any Means" />
+
+        <!-- Rating, Year, Genres Metadata -->
+        <TextView
+            android:id="@+id/tv_hero_metadata"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="#E0E0E0"
+            android:textSize="13sp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/tv_hero_title"
+            tools:text="⭐ 6.7  |  2026  |  Action, Crime, Thriller" />
+
+        <!-- Overview -->
+        <TextView
+            android:id="@+id/tv_hero_overview"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:ellipsize="end"
+            android:maxLines="2"
+            android:textColor="#9E9E9E"
+            android:textSize="12sp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/tv_hero_metadata"
+            tools:text="An exciting journey through the universe..." />
+
+        <!-- Right Side Mini Poster Cards Row -->
+        <com.nexastream.app.ui.tv.SafeHorizontalGridView
+            android:id="@+id/hgv_hero_posters"
+            android:layout_width="0dp"
+            android:layout_height="165dp"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:descendantFocusability="afterDescendants"
+            android:focusable="true"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

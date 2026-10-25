@@ -159,6 +159,7 @@ class PlayerTvFragment : Fragment() {
     private var _binding: FragmentPlayerTvBinding? = null
     private val binding get() = _binding!!
     private var isSetupDone = false
+    private var liveRetryCount = 0
 
     private val PlayerControlView.binding
         get() = ContentExoControllerTvBinding.bind(this.findViewById(R.id.cl_exo_controller))
@@ -1454,6 +1455,7 @@ class PlayerTvFragment : Fragment() {
                 super.onPlaybackStateChanged(playbackState)
 
                 if (playbackState == Player.STATE_READY) {
+                    liveRetryCount = 0
                     binding.pvPlayer.controller.binding.exoPlayPause.nextFocusDownId = -1
                     updatePlayerScale()
                     reportCurrentStreamHealthy()
@@ -1472,6 +1474,16 @@ class PlayerTvFragment : Fragment() {
                 if (playbackState == Player.STATE_ENDED) {
                     stopBufferingWatchdog()
                     hideLivestreamStatusOverlay()
+                    val isLive = isLivestreamContent()
+                    if (isLive) {
+                        Log.e("PlayerTvFragment", "Live stream ended unexpectedly, retrying in 2s...")
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            delay(2000)
+                            player.seekToDefaultPosition()
+                            player.prepare()
+                            player.play()
+                        }
+                    }
                 }
                 
                 updateLiveControls()
@@ -1567,7 +1579,25 @@ class PlayerTvFragment : Fragment() {
                 } else {
                     Log.e("PlayerTvFragment", "All servers failed.")
                     if (isLivestreamContent()) {
-                        showLivestreamOffline()
+                        if (liveRetryCount < 3) {
+                            liveRetryCount++
+                            Log.w("PlayerTvFragment", "Live stream error/failure. Attempting auto-retry $liveRetryCount/3...")
+                            showLivestreamLoading("Stream interrupted. Reconnecting (attempt $liveRetryCount)...")
+                            viewLifecycleOwner.lifecycleScope.launch {
+                                delay(3000L * liveRetryCount)
+                                if (isAdded && _binding != null) {
+                                    try {
+                                        player.seekToDefaultPosition()
+                                        player.prepare()
+                                        player.play()
+                                    } catch (e: Exception) {
+                                        Log.e("PlayerTvFragment", "Retry failed", e)
+                                    }
+                                }
+                            }
+                        } else {
+                            showLivestreamOffline()
+                        }
                     } else {
                         Toast.makeText(requireContext(), "All servers failed to play this content.", Toast.LENGTH_LONG).show()
                     }
@@ -2019,7 +2049,7 @@ class PlayerTvFragment : Fragment() {
     private fun startBufferingWatchdog() {
         bufferingWatchdogJob?.cancel()
         bufferingWatchdogJob = viewLifecycleOwner.lifecycleScope.launch {
-            val timeoutMs = if (isLivestreamContent()) 10_000L else 20_000L
+            val timeoutMs = if (isLivestreamContent()) 35_000L else 20_000L
             delay(timeoutMs)
             if (player.playbackState == Player.STATE_BUFFERING) {
                 val nextServer = servers.getOrNull(servers.indexOf(currentServer) + 1)
@@ -2032,7 +2062,19 @@ class PlayerTvFragment : Fragment() {
                     }
                     viewModel.getVideo(nextServer)
                 } else if (isLivestreamContent()) {
-                    showLivestreamOffline()
+                    if (liveRetryCount < 3) {
+                        liveRetryCount++
+                        Log.w("PlayerTvFragment", "Buffering timeout reached. Auto-retrying live stream ($liveRetryCount/3)...")
+                        showLivestreamLoading("Buffering live stream, reconnecting...")
+                        try {
+                            player.prepare()
+                            player.play()
+                        } catch (e: Exception) {
+                            Log.e("PlayerTvFragment", "Buffering retry error", e)
+                        }
+                    } else {
+                        showLivestreamOffline()
+                    }
                 }
             }
         }
@@ -2264,10 +2306,10 @@ class PlayerTvFragment : Fragment() {
         }
         trackSelector = selector
 
-        val minBuffer = if (isLive) 30_000 else 25_000
+        val minBuffer = if (isLive) 50_000 else 25_000
         val maxBuffer = if (extraBuffering) 300_000 else 120_000
-        val playbackBuffer = if (isLive) 5_000 else 1_000
-        val rebufferBuffer = if (isLive) 8_000 else 2_000
+        val playbackBuffer = if (isLive) 10_000 else 1_000
+        val rebufferBuffer = if (isLive) 15_000 else 2_000
 
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(

@@ -4,22 +4,26 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="wrap_content"
     android:layout_height="match_parent"
+    android:background="#000000"
     android:focusable="true"
     android:focusableInTouchMode="true"
-    android:padding="10dp"
-    android:background="?attr/app_background_color">
+    android:paddingStart="12dp"
+    android:paddingEnd="16dp"
+    android:paddingTop="6dp"
+    android:paddingBottom="6dp">
 
     <ImageView
         android:id="@+id/iv_navigation_header_icon"
-        android:layout_width="24dp"
-        android:layout_height="24dp"
+        android:layout_width="26dp"
+        android:layout_height="26dp"
         android:duplicateParentState="true"
-        android:foreground="@drawable/fg_navigation_header_icon_tv"
         android:padding="2dp"
         android:scaleType="fitCenter"
+        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        tools:ignore="ContentDescription,UseAppTint" />
+        tools:ignore="ContentDescription"
+        tools:src="@drawable/ic_provider_default_logo" />
 
     <TextView
         android:id="@+id/tv_navigation_header_title"
@@ -28,13 +32,13 @@
         android:layout_marginStart="8dp"
         android:duplicateParentState="true"
         android:maxLines="1"
-        android:paddingStart="0dp"
-        android:paddingEnd="10dp"
         android:textColor="#FFFFFF"
-        android:textSize="13sp"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toTopOf="@id/tv_navigation_header_subtitle"
         app:layout_constraintStart_toEndOf="@id/iv_navigation_header_icon"
-        app:layout_constraintTop_toTopOf="@id/iv_navigation_header_icon"
-        tools:text="Title" />
+        app:layout_constraintTop_toTopOf="parent"
+        tools:text="NexaStream" />
 
     <TextView
         android:id="@+id/tv_navigation_header_subtitle"
@@ -43,13 +47,12 @@
         android:layout_marginStart="8dp"
         android:duplicateParentState="true"
         android:maxLines="1"
-        android:paddingStart="0dp"
-        android:paddingEnd="10dp"
         android:textColor="#B3FFFFFF"
-        android:textSize="9sp"
+        android:textSize="10sp"
+        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toEndOf="@id/iv_navigation_header_icon"
         app:layout_constraintTop_toBottomOf="@id/tv_navigation_header_title"
         tools:ignore="SmallSp"
-        tools:text="Subtitle" />
+        tools:text="Change Provider" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

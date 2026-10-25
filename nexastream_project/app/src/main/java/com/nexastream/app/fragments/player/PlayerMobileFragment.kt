@@ -139,6 +139,7 @@ class PlayerMobileFragment : Fragment() {
     private var _binding: FragmentPlayerMobileBinding? = null
     private val binding get() = _binding!!
     private var isSetupDone = false
+    private var liveRetryCount = 0
 
     private val PlayerControlView.binding
         get() = ContentExoControllerMobileBinding.bind(this.findViewById(R.id.cl_exo_controller))
@@ -1360,6 +1361,7 @@ class PlayerMobileFragment : Fragment() {
                 super.onPlaybackStateChanged(playbackState)
                 updateLiveControls()
                 if (playbackState == Player.STATE_READY) {
+                    liveRetryCount = 0
                     reportCurrentStreamHealthy()
                     stopBufferingWatchdog()
                     hideLivestreamStatusOverlay()
@@ -1474,7 +1476,25 @@ class PlayerMobileFragment : Fragment() {
                 } else {
                     Log.e("PlayerMobileFragment", "All servers failed.")
                     if (isLivestreamContent()) {
-                        showLivestreamOffline()
+                        if (liveRetryCount < 3) {
+                            liveRetryCount++
+                            Log.w("PlayerMobileFragment", "Live stream error/failure. Attempting auto-retry $liveRetryCount/3...")
+                            showLivestreamLoading("Stream interrupted. Reconnecting (attempt $liveRetryCount)...")
+                            viewLifecycleOwner.lifecycleScope.launch {
+                                delay(3000L * liveRetryCount)
+                                if (isAdded && _binding != null) {
+                                    try {
+                                        player.seekToDefaultPosition()
+                                        player.prepare()
+                                        player.play()
+                                    } catch (e: Exception) {
+                                        Log.e("PlayerMobileFragment", "Retry failed", e)
+                                    }
+                                }
+                            }
+                        } else {
+                            showLivestreamOffline()
+                        }
                     } else {
                         Toast.makeText(context, "All servers failed to play this content.", Toast.LENGTH_LONG).show()
                     }
@@ -1869,7 +1889,7 @@ class PlayerMobileFragment : Fragment() {
     private fun startBufferingWatchdog() {
         bufferingWatchdogJob?.cancel()
         bufferingWatchdogJob = viewLifecycleOwner.lifecycleScope.launch {
-            val timeoutMs = if (isLivestreamContent()) 10_000L else 20_000L
+            val timeoutMs = if (isLivestreamContent()) 35_000L else 20_000L
             delay(timeoutMs)
             if (player.playbackState == Player.STATE_BUFFERING) {
                 val nextServer = servers.getOrNull(servers.indexOf(currentServer) + 1)
@@ -1882,7 +1902,19 @@ class PlayerMobileFragment : Fragment() {
                     }
                     viewModel.getVideo(nextServer)
                 } else if (isLivestreamContent()) {
-                    showLivestreamOffline()
+                    if (liveRetryCount < 3) {
+                        liveRetryCount++
+                        Log.w("PlayerMobileFragment", "Buffering timeout reached. Auto-retrying live stream ($liveRetryCount/3)...")
+                        showLivestreamLoading("Buffering live stream, reconnecting...")
+                        try {
+                            player.prepare()
+                            player.play()
+                        } catch (e: Exception) {
+                            Log.e("PlayerMobileFragment", "Buffering retry error", e)
+                        }
+                    } else {
+                        showLivestreamOffline()
+                    }
                 }
             }
         }
@@ -2043,10 +2075,10 @@ class PlayerMobileFragment : Fragment() {
         }
         trackSelector = selector
 
-        val minBuffer = if (isLive) 30_000 else 25_000
+        val minBuffer = if (isLive) 50_000 else 25_000
         val maxBuffer = if (extraBuffering) 300_000 else 120_000
-        val playbackBuffer = if (isLive) 5_000 else 1_000
-        val rebufferBuffer = if (isLive) 8_000 else 2_000
+        val playbackBuffer = if (isLive) 10_000 else 1_000
+        val rebufferBuffer = if (isLive) 15_000 else 2_000
 
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(

@@ -19,14 +19,14 @@
         android:paddingBottom="24dp">
 
         <!-- Close Button -->
-        <ImageButton
+        <android.widget.ImageButton
             android:id="@+id/btn_telegram_close"
             android:layout_width="36dp"
             android:layout_height="36dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
             android:contentDescription="Close"
             android:src="@drawable/ic_close"
-            app:tint="#9CA3AF"
+            android:tint="#9CA3AF"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 

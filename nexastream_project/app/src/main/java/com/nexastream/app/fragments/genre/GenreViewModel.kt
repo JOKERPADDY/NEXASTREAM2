@@ -28,8 +28,15 @@ class GenreViewModel @Inject constructor(
     private val database: AppDatabase
 ) : ViewModel() {
 
-    private val id: String = savedStateHandle.get<String>("id") ?: ""
+    private var id: String = savedStateHandle.get<String>("id") ?: ""
     private val _state = MutableStateFlow<State>(State.Loading)
+
+    fun loadGenreForId(newId: String) {
+        if (id == newId) return
+        id = newId
+        page = 1
+        getGenre()
+    }
     
     @OptIn(ExperimentalCoroutinesApi::class)
     val state: Flow<State> = _state.flatMapLatest { state ->
@@ -83,14 +90,16 @@ class GenreViewModel @Inject constructor(
         _state.emit(State.Loading)
 
         try {
-            val genre = if (id == "tmdb_recommended_for_you" || id == "Recommended For You" || id == "✨ Recommended For You") {
-                runCatching {
-                    UserPreferences.currentProvider.getGenre(id, 1)
-                }.getOrElse {
-                    com.nexastream.app.providers.NexaHomeProvider.getGenre("tmdb_recommended_for_you", 1)
-                }
-            } else {
+            val genre = runCatching {
                 UserPreferences.currentProvider.getGenre(id, 1)
+            }.getOrElse {
+                com.nexastream.app.providers.NexaHomeProvider.getGenre(id, 1)
+            }.let { g ->
+                if (g.shows.isEmpty() && (id == "kids" || id == "anime" || id == "explore" || id == "all_content")) {
+                    com.nexastream.app.providers.NexaHomeProvider.getGenre(id, 1)
+                } else {
+                    g
+                }
             }
 
             page = 1
@@ -98,7 +107,12 @@ class GenreViewModel @Inject constructor(
             _state.emit(State.SuccessLoading(genre, genre.shows.isNotEmpty()))
         } catch (e: Exception) {
             Log.e("GenreViewModel", "getGenre: ", e)
-            _state.emit(State.FailedLoading(e))
+            runCatching {
+                val fallbackGenre = com.nexastream.app.providers.NexaHomeProvider.getGenre(id, 1)
+                _state.emit(State.SuccessLoading(fallbackGenre, fallbackGenre.shows.isNotEmpty()))
+            }.getOrElse {
+                _state.emit(State.FailedLoading(e))
+            }
         }
     }
 
@@ -108,14 +122,10 @@ class GenreViewModel @Inject constructor(
             _state.emit(State.LoadingMore)
 
             try {
-                val genre = if (id == "tmdb_recommended_for_you" || id == "Recommended For You" || id == "✨ Recommended For You") {
-                    runCatching {
-                        UserPreferences.currentProvider.getGenre(id, page + 1)
-                    }.getOrElse {
-                        com.nexastream.app.providers.NexaHomeProvider.getGenre("tmdb_recommended_for_you", page + 1)
-                    }
-                } else {
+                val genre = runCatching {
                     UserPreferences.currentProvider.getGenre(id, page + 1)
+                }.getOrElse {
+                    com.nexastream.app.providers.NexaHomeProvider.getGenre(id, page + 1)
                 }
 
                 page += 1

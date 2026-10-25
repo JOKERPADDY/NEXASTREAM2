@@ -17,6 +17,7 @@ import com.nexastream.app.adapters.viewholders.SportMatchViewHolder
 import com.nexastream.app.adapters.viewholders.TvShowViewHolder
 import com.nexastream.app.databinding.ContentCategorySwiperMobileBinding
 import com.nexastream.app.databinding.ContentCategorySwiperTvBinding
+import com.nexastream.app.databinding.ItemTvCompositeHeroBinding
 import com.nexastream.app.databinding.ContentMovieCastMobileBinding
 import com.nexastream.app.databinding.ContentMovieCastTvBinding
 import com.nexastream.app.databinding.ContentMovieDirectorsMobileBinding
@@ -112,6 +113,7 @@ class AppAdapter(
 
         CATEGORY_MOBILE_SWIPER,
         CATEGORY_TV_SWIPER,
+        CATEGORY_TV_COMPOSITE_HERO,
 
         EPISODE_MOBILE_ITEM,
         EPISODE_TV_ITEM,
@@ -188,6 +190,13 @@ class AppAdapter(
     private var onLoadMoreListener: (() -> Unit)? = null
     private var footer: Footer<ViewBinding>? = null
 
+    private fun isTvContext(context: android.content.Context): Boolean {
+        val isLeanback = context.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK)
+        val isTvActivity = context is com.nexastream.app.activities.main.MainTvActivity ||
+                           context.javaClass.name.contains("Tv", ignoreCase = true)
+        return isLeanback || isTvActivity
+    }
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
         val holder = when (Type.entries[viewType]) {
             Type.CATEGORY_MOBILE_ITEM -> CategoryViewHolder(
@@ -214,6 +223,13 @@ class AppAdapter(
             )
             Type.CATEGORY_TV_SWIPER -> CategoryViewHolder(
                 ContentCategorySwiperTvBinding.inflate(
+                    LayoutInflater.from(parent.context),
+                    parent,
+                    false,
+                )
+            )
+            Type.CATEGORY_TV_COMPOSITE_HERO -> CategoryViewHolder(
+                ItemTvCompositeHeroBinding.inflate(
                     LayoutInflater.from(parent.context),
                     parent,
                     false,
@@ -443,7 +459,7 @@ class AppAdapter(
             )
 
             Type.SPORT_MATCH_ITEM -> SportMatchViewHolder(
-                if (parent.context.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK)) {
+                if (isTvContext(parent.context)) {
                     ItemSportMatchTvBinding.inflate(
                         LayoutInflater.from(parent.context),
                         parent,
@@ -459,7 +475,7 @@ class AppAdapter(
             )
 
             Type.TV_CHANNEL_ITEM -> TvShowViewHolder( // Reusing for now
-                if (parent.context.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK)) {
+                if (isTvContext(parent.context)) {
                     ItemTvShowTvBinding.inflate(
                         LayoutInflater.from(parent.context),
                         parent,
@@ -691,10 +707,16 @@ class AppAdapter(
 
         val adjustedPosition = header?.let { position - 1 } ?: position
         if (adjustedPosition in items.indices) {
+            val item = items[adjustedPosition]
             return try {
-                items[adjustedPosition].itemType.ordinal
+                item.itemType.ordinal
             } catch (e: Exception) {
-                Type.LOADING_ITEM.ordinal
+                when (item) {
+                    is Movie -> Type.MOVIE_TV_ITEM.ordinal
+                    is TvShow -> Type.TV_SHOW_TV_ITEM.ordinal
+                    is Episode -> Type.EPISODE_TV_ITEM.ordinal
+                    else -> Type.LOADING_ITEM.ordinal
+                }
             }
         }
 

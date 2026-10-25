@@ -131,7 +131,7 @@ class MainTvActivity : FragmentActivity() {
                     }
 
                     when (destination.id) {
-                        R.id.search, R.id.providers, R.id.home, R.id.movies, R.id.tv_shows, R.id.live_guide, R.id.downloads, R.id.settings -> {
+                        R.id.search, R.id.providers, R.id.home, R.id.movies, R.id.tv_shows, R.id.kids, R.id.anime, R.id.explore, R.id.live_guide, R.id.downloads, R.id.settings -> {
                             binding.navMain.visibility = View.VISIBLE
                             updateNavigationVisibility()
                         }
@@ -236,7 +236,8 @@ class MainTvActivity : FragmentActivity() {
 
     private fun handleIntent(intent: Intent?) {
         if (intent == null) return
-        val navController = (supportFragmentManager.findFragmentById(binding.navMainFragment.id) as NavHostFragment).navController
+        val navHostFragment = supportFragmentManager.findFragmentById(binding.navMainFragment.id) as? NavHostFragment
+        val navController = navHostFragment?.navController ?: return
 
         when (intent.action) {
             Intent.ACTION_SEARCH -> {

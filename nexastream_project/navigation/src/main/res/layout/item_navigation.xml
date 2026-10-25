@@ -3,16 +3,20 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/cl_navigation_item"
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content"
+    android:layout_width="wrap_content"
+    android:layout_height="match_parent"
     android:background="@drawable/bg_menu_item"
     android:duplicateParentState="true"
-    android:padding="10dp">
+    android:focusable="true"
+    android:paddingStart="10dp"
+    android:paddingEnd="10dp"
+    android:paddingTop="6dp"
+    android:paddingBottom="6dp">
 
     <ImageView
         android:id="@+id/iv_navigation_item_icon"
-        android:layout_width="24dp"
-        android:layout_height="24dp"
+        android:layout_width="16dp"
+        android:layout_height="16dp"
         android:contentDescription="@null"
         android:duplicateParentState="true"
         android:tint="@color/navigation_item_tint"
@@ -25,15 +29,17 @@
         android:id="@+id/tv_navigation_item_label"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="10dp"
+        android:layout_marginStart="6dp"
         android:duplicateParentState="true"
+        android:ellipsize="end"
+        android:letterSpacing="0.04"
         android:maxLines="1"
-        android:paddingStart="0dp"
-        android:paddingEnd="10dp"
         android:textColor="@color/navigation_item_tint"
-        android:textSize="14sp"
+        android:textSize="13sp"
+        android:textStyle="bold"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toEndOf="@id/iv_navigation_item_icon"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toTopOf="parent"
+        tools:text="HOME" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

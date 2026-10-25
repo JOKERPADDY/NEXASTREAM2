@@ -2,22 +2,20 @@
 <androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
-    android:layout_width="wrap_content"
+    android:layout_width="280dp"
     android:layout_height="wrap_content"
     android:background="@drawable/bg_item_movie_tv"
     android:focusable="true"
-    android:focusableInTouchMode="true"
-    android:padding="6dp"
-    android:clipChildren="false"
-    android:clipToPadding="false">
+    android:focusableInTouchMode="true">
 
     <androidx.cardview.widget.CardView
         android:id="@+id/cv_livestream_poster"
-        android:layout_width="210dp"
-        android:layout_height="118dp"
+        android:layout_width="0dp"
+        android:layout_height="150dp"
         app:cardBackgroundColor="#1A1A1A"
         app:cardCornerRadius="10dp"
         app:cardElevation="0dp"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
@@ -26,7 +24,7 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:scaleType="fitCenter"
-            android:padding="16dp"
+            android:padding="20dp"
             android:importantForAccessibility="no" />
 
         <View
@@ -39,15 +37,15 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="top|start"
-            android:layout_margin="8dp"
+            android:layout_margin="10dp"
             android:background="@drawable/bg_live_badge"
             android:paddingStart="8dp"
-            android:paddingTop="3dp"
+            android:paddingTop="4dp"
             android:paddingEnd="8dp"
-            android:paddingBottom="3dp"
+            android:paddingBottom="4dp"
             android:text="• LIVE"
             android:textColor="#FFFFFF"
-            android:textSize="10sp"
+            android:textSize="11sp"
             android:textStyle="bold"
             android:letterSpacing="0.05" />
 
@@ -57,14 +55,18 @@
         android:id="@+id/tv_livestream_title"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="12dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginBottom="16dp"
         android:ellipsize="end"
         android:lines="1"
         android:textColor="#FFFFFF"
-        android:textSize="13sp"
+        android:textSize="16sp"
         android:textStyle="bold"
-        app:layout_constraintEnd_toEndOf="@id/cv_livestream_poster"
-        app:layout_constraintStart_toStartOf="@id/cv_livestream_poster"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/cv_livestream_poster"
         tools:text="Channel Name" />
 

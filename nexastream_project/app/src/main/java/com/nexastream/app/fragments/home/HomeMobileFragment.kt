@@ -278,7 +278,7 @@ class HomeMobileFragment : Fragment() {
                         "Peppa Pig" -> "search_Peppa Pig" to category.name
 
                         "Anime Universe", "Anime" -> "tmdb_anime_universe" to category.name
-                        "Anime Movies" -> "tmdb_cartoon_movies" to category.name
+                        "Anime Movies" -> "tmdb_anime_movies" to category.name
                         "Japanese Anime" -> "tmdb_japanese_anime" to category.name
                         "European & American Anime", "American Anime" -> "tmdb_western_anime" to category.name
                         "Age 7-12" -> "tmdb_anime_age_7_12" to category.name

@@ -55,7 +55,11 @@ class MoviesViewModel @Inject constructor(
     sealed class State {
         data object Loading : State()
         data object LoadingMore : State()
-        data class SuccessLoading(val movies: List<Movie>, val hasMore: Boolean) : State()
+        data class SuccessLoading(
+            val movies: List<Movie> = emptyList(),
+            val categories: List<com.nexastream.app.models.Category> = emptyList(),
+            val hasMore: Boolean = false
+        ) : State()
         data class FailedLoading(val error: Exception) : State()
     }
 
@@ -68,13 +72,19 @@ class MoviesViewModel @Inject constructor(
         _state.emit(State.Loading)
 
         try {
-            val movies = ParentalControlUtils.filterItems(
-                UserPreferences.currentProvider.getMovies()
-            ).filterIsInstance<Movie>()
+            val genre = runCatching { UserPreferences.currentProvider.getGenre("movies", 1) }.getOrNull()
+            val categories = genre?.shows?.filterIsInstance<com.nexastream.app.models.Category>().orEmpty()
 
-            page = 1
+            if (categories.isNotEmpty()) {
+                _state.emit(State.SuccessLoading(categories = categories, hasMore = false))
+            } else {
+                val movies = ParentalControlUtils.filterItems(
+                    UserPreferences.currentProvider.getMovies()
+                ).filterIsInstance<Movie>()
 
-            _state.emit(State.SuccessLoading(movies, movies.isNotEmpty()))
+                page = 1
+                _state.emit(State.SuccessLoading(movies = movies, hasMore = movies.isNotEmpty()))
+            }
         } catch (e: Exception) {
             Log.e("MoviesViewModel", "getMovies: ", e)
             _state.emit(State.FailedLoading(e))

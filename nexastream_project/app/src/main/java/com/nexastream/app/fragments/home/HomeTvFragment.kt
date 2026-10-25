@@ -295,6 +295,20 @@ class HomeTvFragment : Fragment() {
         binding.vgvHome.apply {
             adapter = appAdapter.apply {
                 stateRestorationPolicy = RecyclerView.Adapter.StateRestorationPolicy.PREVENT_WHEN_EMPTY
+                onMovieClickListener = { movie ->
+                    findNavController().navigate(
+                        HomeTvFragmentDirections.actionHomeToMovie(id = movie.id)
+                    )
+                }
+                onTvShowClickListener = { tvShow ->
+                    findNavController().navigate(
+                        HomeTvFragmentDirections.actionHomeToTvShow(
+                            id = tvShow.id,
+                            poster = tvShow.poster,
+                            banner = tvShow.banner
+                        )
+                    )
+                }
                 onViewAllClickListener = { category ->
                     val (genreId, genreName) = when (category.name) {
                         "CDN Live Channels", "Livestream", "Live Channels" -> "cdn_all_channels" to "CDN Live TV"
@@ -376,7 +390,7 @@ class HomeTvFragment : Fragment() {
                         "Peppa Pig" -> "search_Peppa Pig" to category.name
 
                         "Anime Universe" -> "tmdb_anime_universe" to category.name
-                        "Anime Movies" -> "tmdb_cartoon_movies" to category.name
+                        "Anime Movies" -> "tmdb_anime_movies" to category.name
                         "Japanese Anime" -> "tmdb_japanese_anime" to category.name
                         "European & American Anime", "American Anime" -> "tmdb_western_anime" to category.name
                         "Age 7-12" -> "tmdb_anime_age_7_12" to category.name
@@ -553,7 +567,7 @@ class HomeTvFragment : Fragment() {
                     }
                     category.itemSpacing = resources.getDimension(R.dimen.home_spacing).toInt()
                     category.itemType = when (category.name) {
-                        Category.FEATURED -> AppAdapter.Type.CATEGORY_TV_SWIPER
+                        Category.FEATURED -> AppAdapter.Type.CATEGORY_TV_COMPOSITE_HERO
                         else -> AppAdapter.Type.CATEGORY_TV_ITEM
                     }
                 }
@@ -562,45 +576,6 @@ class HomeTvFragment : Fragment() {
 
     fun resetSwiperSchedule() {
         swiperHandler.removeCallbacksAndMessages(null)
-        swiperHandler.postDelayed(object : Runnable {
-            override fun run() {
-                if (isBackgroundPinned) {
-                    swiperHandler.postDelayed(this, 8_000)
-                    return
-                }
-
-                val position = appAdapter.items
-                    .filterIsInstance<Category>()
-                    .find { it.name == Category.FEATURED }
-                    ?.let { category ->
-                        if (category.list.isEmpty()) return@let null
-                        category.selectedIndex = (category.selectedIndex + 1) % category.list.size
-                        
-                        // Update background when swiper rotates automatically
-                        val currentItem = category.list.getOrNull(category.selectedIndex)
-                        val poster = when (currentItem) {
-                            is Movie -> currentItem.banner
-                            is TvShow -> currentItem.banner
-                            else -> null
-                        }
-                        // Update background if it's not null
-                        if (poster != null) {
-                            updateBackground(poster, null)
-                        }
-
-                        appAdapter.items.indexOf(category)
-                    }
-                    ?.takeIf { it != -1 }
-
-                if (position == null) {
-                    swiperHandler.removeCallbacksAndMessages(null)
-                    return
-                }
-
-                appAdapter.notifyItemChanged(position)
-                swiperHandler.postDelayed(this, 8_000)
-            }
-        }, 8_000)
     }
 
     private fun syncFeaturedBackground() {

@@ -42,7 +42,7 @@
         app:layout_constraintTop_toTopOf="@id/tv_category_title"
         tools:visibility="visible" />
 
-    <androidx.leanback.widget.HorizontalGridView
+    <com.nexastream.app.ui.tv.SafeHorizontalGridView
         android:id="@+id/hgv_category"
         android:layout_width="0dp"
         android:layout_height="wrap_content"

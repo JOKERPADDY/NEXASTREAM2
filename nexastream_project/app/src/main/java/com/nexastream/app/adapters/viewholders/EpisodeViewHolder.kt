@@ -245,12 +245,12 @@ class EpisodeViewHolder(
                 true
             }
             setOnFocusChangeListener { _, hasFocus ->
-                val animation = when {
-                    hasFocus -> AnimationUtils.loadAnimation(context, R.anim.zoom_in)
-                    else -> AnimationUtils.loadAnimation(context, R.anim.zoom_out)
-                }
-                binding.root.startAnimation(animation)
-                animation.fillAfter = true
+                val scale = if (hasFocus) 1.05f else 1.0f
+                binding.root.animate()
+                    .scaleX(scale)
+                    .scaleY(scale)
+                    .setDuration(150)
+                    .start()
             }
         }
 
@@ -596,12 +596,12 @@ class EpisodeViewHolder(
                 true
             }
             setOnFocusChangeListener { _, hasFocus ->
-                val animation = when {
-                    hasFocus -> AnimationUtils.loadAnimation(context, R.anim.zoom_in)
-                    else -> AnimationUtils.loadAnimation(context, R.anim.zoom_out)
-                }
-                binding.root.startAnimation(animation)
-                animation.fillAfter = true
+                val scale = if (hasFocus) 1.05f else 1.0f
+                binding.root.animate()
+                    .scaleX(scale)
+                    .scaleY(scale)
+                    .setDuration(150)
+                    .start()
             }
         }
 

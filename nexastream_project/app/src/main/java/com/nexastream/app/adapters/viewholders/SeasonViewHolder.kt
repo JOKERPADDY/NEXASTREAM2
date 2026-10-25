@@ -1,6 +1,5 @@
 package com.nexastream.app.adapters.viewholders
 
-import android.view.animation.AnimationUtils
 import androidx.navigation.findNavController
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewbinding.ViewBinding
@@ -30,7 +29,6 @@ class SeasonViewHolder(
             is ItemSeasonTvBinding -> displayTvItem(_binding)
         }
     }
-
 
     private fun displayMobileItem(binding: ItemSeasonMobileBinding) {
         binding.root.apply {
@@ -79,12 +77,12 @@ class SeasonViewHolder(
                 )
             }
             setOnFocusChangeListener { _, hasFocus ->
-                val animation = when {
-                    hasFocus -> AnimationUtils.loadAnimation(context, R.anim.zoom_in)
-                    else -> AnimationUtils.loadAnimation(context, R.anim.zoom_out)
-                }
-                binding.ivSeasonPoster.startAnimation(animation)
-                animation.fillAfter = true
+                val scale = if (hasFocus) 1.08f else 1.0f
+                binding.ivSeasonPoster.animate()
+                    .scaleX(scale)
+                    .scaleY(scale)
+                    .setDuration(150)
+                    .start()
             }
         }
 

@@ -340,7 +340,7 @@ class TvShowViewHolder(
         }
         
         binding.ivLivestreamPoster.scaleType = ImageView.ScaleType.FIT_CENTER
-        binding.ivLivestreamPoster.setPadding(16, 16, 16, 16)
+        binding.ivLivestreamPoster.setPadding(20.dp(context), 20.dp(context), 20.dp(context), 20.dp(context))
 
         Glide.with(binding.ivLivestreamPoster.context.applicationContext)
             .load(tvShow.poster ?: tvShow.banner)

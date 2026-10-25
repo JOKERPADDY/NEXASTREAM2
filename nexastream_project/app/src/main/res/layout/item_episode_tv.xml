@@ -2,118 +2,142 @@
 <androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
-    android:layout_width="wrap_content"
+    android:layout_width="280dp"
     android:layout_height="wrap_content"
+    android:background="@drawable/bg_item_tv_show_tv"
+    android:padding="6dp"
     android:focusable="true"
-    android:focusableInTouchMode="true">
+    android:focusableInTouchMode="true"
+    android:clipChildren="false"
+    android:clipToPadding="false">
 
-    <ImageView
-        android:id="@+id/iv_episode_poster"
-        android:layout_width="600dp"
+    <!-- CardView for 16:9 Episode Thumbnail -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/cv_episode_thumbnail"
+        android:layout_width="0dp"
         android:layout_height="0dp"
-        android:background="@drawable/bg_item_episode_image_tv"
-        android:duplicateParentState="true"
-        android:foreground="@drawable/fg_item_episode_image_tv"
-        android:scaleType="centerCrop"
-        app:layout_constraintDimensionRatio="2:1"
+        app:cardBackgroundColor="#1A1A1A"
+        app:cardCornerRadius="8dp"
+        app:cardElevation="0dp"
+        app:layout_constraintDimensionRatio="16:9"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        tools:ignore="ContentDescription" />
+        app:layout_constraintTop_toTopOf="parent">
 
-    <ProgressBar
-        android:id="@+id/pb_episode_progress"
-        style="@android:style/Widget.ProgressBar.Horizontal"
-        android:layout_width="0dp"
-        android:layout_height="4dp"
-        android:layout_marginStart="24dp"
-        android:layout_marginEnd="24dp"
-        android:layout_marginBottom="20dp"
-        android:backgroundTint="#CC646464"
-        android:progressTint="#FFFFFF"
-        app:layout_constraintBottom_toBottomOf="@id/iv_episode_poster"
-        app:layout_constraintEnd_toEndOf="@id/iv_episode_poster"
-        app:layout_constraintStart_toStartOf="@id/iv_episode_poster"
-        tools:progress="80" />
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
 
+            <ImageView
+                android:id="@+id/iv_episode_poster"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/bg_item_episode_image_tv"
+                android:foreground="@drawable/fg_item_episode_image_tv"
+                android:scaleType="centerCrop"
+                tools:ignore="ContentDescription"
+                tools:src="@drawable/glide_fallback_cover" />
+
+            <ProgressBar
+                android:id="@+id/pb_episode_progress"
+                style="@android:style/Widget.ProgressBar.Horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="4dp"
+                android:backgroundTint="#CC646464"
+                android:progressTint="#E50914"
+                app:layout_constraintBottom_toBottomOf="parent" />
+
+            <ImageView
+                android:id="@+id/iv_selection_check"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_margin="8dp"
+                android:src="@drawable/ic_check_circle"
+                android:visibility="gone"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:tint="@color/netflix_red"
+                tools:visibility="visible" />
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+    </androidx.cardview.widget.CardView>
+
+    <!-- Episode Number Info -->
     <TextView
         android:id="@+id/tv_episode_info"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="0dp"
-        android:gravity="center"
-        android:textSize="16sp"
+        android:layout_marginStart="4dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="4dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="#B3FFFFFF"
+        android:textSize="12sp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/iv_episode_poster"
-        tools:text="Episode #" />
+        app:layout_constraintTop_toBottomOf="@id/cv_episode_thumbnail"
+        tools:text="Episode 1" />
 
+    <!-- Episode Title (Max 2 lines, truncated with ellipsis) -->
     <TextView
         android:id="@+id/tv_episode_title"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:gravity="center"
+        android:layout_marginStart="4dp"
+        android:layout_marginTop="2dp"
+        android:layout_marginEnd="4dp"
+        android:ellipsize="end"
+        android:maxLines="2"
         android:textColor="#FFFFFF"
-        android:textSize="18sp"
+        android:textSize="14sp"
         android:textStyle="bold"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/tv_episode_info"
-        tools:text="Title" />
+        tools:text="The First Cut is the Deepest" />
 
+    <!-- Release Date -->
     <TextView
         android:id="@+id/tv_episode_released"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:gravity="center"
-        android:textSize="12sp"
-        android:textStyle="bold"
+        android:layout_marginStart="4dp"
+        android:layout_marginTop="2dp"
+        android:layout_marginEnd="4dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="#80FFFFFF"
+        android:textSize="11sp"
         app:layout_constraintEnd_toStartOf="@id/btn_episode_download"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/tv_episode_title"
-        tools:text="Release date" />
+        tools:text="Sunday - March 27, 2005" />
 
+    <!-- Download Button (Optional) -->
     <ImageView
         android:id="@+id/btn_episode_download"
-        android:layout_width="32dp"
-        android:layout_height="32dp"
-        android:layout_marginEnd="16dp"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
         android:focusable="true"
-        android:padding="4dp"
+        android:padding="2dp"
         android:src="@drawable/ic_download"
+        android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="@id/tv_episode_released"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="@id/tv_episode_released"
         app:tint="#FFFFFF"
         tools:ignore="ContentDescription" />
 
+    <!-- Hidden Overview to maintain binding compatibility -->
     <TextView
         android:id="@+id/tv_episode_overview"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="12dp"
-        android:layout_marginEnd="10dp"
-        android:textSize="12sp"
-        android:ellipsize="end"
-        android:scrollHorizontally="false"
-        android:singleLine="false"
-        android:maxLines="4"
-        app:layout_constraintTop_toBottomOf="@id/tv_episode_title"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        tools:text="Overview" />
-
-    <ImageView
-        android:id="@+id/iv_selection_check"
-        android:layout_width="24dp"
-        android:layout_height="24dp"
-        android:layout_margin="8dp"
-        android:src="@drawable/ic_check_circle"
         android:visibility="gone"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:tint="@color/netflix_red"
-        tools:visibility="visible" />
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/tv_episode_released" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

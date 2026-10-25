@@ -38,7 +38,11 @@ object NexaHomeProvider : Provider {
     override val language: String = "en"
 
     private val tmdb = TmdbProvider("en")
-    private val fetchSemaphore = Semaphore(8)
+    private val fetchSemaphore = Semaphore(4)
+
+    private var homeCache: Pair<Long, List<Category>>? = null
+    private val genreCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, Genre>>()
+    private const val CACHE_EXPIRATION_MS = 10 * 60 * 1000L // 10 minutes cache TTL
 
     private suspend inline fun <T> limited(crossinline block: suspend () -> T): T = fetchSemaphore.withPermit { block() }
 
@@ -48,9 +52,21 @@ object NexaHomeProvider : Provider {
         }.getOrDefault(false)
 
     override suspend fun getHome(): List<Category> = coroutineScope {
+        val now = System.currentTimeMillis()
+        homeCache?.let { (timestamp, categories) ->
+            if (now - timestamp < CACHE_EXPIRATION_MS && categories.isNotEmpty()) {
+                Log.d("NexaHomeProvider", "Returning cached home categories (Instant Load)")
+                return@coroutineScope categories
+            }
+        }
+
         val phase0 = getHomePhase0()
         val phase1 = getHomePhase1(phase0)
-        getHomePhase2(phase1)
+        val full = getHomePhase2(phase1)
+        if (full.isNotEmpty()) {
+            homeCache = Pair(now, full)
+        }
+        full
     }
 
     suspend fun getHomeProgressive(
@@ -678,7 +694,26 @@ object NexaHomeProvider : Provider {
         val mbEps = runCatching { MovieBoxProvider.getEpisodesBySeason(seasonId) }.getOrElse { emptyList() }
         if (mbEps.isNotEmpty()) mbEps else tmdb.getEpisodesBySeason(seasonId)
     }
-    override suspend fun getGenre(id: String, page: Int): Genre = when {
+    override suspend fun getGenre(id: String, page: Int): Genre = coroutineScope {
+        val now = System.currentTimeMillis()
+        if (page == 1) {
+            genreCache[id]?.let { (timestamp, cachedGenre) ->
+                if (now - timestamp < CACHE_EXPIRATION_MS && cachedGenre.shows.isNotEmpty()) {
+                    Log.d("NexaHomeProvider", "Returning cached genre '$id' (Instant Load)")
+                    return@coroutineScope cachedGenre
+                }
+            }
+        }
+
+        val freshGenre = getGenreUncached(id, page)
+
+        if (page == 1 && freshGenre.shows.isNotEmpty()) {
+            genreCache[id] = Pair(now, freshGenre)
+        }
+        freshGenre
+    }
+
+    private suspend fun getGenreUncached(id: String, page: Int): Genre = when {
         id == "cdn_all_channels" -> {
             runCatching { CdnLiveTvProvider.getGenre(id, page) }.getOrElse {
                 Log.w("NexaHomeProvider", "CDN getGenre failed for $id, trying IPTV fallback")

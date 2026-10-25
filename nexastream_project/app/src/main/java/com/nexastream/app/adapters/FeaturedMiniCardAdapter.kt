@@ -1,5 +1,8 @@
 package com.nexastream.app.adapters
 
+import android.os.Handler
+import android.os.Looper
+import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -9,9 +12,7 @@ import com.bumptech.glide.Glide
 import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
 import com.nexastream.app.R
 import com.nexastream.app.databinding.ItemTvFeaturedMiniCardBinding
-import com.nexastream.app.models.Movie
 import com.nexastream.app.models.Show
-import com.nexastream.app.models.TvShow
 
 class FeaturedMiniCardAdapter(
     var items: List<Show> = emptyList(),
@@ -46,16 +47,37 @@ class FeaturedMiniCardAdapter(
                 if (hasFocus) {
                     val oldIndex = selectedIndex
                     selectedIndex = position
-                    if (oldIndex != position) {
-                        notifyItemChanged(oldIndex)
-                        notifyItemChanged(position)
+                    binding.root.isSelected = true
+                    binding.ivMiniCardPlayIcon.isVisible = true
+                    if (oldIndex != position && oldIndex in items.indices) {
+                        Handler(Looper.getMainLooper()).post {
+                            notifyItemChanged(oldIndex)
+                        }
                     }
                     onItemSelected?.invoke(show, position)
+                } else {
+                    if (selectedIndex != position) {
+                        binding.root.isSelected = false
+                        binding.ivMiniCardPlayIcon.isVisible = false
+                    }
                 }
             }
 
-            binding.root.setOnClickListener {
+            val clickListener = View.OnClickListener {
                 onItemClicked?.invoke(show)
+            }
+            binding.root.setOnClickListener(clickListener)
+            binding.cvMiniCardPoster.setOnClickListener(clickListener)
+
+            binding.root.setOnKeyListener { _, keyCode, event ->
+                if (event.action == KeyEvent.ACTION_DOWN &&
+                    (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER)
+                ) {
+                    onItemClicked?.invoke(show)
+                    true
+                } else {
+                    false
+                }
             }
         }
     }
@@ -81,8 +103,10 @@ class FeaturedMiniCardAdapter(
         if (selectedIndex != validIndex) {
             val oldIndex = selectedIndex
             selectedIndex = validIndex
-            notifyItemChanged(oldIndex)
-            notifyItemChanged(selectedIndex)
+            Handler(Looper.getMainLooper()).post {
+                notifyItemChanged(oldIndex)
+                notifyItemChanged(selectedIndex)
+            }
         }
     }
 }

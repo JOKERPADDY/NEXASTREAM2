@@ -4,6 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="#000000"
     tools:context=".fragments.movies.MoviesTvFragment">
 
     <androidx.leanback.widget.VerticalGridView
@@ -19,8 +20,7 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:numberOfColumns="7"
-        tools:listitem="@layout/item_movie_grid_tv" />
+        tools:listitem="@layout/item_category_tv" />
 
     <include
         android:id="@+id/is_loading"

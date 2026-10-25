@@ -55,7 +55,11 @@ class TvShowsViewModel @Inject constructor(
     sealed class State {
         data object Loading : State()
         data object LoadingMore : State()
-        data class SuccessLoading(val tvShows: List<TvShow>, val hasMore: Boolean) : State()
+        data class SuccessLoading(
+            val tvShows: List<TvShow> = emptyList(),
+            val categories: List<com.nexastream.app.models.Category> = emptyList(),
+            val hasMore: Boolean = false
+        ) : State()
         data class FailedLoading(val error: Exception) : State()
     }
 
@@ -68,13 +72,19 @@ class TvShowsViewModel @Inject constructor(
         _state.emit(State.Loading)
 
         try {
-            val tvShows = ParentalControlUtils.filterItems(
-                UserPreferences.currentProvider.getTvShows()
-            ).filterIsInstance<TvShow>()
+            val genre = runCatching { UserPreferences.currentProvider.getGenre("tv_shows", 1) }.getOrNull()
+            val categories = genre?.shows?.filterIsInstance<com.nexastream.app.models.Category>().orEmpty()
 
-            page = 1
+            if (categories.isNotEmpty()) {
+                _state.emit(State.SuccessLoading(categories = categories, hasMore = false))
+            } else {
+                val tvShows = ParentalControlUtils.filterItems(
+                    UserPreferences.currentProvider.getTvShows()
+                ).filterIsInstance<TvShow>()
 
-            _state.emit(State.SuccessLoading(tvShows, tvShows.isNotEmpty()))
+                page = 1
+                _state.emit(State.SuccessLoading(tvShows = tvShows, hasMore = tvShows.isNotEmpty()))
+            }
         } catch (e: Exception) {
             Log.e("TvShowsViewModel", "getTvShows: ", e)
             _state.emit(State.FailedLoading(e))

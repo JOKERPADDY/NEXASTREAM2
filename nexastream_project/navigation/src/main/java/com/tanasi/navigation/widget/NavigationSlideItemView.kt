@@ -34,6 +34,16 @@ class NavigationSlideItemView(
 
     var itemPosition = INVALID_ITEM_POSITION
 
+    init {
+        setOnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) {
+                animate().scaleX(1.08f).scaleY(1.08f).setDuration(150).start()
+            } else {
+                animate().scaleX(1.0f).scaleY(1.0f).setDuration(150).start()
+            }
+        }
+    }
+
     fun setOrientation(orientation: Int) {
         val root = view.findViewById<View>(R.id.cl_navigation_item) ?: return
         val params = root.layoutParams
@@ -141,7 +151,7 @@ class NavigationSlideItemView(
     }
 
     fun close() {
-        label.visibility = View.GONE
+        label.visibility = View.VISIBLE
     }
 
 

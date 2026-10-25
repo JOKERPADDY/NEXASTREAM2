@@ -1,19 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- D-pad Focused state on TV: Nexa Red pill fill and outline -->
     <item android:state_focused="true">
         <shape android:shape="rectangle">
-            <corners android:radius="2dp" />
-            <solid android:color="#26FFFFFF" />
-            <stroke android:width="2dp" android:color="?attr/colorAccent" />
+            <corners android:radius="20dp" />
+            <solid android:color="#2B330000" />
+            <stroke android:width="2dp" android:color="#E50914" />
         </shape>
     </item>
 
+    <!-- Active selected tab state: Nexa Red fill -->
     <item android:state_selected="true">
         <shape android:shape="rectangle">
-            <corners android:radius="2dp" />
-            <solid android:color="#14FFFFFF" />
-            <stroke android:width="1dp" android:color="?attr/colorAccent" />
+            <corners android:radius="20dp" />
+            <solid android:color="#E50914" />
+        </shape>
+    </item>
+
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="20dp" />
+            <solid android:color="@android:color/transparent" />
         </shape>
     </item>
 

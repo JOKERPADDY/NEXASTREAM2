@@ -188,6 +188,54 @@
             app:destination="@id/tv_show" />
     </fragment>
     <fragment
+        android:id="@+id/kids"
+        android:name="com.nexastream.app.fragments.genre.KidsTvFragment"
+        android:label="Kids"
+        tools:layout="@layout/fragment_genre_tv">
+        <argument
+            android:name="id"
+            app:argType="string"
+            android:defaultValue="kids" />
+        <argument
+            android:name="name"
+            app:argType="string"
+            android:defaultValue="Kids" />
+        <action android:id="@+id/action_genre_to_movie" app:destination="@id/movie" />
+        <action android:id="@+id/action_genre_to_tv_show" app:destination="@id/tv_show" />
+    </fragment>
+    <fragment
+        android:id="@+id/anime"
+        android:name="com.nexastream.app.fragments.genre.AnimeTvFragment"
+        android:label="Anime"
+        tools:layout="@layout/fragment_genre_tv">
+        <argument
+            android:name="id"
+            app:argType="string"
+            android:defaultValue="anime" />
+        <argument
+            android:name="name"
+            app:argType="string"
+            android:defaultValue="Anime" />
+        <action android:id="@+id/action_genre_to_movie" app:destination="@id/movie" />
+        <action android:id="@+id/action_genre_to_tv_show" app:destination="@id/tv_show" />
+    </fragment>
+    <fragment
+        android:id="@+id/explore"
+        android:name="com.nexastream.app.fragments.genre.ExploreTvFragment"
+        android:label="Explore"
+        tools:layout="@layout/fragment_genre_tv">
+        <argument
+            android:name="id"
+            app:argType="string"
+            android:defaultValue="all_content" />
+        <argument
+            android:name="name"
+            app:argType="string"
+            android:defaultValue="Explore" />
+        <action android:id="@+id/action_genre_to_movie" app:destination="@id/movie" />
+        <action android:id="@+id/action_genre_to_tv_show" app:destination="@id/tv_show" />
+    </fragment>
+    <fragment
         android:id="@+id/people"
         android:name="com.nexastream.app.fragments.people.PeopleTvFragment"
         android:label="fragment_people_tv"

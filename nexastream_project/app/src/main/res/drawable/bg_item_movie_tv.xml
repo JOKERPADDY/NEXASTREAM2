@@ -5,8 +5,8 @@
         <layer-list>
             <item>
                 <shape android:shape="rectangle">
-                    <corners android:radius="8dp" />
-                    <stroke android:width="4dp" android:color="#FFFFFF" />
+                    <corners android:radius="10dp" />
+                    <stroke android:width="3dp" android:color="@color/netflix_red" />
                 </shape>
             </item>
         </layer-list>

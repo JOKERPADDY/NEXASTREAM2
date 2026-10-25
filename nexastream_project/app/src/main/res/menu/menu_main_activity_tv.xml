@@ -4,38 +4,43 @@
     tools:showIn="@layout/activity_main_tv">
 
     <item
-        android:id="@id/search"
-        android:icon="@drawable/ic_menu_search"
-        android:title="@string/main_menu_search" />
-
-    <item
-        android:id="@+id/providers"
-        android:icon="@drawable/ic_refresh"
-        android:title="@string/main_menu_change_provider" />
-
-    <item
         android:id="@id/home"
         android:icon="@drawable/ic_menu_home"
-        android:title="@string/main_menu_home" />
+        android:title="HOME" />
 
     <item
-        android:id="@id/movies"
+        android:id="@+id/movies"
         android:icon="@drawable/ic_menu_movie"
-        android:title="@string/main_menu_movies" />
+        android:title="MOVIES" />
 
     <item
-        android:id="@id/tv_shows"
+        android:id="@+id/tv_shows"
         android:icon="@drawable/ic_menu_tv"
-        android:title="@string/main_menu_tv_shows" />
+        android:title="SERIES" />
 
     <item
-        android:id="@id/live_guide"
+        android:id="@+id/kids"
+        android:icon="@drawable/ic_menu_tv"
+        android:title="KIDS" />
+
+    <item
+        android:id="@+id/anime"
+        android:icon="@drawable/ic_menu_movie"
+        android:title="ANIME" />
+
+    <item
+        android:id="@+id/explore"
         android:icon="@drawable/ic_menu_guide"
-        android:title="@string/main_menu_live_guide" />
+        android:title="EXPLORAR" />
 
     <item
-        android:id="@id/settings"
+        android:id="@id/search"
+        android:icon="@drawable/ic_menu_search"
+        android:title="SEARCH" />
+
+    <item
+        android:id="@+id/settings"
         android:icon="@drawable/ic_menu_settings"
-        android:title="@string/main_menu_settings" />
+        android:title="SETTINGS" />
 
 </menu>

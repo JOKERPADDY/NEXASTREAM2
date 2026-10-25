@@ -57,31 +57,49 @@ class TmdbProvider(override val language: String) : Provider {
 
     fun mapMulti(multi: TMDb3.MultiItem): AppAdapter.Item? {
         return when (multi) {
-            is TMDb3.Movie -> Movie(
-                id = multi.id.toString(),
-                title = multi.title,
-                overview = multi.overview,
-                released = multi.releaseDate,
-                rating = multi.voteAverage.toDouble(),
-                poster = multi.posterPath?.w500,
-                banner = multi.backdropPath?.original,
-            )
+            is TMDb3.Movie -> {
+                val posterUrl = multi.posterPath?.w500
+                if (posterUrl.isNullOrBlank() || posterUrl.contains("null") || multi.title.isNullOrBlank()) {
+                    return null
+                }
+                Movie(
+                    id = multi.id.toString(),
+                    title = multi.title,
+                    overview = multi.overview,
+                    released = multi.releaseDate,
+                    rating = multi.voteAverage.toDouble(),
+                    poster = posterUrl,
+                    banner = multi.backdropPath?.original,
+                )
+            }
 
-            is TMDb3.Tv -> TvShow(
-                id = multi.id.toString(),
-                title = multi.name,
-                overview = multi.overview,
-                released = multi.firstAirDate,
-                rating = multi.voteAverage.toDouble(),
-                poster = multi.posterPath?.w500,
-                banner = multi.backdropPath?.original,
-            )
+            is TMDb3.Tv -> {
+                val posterUrl = multi.posterPath?.w500
+                if (posterUrl.isNullOrBlank() || posterUrl.contains("null") || multi.name.isNullOrBlank()) {
+                    return null
+                }
+                TvShow(
+                    id = multi.id.toString(),
+                    title = multi.name,
+                    overview = multi.overview,
+                    released = multi.firstAirDate,
+                    rating = multi.voteAverage.toDouble(),
+                    poster = posterUrl,
+                    banner = multi.backdropPath?.original,
+                )
+            }
 
-            is TMDb3.Person -> People(
-                id = multi.id.toString(),
-                name = multi.name,
-                image = multi.profilePath?.w500,
-            )
+            is TMDb3.Person -> {
+                val profileUrl = multi.profilePath?.w500
+                if (profileUrl.isNullOrBlank() || profileUrl.contains("null") || multi.name.isNullOrBlank()) {
+                    return null
+                }
+                People(
+                    id = multi.id.toString(),
+                    name = multi.name,
+                    image = profileUrl,
+                )
+            }
 
             else -> null
         }
@@ -336,12 +354,26 @@ class TmdbProvider(override val language: String) : Provider {
     // --- NEW SPECIFIC METHODS ---
     suspend fun getLatestMovies(): Category = coroutineScope {
         val today = Calendar.getInstance()
-        val results = TMDb3.Discover.movie(
-            language = language,
-            primaryReleaseDate = TMDb3.Params.Range(lte = today),
-            sortBy = TMDb3.Params.SortBy.Movie.PRIMARY_RELEASE_DATE_DESC
-        ).results.mapNotNull { mapMulti(it) }
-        Category(name = "Latest Movies", list = results)
+        val threeMonthsAgo = Calendar.getInstance().apply { add(Calendar.MONTH, -3) }
+
+        val discoverResults = runCatching {
+            TMDb3.Discover.movie(
+                language = language,
+                primaryReleaseDate = TMDb3.Params.Range(gte = threeMonthsAgo, lte = today),
+                voteCount = TMDb3.Params.Range(gte = 5),
+                sortBy = TMDb3.Params.SortBy.Movie.PRIMARY_RELEASE_DATE_DESC
+            ).results
+        }.getOrDefault(emptyList())
+
+        val popularResults = runCatching {
+            TMDb3.MovieLists.popular(page = 1, language = language).results
+        }.getOrDefault(emptyList())
+
+        val combined = (discoverResults + popularResults)
+            .distinctBy { it.id }
+            .mapNotNull { mapMulti(it) }
+
+        Category(name = "Latest Movies", list = combined)
     }
 
     suspend fun getAllCinema(): Category = coroutineScope {
@@ -356,10 +388,19 @@ class TmdbProvider(override val language: String) : Provider {
     }
 
     suspend fun getNewSeasonsAndEpisodes(): Category = coroutineScope {
-        val results = TMDb3.TvSeriesLists.airingToday(
-            language = language
-        ).results.mapNotNull { mapMulti(it) }
-        Category(name = "New Season and Episode", list = results)
+        val airingToday = runCatching {
+            TMDb3.TvSeriesLists.airingToday(page = 1, language = language).results
+        }.getOrDefault(emptyList())
+
+        val popularTv = runCatching {
+            TMDb3.TvSeriesLists.popular(page = 1, language = language).results
+        }.getOrDefault(emptyList())
+
+        val combined = (airingToday + popularTv)
+            .distinctBy { it.id }
+            .mapNotNull { mapMulti(it) }
+
+        Category(name = "New Season and Episode", list = combined)
     }
 
     suspend fun getUpcomingMovies(): Category = coroutineScope {
