@@ -333,6 +333,7 @@ class CategoryViewHolder(
         }
 
         // Setup Mini Cards HorizontalGridView
+        binding.hgvFeaturedMiniCards.setRecycledViewPool(AppAdapter.sharedViewPool)
         val miniCardAdapter = (binding.hgvFeaturedMiniCards.adapter as? FeaturedMiniCardAdapter)
             ?: FeaturedMiniCardAdapter().also { adapter ->
                 binding.hgvFeaturedMiniCards.adapter = adapter
@@ -564,6 +565,7 @@ class CategoryViewHolder(
         miniAdapter.notifyDataSetChanged()
 
         binding.hgvHeroPosters.apply {
+            setRecycledViewPool(AppAdapter.sharedViewPool)
             setItemSpacing(category.itemSpacing)
             isFocusable = true
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS

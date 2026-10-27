@@ -26,9 +26,9 @@ import kotlinx.coroutines.sync.withPermit
 
 object NexaHomeProvider : Provider {
     private const val PHASE0_TIMEOUT_MOBILE_MS = 2_500L
-    private const val PHASE0_TIMEOUT_TV_MS = 12_000L
+    private const val PHASE0_TIMEOUT_TV_MS = 4_000L
     private const val IPTV_FALLBACK_TIMEOUT_MOBILE_MS = 2_000L
-    private const val IPTV_FALLBACK_TIMEOUT_TV_MS = 10_000L
+    private const val IPTV_FALLBACK_TIMEOUT_TV_MS = 3_000L
 
     private const val LOGO_URL = "https://i.ibb.co/39Ld2wbt/MAGISTV.png"
 
@@ -38,7 +38,7 @@ object NexaHomeProvider : Provider {
     override val language: String = "en"
 
     private val tmdb = TmdbProvider("en")
-    private val fetchSemaphore = Semaphore(4)
+    private val fetchSemaphore = Semaphore(16)
 
     private var homeCache: Pair<Long, List<Category>>? = null
     private val genreCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, Genre>>()
@@ -980,15 +980,41 @@ object NexaHomeProvider : Provider {
             }
             Genre(id = id, name = "Popular TV Shows", shows = shows)
         }
-        id == "tmdb_kids_family" -> {
-            val mbKids = runCatching { MovieBoxProvider.getCategory("kids", page) }.getOrElse { emptyList() }
-            val list = if (mbKids.isNotEmpty()) mbKids else tmdb.getKidsContent().list
-            Genre(id = id, name = "Kids & Family", shows = list)
+        id == "kids" || id == "tmdb_kids_family" -> {
+            val rows = fetchKidsRows().filterNotNull()
+            val featuredList = rows.flatMap { it.list }.distinctBy { item ->
+                when (item) { is Movie -> "m_${item.id}"; is TvShow -> "tv_${item.id}"; else -> item.hashCode().toString() }
+            }.take(8)
+            val resultRows = mutableListOf<Category>()
+            if (featuredList.isNotEmpty()) {
+                resultRows.add(Category(Category.FEATURED, featuredList))
+            }
+            resultRows.addAll(rows)
+            Genre(id = id, name = "Kids & Family", shows = resultRows)
         }
-        id == "tmdb_anime_universe" -> {
-            val mbAnime = runCatching { MovieBoxProvider.getCategory("anime", page) }.getOrElse { emptyList() }
-            val list = if (mbAnime.isNotEmpty()) mbAnime else tmdb.getAnimeContent().list
-            Genre(id = id, name = "Anime", shows = list)
+        id == "anime" || id == "tmdb_anime_universe" -> {
+            val rows = fetchAnimeRows().filterNotNull()
+            val featuredList = rows.flatMap { it.list }.distinctBy { item ->
+                when (item) { is Movie -> "m_${item.id}"; is TvShow -> "tv_${item.id}"; else -> item.hashCode().toString() }
+            }.take(8)
+            val resultRows = mutableListOf<Category>()
+            if (featuredList.isNotEmpty()) {
+                resultRows.add(Category(Category.FEATURED, featuredList))
+            }
+            resultRows.addAll(rows)
+            Genre(id = id, name = "Anime", shows = resultRows)
+        }
+        id == "explore" || id == "all_content" -> {
+            val rows = fetchMovieMegaRows().filterNotNull()
+            val featuredList = rows.flatMap { it.list }.distinctBy { item ->
+                when (item) { is Movie -> "m_${item.id}"; is TvShow -> "tv_${item.id}"; else -> item.hashCode().toString() }
+            }.take(8)
+            val resultRows = mutableListOf<Category>()
+            if (featuredList.isNotEmpty()) {
+                resultRows.add(Category(Category.FEATURED, featuredList))
+            }
+            resultRows.addAll(rows)
+            Genre(id = id, name = "Explore", shows = resultRows)
         }
         id == "tmdb_cartoon_movies" -> {
             val mbKids = runCatching { MovieBoxProvider.getCategory("kids", page).filterIsInstance<Movie>() }.getOrElse { emptyList() }

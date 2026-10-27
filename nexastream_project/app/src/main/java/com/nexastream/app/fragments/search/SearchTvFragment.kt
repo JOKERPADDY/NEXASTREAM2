@@ -28,6 +28,7 @@ import com.nexastream.app.models.People
 import com.nexastream.app.models.TvShow
 import com.nexastream.app.utils.CacheUtils
 import com.nexastream.app.utils.LoggingUtils
+import com.nexastream.app.utils.setupFocusUpToTopNav
 import com.nexastream.app.utils.UserPreferences
 import com.nexastream.app.utils.VoiceRecognitionHelper
 import com.nexastream.app.utils.hideKeyboard
@@ -377,6 +378,7 @@ class SearchTvFragment : Fragment() {
         }
 
         binding.vgvSearch.apply {
+            setupFocusUpToTopNav(activity)
             adapter = appAdapter.apply {
                 stateRestorationPolicy = RecyclerView.Adapter.StateRestorationPolicy.PREVENT_WHEN_EMPTY
             }

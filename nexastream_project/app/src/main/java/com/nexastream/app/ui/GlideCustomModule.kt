@@ -1,18 +1,20 @@
 package com.nexastream.app.ui
 
+import android.app.ActivityManager
 import android.content.Context
 import android.webkit.CookieManager
 import com.bumptech.glide.Glide
+import com.bumptech.glide.GlideBuilder
 import com.bumptech.glide.annotation.GlideModule
 import com.bumptech.glide.integration.okhttp3.OkHttpUrlLoader
+import com.bumptech.glide.load.DecodeFormat
 import com.bumptech.glide.load.model.GlideUrl
 import com.bumptech.glide.module.AppGlideModule
+import com.bumptech.glide.request.RequestOptions
 import com.nexastream.app.utils.ArtworkRequestHeaders
-import com.nexastream.app.utils.DnsResolver
 import com.nexastream.app.utils.NetworkClient
 import okhttp3.*
 import okhttp3.OkHttpClient.Builder
-import okhttp3.logging.HttpLoggingInterceptor
 import java.io.File
 import java.io.InputStream
 import java.security.SecureRandom
@@ -25,10 +27,20 @@ import javax.net.ssl.X509TrustManager
 @GlideModule
 class GlideCustomModule : AppGlideModule() {
 
-    private fun getOkHttpClient(context: Context): OkHttpClient {
-        val appCache = Cache(File(context.cacheDir, "glide-okhttp-cache"), 10 * 1024 * 1024)
+    override fun applyOptions(context: Context, builder: GlideBuilder) {
+        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+        val mi = ActivityManager.MemoryInfo()
+        am?.getMemoryInfo(mi)
+        // Devices with < 4GB RAM (standard TV hardware) use RGB_565 for 50% lower bitmap RAM & 2x decoding speed
+        if (mi.totalMem < 4L * 1024 * 1024 * 1024) {
+            builder.setDefaultRequestOptions(
+                RequestOptions().format(DecodeFormat.PREFER_RGB_565)
+            )
+        }
+    }
 
-        val logging = HttpLoggingInterceptor().setLevel(HttpLoggingInterceptor.Level.HEADERS)
+    private fun getOkHttpClient(context: Context): OkHttpClient {
+        val appCache = Cache(File(context.cacheDir, "glide-okhttp-cache"), 20 * 1024 * 1024)
 
         val trustAllCerts = arrayOf<TrustManager>(
             object : X509TrustManager {
@@ -42,6 +54,7 @@ class GlideCustomModule : AppGlideModule() {
 
         return Builder()
             .cache(appCache)
+            .connectionPool(ConnectionPool(10, 5, TimeUnit.MINUTES))
             .cookieJar(imageCookieJar)
             .addInterceptor { chain ->
                 val original = chain.request()
@@ -60,13 +73,12 @@ class GlideCustomModule : AppGlideModule() {
                 }
                 chain.proceed(requestBuilder.build())
             }
-            .readTimeout(30, TimeUnit.SECONDS)
-            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .connectTimeout(15, TimeUnit.SECONDS)
             .addInterceptor { chain ->
                 val request = chain.request()
                 val headers = ArtworkRequestHeaders.headersFor(request.url)
                 val strippedUrl = ArtworkRequestHeaders.stripHeaders(request.url)
-                android.util.Log.e("GlideCustomModule", "Headers for ${request.url}: $headers")
                 val fixedRequest = if (headers.isNotEmpty() || strippedUrl != request.url) {
                     request.newBuilder()
                         .url(strippedUrl)
@@ -79,7 +91,6 @@ class GlideCustomModule : AppGlideModule() {
                 }
                 chain.proceed(fixedRequest.withAnimeOnlineCookies())
             }
-            .addInterceptor(logging)
             .sslSocketFactory(sslContext.socketFactory, trustManager)
             .hostnameVerifier { _, _ -> true }
             .dns(NetworkClient.systemDns.dns)

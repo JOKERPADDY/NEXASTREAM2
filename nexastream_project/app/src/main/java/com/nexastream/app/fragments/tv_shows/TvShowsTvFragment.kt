@@ -21,6 +21,7 @@ import com.nexastream.app.models.TvShow
 import com.nexastream.app.providers.Provider
 import com.nexastream.app.utils.UserPreferences
 import com.nexastream.app.utils.CacheUtils
+import com.nexastream.app.utils.setupFocusUpToTopNav
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 
@@ -123,6 +124,7 @@ class TvShowsTvFragment : Fragment() {
             )
         }
         binding.vgvTvShows.apply {
+            setupFocusUpToTopNav(activity)
             val spacing = requireContext().resources.getDimension(R.dimen.tv_shows_spacing).toInt()
             setItemSpacing(spacing)
             adapter = appAdapter.apply {

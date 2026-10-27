@@ -21,6 +21,7 @@ import com.nexastream.app.models.Movie
 import com.nexastream.app.providers.Provider
 import com.nexastream.app.utils.UserPreferences
 import com.nexastream.app.utils.CacheUtils
+import com.nexastream.app.utils.setupFocusUpToTopNav
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 
@@ -123,6 +124,7 @@ class MoviesTvFragment : Fragment() {
             )
         }
         binding.vgvMovies.apply {
+            setupFocusUpToTopNav(activity)
             adapter = appAdapter.apply {
                 stateRestorationPolicy = RecyclerView.Adapter.StateRestorationPolicy.PREVENT_WHEN_EMPTY
             }

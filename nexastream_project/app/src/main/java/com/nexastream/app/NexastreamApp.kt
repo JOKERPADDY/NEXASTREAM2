@@ -91,6 +91,20 @@ class NexastreamApp : Application() {
                 Log.e("NexastreamApp", "Failed to start LocalGengaServer", e)
             }
             AppDatabase.setup(appContext)
+            
+            // Pre-fetch Home categories instantly on app launch so TMDb cards load immediately
+            launch {
+                try {
+                    val categories = com.nexastream.app.providers.NexaHomeProvider.getHome()
+                    if (categories.isNotEmpty()) {
+                        com.nexastream.app.utils.HomeCacheStore.write(appContext, com.nexastream.app.providers.NexaHomeProvider, categories)
+                        Log.d("NexastreamApp", "Home categories pre-fetched and cached successfully on startup")
+                    }
+                } catch (e: Exception) {
+                    Log.e("NexastreamApp", "Failed to pre-fetch home categories", e)
+                }
+            }
+
             val downloadManager = appDownloadManagerProvider.get()
             Log.d("NexastreamApp", "DownloadManager initialized: ${downloadManager.hashCode()}")
             downloadManager.recoverDownloads()

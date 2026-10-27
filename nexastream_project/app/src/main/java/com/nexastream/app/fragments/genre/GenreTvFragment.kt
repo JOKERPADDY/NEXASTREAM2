@@ -22,6 +22,7 @@ import com.nexastream.app.models.Genre
 import com.nexastream.app.models.Movie
 import com.nexastream.app.models.TvShow
 import com.nexastream.app.utils.CacheUtils
+import com.nexastream.app.utils.setupFocusUpToTopNav
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 
@@ -256,6 +257,7 @@ open class GenreTvFragment : Fragment() {
             )
         }
         binding.vgvGenre.apply {
+            setupFocusUpToTopNav(activity)
             setNumColumns(6)
             adapter = appAdapter.apply {
                 stateRestorationPolicy = RecyclerView.Adapter.StateRestorationPolicy.PREVENT_WHEN_EMPTY

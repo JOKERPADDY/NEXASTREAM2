@@ -29,8 +29,8 @@ class NavigationSlideHeaderView @JvmOverloads constructor(
     }
 
     fun close() {
-        isFocusable = false
-        isFocusableInTouchMode = false
+        isFocusable = true
+        isFocusableInTouchMode = true
 
         closeListener?.invoke()
     }

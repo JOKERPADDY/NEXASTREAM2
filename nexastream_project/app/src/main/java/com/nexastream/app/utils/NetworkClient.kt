@@ -2,6 +2,7 @@ package com.nexastream.app.utils
 
 import android.util.Log
 import android.webkit.CookieManager
+import okhttp3.ConnectionPool
 import okhttp3.ConnectionSpec
 import com.nexastream.app.BuildConfig
 import okhttp3.Cookie
@@ -55,6 +56,8 @@ object NetworkClient {
             level = HttpLoggingInterceptor.Level.HEADERS
         }
     }
+
+    val sharedConnectionPool = ConnectionPool(10, 5, TimeUnit.MINUTES)
 
     val default: OkHttpClient by lazy { buildClient(DnsResolver.doh) }
     val systemDns: OkHttpClient by lazy { buildClient(Dns.SYSTEM) }
@@ -133,6 +136,7 @@ object NetworkClient {
                     requestBuilder.header("Upgrade-Insecure-Requests", "1")
                 chain.proceed(requestBuilder.build())
             }
+            .connectionPool(sharedConnectionPool)
             .cookieJar(cookieJar)
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)

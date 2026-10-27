@@ -360,3 +360,26 @@ private fun ContentResolver.getContentFileName(uri: Uri): String? = runCatching 
 
 operator fun <K, V> Map<out K, V>.plus(map: Map<out K, V>): Map<K, V> =
     LinkedHashMap(this).apply { putAll(map) }
+
+fun androidx.leanback.widget.VerticalGridView.setupFocusUpToTopNav(activity: android.app.Activity?) {
+    setOnKeyListener { _, keyCode, event ->
+        if (event.action == android.view.KeyEvent.ACTION_DOWN && keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP) {
+            val focusedChild = focusedChild
+            if (focusedChild != null) {
+                val holder = getChildViewHolder(focusedChild)
+                if (holder != null && holder.adapterPosition <= 0) {
+                    val navMain = activity?.findViewById<android.view.View>(com.nexastream.app.R.id.nav_main)
+                    if (navMain != null) {
+                        return@setOnKeyListener navMain.requestFocus()
+                    }
+                }
+            } else {
+                val navMain = activity?.findViewById<android.view.View>(com.nexastream.app.R.id.nav_main)
+                if (navMain != null) {
+                    return@setOnKeyListener navMain.requestFocus()
+                }
+            }
+        }
+        false
+    }
+}

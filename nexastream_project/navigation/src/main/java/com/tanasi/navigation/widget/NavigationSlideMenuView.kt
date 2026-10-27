@@ -147,8 +147,8 @@ class NavigationSlideMenuView(
 
     fun close() {
         childs.forEach {
-            it.isFocusable = it.isSelected
-            it.isFocusableInTouchMode = it.isSelected
+            it.isFocusable = true
+            it.isFocusableInTouchMode = true
 
             it.close()
         }

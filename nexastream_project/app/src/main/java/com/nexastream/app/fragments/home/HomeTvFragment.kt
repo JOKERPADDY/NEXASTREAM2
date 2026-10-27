@@ -33,6 +33,7 @@ import com.nexastream.app.providers.NexaHomeProvider
 import com.nexastream.app.repositories.HomeRepository
 import com.nexastream.app.utils.CacheUtils
 import com.nexastream.app.utils.LoggingUtils
+import com.nexastream.app.utils.setupFocusUpToTopNav
 import com.nexastream.app.utils.ProviderChangeNotifier
 import com.nexastream.app.utils.UserPreferences
 import com.nexastream.app.utils.activityViewModelsFactory
@@ -198,38 +199,15 @@ class HomeTvFragment : Fragment() {
 
     private var swiperHasLastFocus: Boolean = false
     fun updateBackground(uri: String?, swiperHasFocus: Boolean? = false) {
-        val binding = _binding ?: return
-        val ctx = context ?: return
-        if (!isAdded || isDetached) return
-        if (swiperHasFocus == null && isBackgroundPinned) return
-        if (swiperHasFocus == null && !swiperHasLastFocus) return
-
-        runCatching {
-            Glide.with(ctx)
-                .load(uri)
-                .transition(DrawableTransitionOptions.withCrossFade())
-                .into(binding.ivHomeBackground)
-        }
-        swiperHasLastFocus = swiperHasFocus ?: swiperHasLastFocus
+        // Disabled full-screen dynamic backdrop for clean dark theme & max TV scrolling performance
     }
 
     fun pinBackground(uri: String?) {
-        val binding = _binding ?: return
-        val ctx = context ?: return
-        if (!isAdded || isDetached) return
-        isBackgroundPinned = true
-        runCatching {
-            Glide.with(ctx)
-                .load(uri)
-                .transition(DrawableTransitionOptions.withCrossFade())
-                .into(binding.ivHomeBackground)
-        }
+        // Disabled full-screen dynamic backdrop for clean dark theme
     }
 
     fun releasePinnedBackground() {
-        if (!isBackgroundPinned) return
-        isBackgroundPinned = false
-        syncFeaturedBackground()
+        // Disabled full-screen dynamic backdrop for clean dark theme
     }
 
     private fun initializeHome() {
@@ -293,6 +271,7 @@ class HomeTvFragment : Fragment() {
         }
 
         binding.vgvHome.apply {
+            setupFocusUpToTopNav(activity)
             adapter = appAdapter.apply {
                 stateRestorationPolicy = RecyclerView.Adapter.StateRestorationPolicy.PREVENT_WHEN_EMPTY
                 onMovieClickListener = { movie ->
@@ -508,19 +487,6 @@ class HomeTvFragment : Fragment() {
                     ?.selectedIndex
                     ?: 0
                 it.selectedIndex = index.coerceIn(0, it.list.lastIndex.coerceAtLeast(0))
-
-                // Initialize background with first item from featured category immediately
-                val firstItem = it.list.getOrNull(index)
-                val poster = when (firstItem) {
-                    is Movie -> firstItem.banner
-                    is TvShow -> firstItem.banner
-                    else -> null
-                }
-                // Force background update without waiting for focus
-                if (poster != null) {
-                    updateBackground(poster, null)
-                }
-
                 resetSwiperSchedule()
             }
 
@@ -576,23 +542,5 @@ class HomeTvFragment : Fragment() {
 
     fun resetSwiperSchedule() {
         swiperHandler.removeCallbacksAndMessages(null)
-    }
-
-    private fun syncFeaturedBackground() {
-        val featured = appAdapter.items
-            .filterIsInstance<Category>()
-            .find { it.name == Category.FEATURED }
-            ?: return
-
-        val currentItem = featured.list.getOrNull(featured.selectedIndex)
-        val poster = when (currentItem) {
-            is Movie -> currentItem.banner
-            is TvShow -> currentItem.banner
-            else -> null
-        }
-
-        if (poster != null) {
-            updateBackground(poster, null)
-        }
     }
 }
