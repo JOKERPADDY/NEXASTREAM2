@@ -3,12 +3,10 @@ package com.nexastream.app.services
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import androidx.media3.common.util.UnstableApi
 import com.nexastream.app.utils.DownloadManager
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
-@UnstableApi
 @AndroidEntryPoint
 class DownloadNotificationActionReceiver : BroadcastReceiver() {
 
@@ -19,10 +17,10 @@ class DownloadNotificationActionReceiver : BroadcastReceiver() {
         val downloadId = intent.getStringExtra(EXTRA_DOWNLOAD_ID) ?: return
 
         when (intent.action) {
-            ACTION_PAUSE -> downloadManager.pauseDownload(downloadId)
-            ACTION_RESUME -> downloadManager.resumeDownload(downloadId)
-            ACTION_RETRY -> downloadManager.retryDownload(downloadId)
-            ACTION_CANCEL -> downloadManager.deleteDownload(downloadId)
+            ACTION_PAUSE -> MovieBoxDownloadService.pauseDownload(context, downloadId)
+            ACTION_RESUME -> MovieBoxDownloadService.resumeDownload(context, downloadId)
+            ACTION_RETRY -> MovieBoxDownloadService.startDownload(context, downloadId)
+            ACTION_CANCEL -> MovieBoxDownloadService.cancelDownload(context, downloadId)
         }
     }
 

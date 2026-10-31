@@ -213,6 +213,12 @@ object NexaHomeProvider : Provider {
             }.getOrDefault(emptyList())
         } }
 
+        val movieBox2HomeDeferred = async { limited {
+            runCatching {
+                kotlinx.coroutines.withTimeoutOrNull(timeout) { MovieBox2Provider.getHome() }
+            }.getOrDefault(emptyList())
+        } }
+
         val tmdbHomeDeferred = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(timeout) { tmdb.getHome() } }.getOrElse { emptyList() } ?: emptyList() } }
         val latestMoviesDeferred = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(timeout) { tmdb.getLatestMovies() } }.getOrNull() } }
         val allCinemaDeferred = async { limited { runCatching { kotlinx.coroutines.withTimeoutOrNull(timeout) { tmdb.getAllCinema() } }.getOrNull() } }
@@ -247,6 +253,11 @@ object NexaHomeProvider : Provider {
         latestMovies?.let { categories.add(it) }
         allCinema?.let { categories.add(it) }
         newSeasonAndEpisodes?.let { categories.add(it) }
+
+        val movieBox2Home = movieBox2HomeDeferred.await()
+        movieBox2Home?.forEach { cat ->
+            categories.add(cat.copy(name = "MovieBox 2: ${cat.name}"))
+        }
 
         // DYNAMIC DEDICATED ROWS (Phase 1)
         val becauseYouWatchedDeferred = async { limited { runCatching { fetchBecauseYouWatchedRow() }.getOrNull() } }

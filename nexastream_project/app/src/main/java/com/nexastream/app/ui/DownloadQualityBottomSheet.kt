@@ -39,6 +39,8 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.nexastream.app.models.Video
 import com.nexastream.app.utils.DownloadManager
+import com.nexastream.app.utils.DownloadMetadataProbe
+import com.nexastream.app.utils.DownloadProbeException
 import com.nexastream.app.utils.DownloadQualityFormatter
 import com.nexastream.app.utils.UserPreferences
 import dagger.hilt.android.AndroidEntryPoint
@@ -47,7 +49,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-@androidx.media3.common.util.UnstableApi
 @AndroidEntryPoint
 class DownloadQualityBottomSheet : BottomSheetDialogFragment() {
 
@@ -513,7 +514,15 @@ class DownloadQualityBottomSheet : BottomSheetDialogFragment() {
                 val video = withContext(Dispatchers.IO) {
                     server.video ?: provider.getVideo(server)
                 }
-                
+
+                val probeResult = withContext(Dispatchers.IO) {
+                    runCatching {
+                        DownloadMetadataProbe.probe(video.source, video.headers.orEmpty())
+                    }.getOrNull()
+                }
+
+                val subtitleUrl = video.subtitles.firstOrNull()?.file
+
                 downloadManager.startDownload(
                     id = mediaId,
                     title = mediaTitle,
@@ -521,7 +530,10 @@ class DownloadQualityBottomSheet : BottomSheetDialogFragment() {
                     url = video.source,
                     quality = "$selectedQuality - ${DownloadQualityFormatter.title(server).substringAfter(" - ")}",
                     headers = video.headers,
-                    mimeType = video.type
+                    mimeType = video.type,
+                    subtitleUrl = subtitleUrl,
+                    etag = probeResult?.etag,
+                    expectedSize = probeResult?.length
                 )
                 
                 withContext(Dispatchers.Main) {
@@ -530,7 +542,7 @@ class DownloadQualityBottomSheet : BottomSheetDialogFragment() {
             } catch (e: Exception) {
                 android.util.Log.e("DownloadBS", "Extraction failed: ${e.message}", e)
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(appContext, "Failed to get video: ${e.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(appContext, "Failed to start download: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
             }
         }

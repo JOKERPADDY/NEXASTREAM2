@@ -1091,6 +1091,8 @@ class MovieViewHolder(
     }
 
     private fun displayRecommendationsMobile(binding: ContentMovieRecommendationsMobileBinding) {
+        val hasDubs = movie.recommendations.any { it.title.contains("Audio", ignoreCase = true) || it.title.contains("dub", ignoreCase = true) }
+        binding.tvMovieRecommendationsLabel.text = if (hasDubs) "Other audio versions" else context.getString(R.string.movie_you_may_also_like)
         binding.rvMovieRecommendations.apply {
             adapter = AppAdapter().apply {
                 submitList(movie.recommendations.onEach {
@@ -1107,6 +1109,8 @@ class MovieViewHolder(
     }
 
     private fun displayRecommendationsTv(binding: ContentMovieRecommendationsTvBinding) {
+        val hasDubs = movie.recommendations.any { it.title.contains("Audio", ignoreCase = true) || it.title.contains("dub", ignoreCase = true) }
+        binding.tvMovieRecommendationsLabel.text = if (hasDubs) "Other audio versions" else context.getString(R.string.movie_you_may_also_like)
         binding.hgvMovieRecommendations.apply {
             setRowHeight(ViewGroup.LayoutParams.WRAP_CONTENT)
             adapter = AppAdapter().apply {

@@ -3,6 +3,7 @@ package com.nexastream.app.models
 import androidx.room.Entity
 import androidx.room.ColumnInfo
 import androidx.room.PrimaryKey
+import org.json.JSONObject
 
 @Entity(tableName = "downloads")
 data class Download(
@@ -22,8 +23,24 @@ data class Download(
     val mimeType: String? = null,
     val errorMessage: String? = null,
     val waitingReason: Int = 0, // 0 means not waiting, otherwise Requirements.RequirementFlags
+    val subtitleUrl: String? = null,
+    val subtitlePath: String? = null,
+    val etag: String? = null,
+    val serverUrl: String? = null,
     val createdAt: Long = System.currentTimeMillis()
 ) {
+    val filePath: String
+        get() = cacheKey
+
+    val headersJson: String?
+        get() = headers?.let {
+            try {
+                JSONObject(it).toString()
+            } catch (e: Exception) {
+                null
+            }
+        }
+
     enum class Status {
         QUEUED, DOWNLOADING, PAUSED, COMPLETED, FAILED
     }

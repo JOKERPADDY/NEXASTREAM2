@@ -51,7 +51,7 @@ import com.nexastream.app.utils.UserPreferences
         SearchHistory::class,
         TmdbMetadataCache::class,
     ],
-    version = 21,
+    version = 22,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -394,6 +394,19 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_21_22: Migration = object : Migration(21, 22) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                addColumnIfMissing(db, "downloads", "waitingReason", "`waitingReason` INTEGER NOT NULL DEFAULT 0")
+                addColumnIfMissing(db, "downloads", "subtitleUrl", "`subtitleUrl` TEXT")
+                addColumnIfMissing(db, "downloads", "subtitlePath", "`subtitlePath` TEXT")
+                addColumnIfMissing(db, "downloads", "etag", "`etag` TEXT")
+                addColumnIfMissing(db, "downloads", "serverUrl", "`serverUrl` TEXT")
+                addColumnIfMissing(db, "downloads", "downloadedSize", "`downloadedSize` INTEGER NOT NULL DEFAULT 0")
+                addColumnIfMissing(db, "downloads", "downloadSpeed", "`downloadSpeed` INTEGER NOT NULL DEFAULT 0")
+                addColumnIfMissing(db, "downloads", "etaSeconds", "`etaSeconds` INTEGER")
+            }
+        }
+
         val ALL_MIGRATIONS = arrayOf(
             MIGRATION_1_2,
             MIGRATION_2_3,
@@ -415,6 +428,7 @@ abstract class AppDatabase : RoomDatabase() {
             MIGRATION_18_19,
             MIGRATION_19_20,
             MIGRATION_20_21,
+            MIGRATION_21_22,
         )
     }
 }

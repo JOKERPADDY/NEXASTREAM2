@@ -130,7 +130,7 @@ class EmbedStExtractor : Extractor() {
             android.util.Log.d("EmbedStExtractor", "Attempting AkSportsLiveProvider.resolveEmbedStream for source=$source, id=$id")
             try {
                 val resolvedM3u8 = withTimeoutOrNull(5000) {
-                    com.nexastream.app.providers.AkSportsLiveProvider.resolveEmbedStream(source, id)
+                    com.nexastream.app.providers.AkSportsLiveProvider.resolveEmbedStream(link)
                 }
                 if (!resolvedM3u8.isNullOrBlank()) {
                     android.util.Log.d("EmbedStExtractor", "Resolved m3u8 stream via AkSportsLiveProvider.resolveEmbedStream: $resolvedM3u8")

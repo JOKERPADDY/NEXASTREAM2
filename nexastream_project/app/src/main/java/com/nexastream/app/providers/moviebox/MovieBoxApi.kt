@@ -1,78 +1,82 @@
 package com.nexastream.app.providers.moviebox
 
-import android.content.Context
 import okhttp3.OkHttpClient
+import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
-import retrofit2.http.GET
-import retrofit2.http.Path
-import retrofit2.http.Query
+import retrofit2.http.*
 import java.util.concurrent.TimeUnit
 
 interface MovieBoxApi {
 
-    @GET("trending")
+    @GET("home")
+    suspend fun getHome(
+        @Query("host") host: String = "themoviebox.xyz"
+    ): BffResponse<BffHomeData>
+
+    @GET("subject/trending")
     suspend fun getTrending(
         @Query("page") page: Int = 1,
-        @Query("pageSize") pageSize: Int = 24
-    ): HomeListResponse
+        @Query("perPage") perPage: Int = 18
+    ): Response<BffResponse<BffTrendingData>>
 
-    @GET("movies")
-    suspend fun getMoviesCategory(
-        @Query("page") page: Int = 1
-    ): HomeListResponse
+    @POST("subject/filter")
+    suspend fun filterSubjects(
+        @Body request: BffFilterRequest
+    ): BffResponse<BffFilterData>
 
-    @GET("asian")
-    suspend fun getSeriesCategory(
-        @Query("page") page: Int = 1
-    ): HomeListResponse
+    @POST("subject/search")
+    suspend fun searchSubjects(
+        @Header("Authorization") authHeader: String,
+        @Header("Referer") referer: String,
+        @Body request: BffSearchRequest
+    ): BffResponse<BffSearchData>
 
-    @GET("anime")
-    suspend fun getAnimeCategory(
-        @Query("page") page: Int = 1
-    ): HomeListResponse
-
-    @GET("kids")
-    suspend fun getKidsCategory(
-        @Query("page") page: Int = 1
-    ): HomeListResponse
-
-    @GET("search")
-    suspend fun search(
-        @Query("q") query: String,
-        @Query("page") page: Int = 1,
-        @Query("pageSize") pageSize: Int = 24
-    ): SearchResponse
-
-    @GET("detail/{subjectId}")
+    @GET("detail")
     suspend fun getDetail(
-        @Path("subjectId") subjectId: String
-    ): SubjectDetailResponse
+        @Query("detailPath") detailPath: String
+    ): BffResponse<BffDetailData>
 
-    @GET("episodes/{seriesId}")
-    suspend fun getEpisodes(
-        @Path("seriesId") seriesId: String
-    ): EpisodesResponse
+    @GET("subject/play")
+    suspend fun getPlayInfo(
+        @Query("subjectId") subjectId: String? = null,
+        @Query("se") season: Int = 0,
+        @Query("ep") episode: Int = 0,
+        @Query("detailPath") detailPath: String,
+        @Query("streamSignType") streamSignType: Int = 1,
+        @Query("supportCodecs[h264]") h264Codec: Int = 1,
+        @Header("Referer") referer: String
+    ): BffResponse<BffPlayData>
 
-    @GET("stream/{subjectId}")
-    suspend fun playInfo(
-        @Path("subjectId") subjectId: String,
-        @Query("season") season: Int = 1,
-        @Query("episode") episode: Int = 1,
-        @Query("quality") quality: String = "1080p",
-        @Query("resource_id") resourceId: String? = null
-    ): PlayInfo
+    @GET("subject/caption")
+    suspend fun getCaptions(
+        @Query("format") format: String = "MP4",
+        @Query("id") streamId: String,
+        @Query("subjectId") subjectId: String? = null,
+        @Query("detailPath") detailPath: String,
+        @Header("Referer") referer: String
+    ): BffResponse<BffCaptionData>
 
     companion object {
-        fun create(context: Context, baseUrl: String = "http://127.0.0.1:3001/"): MovieBoxApi {
+        const val BASE_URL = "https://themoviebox.xyz/wefeed-h5api-bff/"
+
+        fun create(): MovieBoxApi {
             val okHttpClient = OkHttpClient.Builder()
                 .connectTimeout(15, TimeUnit.SECONDS)
                 .readTimeout(15, TimeUnit.SECONDS)
                 .writeTimeout(15, TimeUnit.SECONDS)
+                .addInterceptor { chain ->
+                    val request = chain.request().newBuilder()
+                        .header("Referer", "https://themoviebox.xyz/")
+                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                        .header("X-Request-Lang", "en")
+                        .build()
+                    chain.proceed(request)
+                }
                 .build()
 
             return Retrofit.Builder()
-                .baseUrl(baseUrl)
+                .baseUrl(BASE_URL)
                 .client(okHttpClient)
                 .addConverterFactory(GsonConverterFactory.create())
                 .build()

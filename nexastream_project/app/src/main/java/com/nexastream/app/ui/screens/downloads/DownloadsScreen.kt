@@ -37,13 +37,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.scheduler.Requirements
 import coil.compose.AsyncImage
 import com.nexastream.app.models.Download
 import com.nexastream.app.models.LocalVideoFile
 
-@UnstableApi
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DownloadsScreen(
@@ -226,7 +223,7 @@ fun DownloadsScreen(
             } else {
                 val isWaitingForWifi = downloads.any { download ->
                     (download.status == Download.Status.QUEUED || download.status == Download.Status.DOWNLOADING) &&
-                            (download.waitingReason and Requirements.NETWORK_UNMETERED) != 0
+                            download.waitingReason != 0
                 }
 
                 Column(modifier = Modifier.fillMaxSize().padding(padding)) {
@@ -482,7 +479,6 @@ fun LocalVideoItem(
     }
 }
 
-@UnstableApi
 @Composable
 fun DownloadItem(
     download: Download,
@@ -567,11 +563,7 @@ fun DownloadItem(
                 }
                 Text(
                     text = if (download.waitingReason != 0) {
-                        when {
-                            (download.waitingReason and Requirements.NETWORK_UNMETERED) != 0 -> "Waiting for Wi-Fi..."
-                            (download.waitingReason and Requirements.NETWORK) != 0 -> "Waiting for network..."
-                            else -> "Waiting..."
-                        }
+                        "Waiting for Wi-Fi..."
                     } else if (hasKnownProgress) {
                         "Downloading... ${download.progress}%"
                     } else {
@@ -649,21 +641,12 @@ private fun DownloadMetadata(download: Download) {
     }
 }
 
-@UnstableApi
 private fun statusLabel(download: Download): String {
     return when (download.status) {
         Download.Status.FAILED -> "Failed"
         Download.Status.PAUSED -> "Paused"
         Download.Status.COMPLETED -> "Ready to watch"
-        Download.Status.QUEUED -> {
-            if (download.waitingReason != 0) {
-                when {
-                    (download.waitingReason and Requirements.NETWORK_UNMETERED) != 0 -> "Waiting for Wi-Fi..."
-                    (download.waitingReason and Requirements.NETWORK) != 0 -> "Waiting for network..."
-                    else -> "Queued"
-                }
-            } else "Queued"
-        }
+        Download.Status.QUEUED -> if (download.waitingReason != 0) "Waiting for Wi-Fi..." else "Queued"
         Download.Status.DOWNLOADING -> "Downloading"
     }
 }

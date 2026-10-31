@@ -160,24 +160,9 @@
             android:theme="@style/AppTheme.Mobile" />
 
         <service
-            android:name=".services.NexaDownloadService"
+            android:name=".services.MovieBoxDownloadService"
             android:exported="false"
-            android:foregroundServiceType="dataSync">
-            <intent-filter>
-                <action android:name="androidx.media3.exoplayer.offline.action.RESTART" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </service>
-
-        <service
-            android:name=".services.NexaStreamDownloadService"
-            android:exported="false"
-            android:foregroundServiceType="dataSync">
-            <intent-filter>
-                <action android:name="androidx.media3.exoplayer.offline.action.RESTART" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </service>
+            android:foregroundServiceType="dataSync" />
 
         <service
             android:name=".live.LiveDvrService"

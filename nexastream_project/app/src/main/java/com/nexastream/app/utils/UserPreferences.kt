@@ -38,7 +38,7 @@ object UserPreferences {
     private const val DEFAULT_STREAMINGCOMMUNITY_DOMAIN = "streamingunity.dog"
     private const val DEFAULT_CUEVANA_DOMAIN = "cuevana.gs"
     private const val DEFAULT_POSEIDON_DOMAIN = "www.poseidonhd2.co"
-    private const val DEFAULT_STREAM_RESOLVER_URL = "https://streamed-pk-resolver.onrender.com"
+    private const val DEFAULT_STREAM_RESOLVER_URL = "https://streamed-pk-resolver.joke.blitz.cloud/"
 
     const val PROVIDER_URL = "URL"
     const val PROVIDER_LOGO = "LOGO"

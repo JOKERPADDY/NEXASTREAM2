@@ -1042,6 +1042,8 @@ class TvShowViewHolder(
         }
     }
     private fun displayRecommendationsMobile(binding: ContentTvShowRecommendationsMobileBinding) {
+        val hasDubs = tvShow.recommendations.any { it.title.contains("Audio", ignoreCase = true) || it.title.contains("dub", ignoreCase = true) }
+        binding.tvTvShowRecommendationsLabel.text = if (hasDubs) "Other audio versions" else context.getString(R.string.movie_you_may_also_like)
         binding.rvTvShowRecommendations.apply {
             adapter = AppAdapter().apply {
                 submitList(tvShow.recommendations.onEach {
@@ -1058,6 +1060,8 @@ class TvShowViewHolder(
     }
 
     private fun displayRecommendationsTv(binding: ContentTvShowRecommendationsTvBinding) {
+        val hasDubs = tvShow.recommendations.any { it.title.contains("Audio", ignoreCase = true) || it.title.contains("dub", ignoreCase = true) }
+        binding.tvTvShowRecommendationsLabel.text = if (hasDubs) "Other audio versions" else context.getString(R.string.movie_you_may_also_like)
         binding.hgvTvShowRecommendations.apply {
             setRowHeight(ViewGroup.LayoutParams.WRAP_CONTENT)
             adapter = AppAdapter().apply {

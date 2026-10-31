@@ -75,8 +75,6 @@ class HomeTvFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        UserPreferences.currentProvider = NexaHomeProvider
-        UserPreferences.previousProviderToRestore = null
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {

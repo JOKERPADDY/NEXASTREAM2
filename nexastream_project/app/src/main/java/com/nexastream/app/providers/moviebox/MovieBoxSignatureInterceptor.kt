@@ -134,6 +134,7 @@ class MovieBoxSignatureInterceptor(private val context: Context) : Interceptor {
             .header("appid", "4U01pxRu278GqCZKY9")
             .header("region", region)
             .header("lang", "en")
+            .header("X-Request-Lang", "en")
             .header("os", "android")
             .header("X-Timestamp", timestamp)
             .header("Referer", "https://api.inmoviebox.com/")
@@ -187,12 +188,11 @@ class MovieBoxSignatureInterceptor(private val context: Context) : Interceptor {
     ) {
         try {
             val tabUrl = originalUrl.newBuilder()
-                .encodedPath("/trending")
+                .encodedPath("/wefeed-h5api-bff/subject/trending")
                 .removeAllQueryParameters("host")
                 .addQueryParameter("host", "api.inmoviebox.com")
-                .addQueryParameter("tabId", "1")
                 .addQueryParameter("page", "1")
-                .addQueryParameter("pageSize", "24")
+                .addQueryParameter("perPage", "1")
                 .build()
 
             val req = Request.Builder()
@@ -204,6 +204,7 @@ class MovieBoxSignatureInterceptor(private val context: Context) : Interceptor {
                 .header("appid", "4U01pxRu278GqCZKY9")
                 .header("region", region)
                 .header("lang", "en")
+                .header("X-Request-Lang", "en")
                 .header("os", "android")
                 .header("X-Timestamp", ts)
                 .header("Referer", "https://api.inmoviebox.com/")

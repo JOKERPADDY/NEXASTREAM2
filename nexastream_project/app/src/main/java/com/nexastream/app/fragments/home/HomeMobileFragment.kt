@@ -63,8 +63,6 @@ class HomeMobileFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        UserPreferences.currentProvider = com.nexastream.app.providers.NexaHomeProvider
-        UserPreferences.previousProviderToRestore = null
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {

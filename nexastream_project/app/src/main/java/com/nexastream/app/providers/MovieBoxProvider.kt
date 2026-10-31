@@ -1,54 +1,390 @@
 package com.nexastream.app.providers
 
+import android.util.Log
+import com.google.gson.JsonParser
 import com.nexastream.app.adapters.AppAdapter
-
 import com.nexastream.app.models.Category
 import com.nexastream.app.models.Episode
 import com.nexastream.app.models.Genre
 import com.nexastream.app.models.Movie
 import com.nexastream.app.models.People
 import com.nexastream.app.models.SearchFilters
+import com.nexastream.app.models.Season
+import com.nexastream.app.models.Show
 import com.nexastream.app.models.TvShow
 import com.nexastream.app.models.Video
+import com.nexastream.app.providers.moviebox.*
+import java.util.Locale
 
 object MovieBoxProvider : Provider {
 
-    override val baseUrl = "http://127.0.0.1:3001"
+    override val baseUrl = "https://themoviebox.xyz"
     override val name = "MovieBox"
-    override val logo = "https://www.moviebox.ph/favicon.ico"
+    override val logo = "https://themoviebox.xyz/favicon.ico"
     override val language = "en"
 
+    private val api: MovieBoxApi by lazy {
+        MovieBoxApi.create()
+    }
 
+    private var cachedGuestToken: String? = null
 
-    override suspend fun getHome(): List<Category> = GengaProvider.getHome()
+    private suspend fun getGuestToken(): String {
+        cachedGuestToken?.let { return it }
+        return try {
+            val response = api.getTrending(page = 1, perPage = 1)
+            val xUser = response.headers()["x-user"]
+            if (!xUser.isNullOrBlank()) {
+                val token = JsonParser.parseString(xUser).asJsonObject.get("token")?.asString
+                if (!token.isNullOrBlank()) {
+                    cachedGuestToken = token
+                    token
+                } else ""
+            } else ""
+        } catch (e: Exception) {
+            Log.e("MovieBoxProvider", "Error fetching guest token", e)
+            ""
+        }
+    }
 
-    suspend fun getCategory(category: String, page: Int = 1): List<AppAdapter.Item> = GengaProvider.getCategory(category, page)
+    override suspend fun getHome(): List<Category> {
+        val categories = mutableListOf<Category>()
+        try {
+            val homeResponse = api.getHome()
+            val operatingList = homeResponse.data?.operatingList.orEmpty()
+
+            for (item in operatingList) {
+                val itemsList = mutableListOf<AppAdapter.Item>()
+                if (item.type == "BANNER") {
+                    item.banner?.items?.forEach { bannerItem ->
+                        bannerItem.subject?.let { subjectToAppItem(it)?.let { appItem -> itemsList.add(appItem) } }
+                    }
+                } else {
+                    item.subjects?.forEach { subject ->
+                        subjectToAppItem(subject)?.let { appItem -> itemsList.add(appItem) }
+                    }
+                }
+                if (itemsList.isNotEmpty()) {
+                    categories.add(Category(name = item.title ?: "Recommended", list = itemsList))
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("MovieBoxProvider", "Error in getHome", e)
+        }
+        return categories
+    }
+
+    suspend fun getCategory(category: String, page: Int = 1): List<AppAdapter.Item> {
+        return when (category.lowercase(Locale.US)) {
+            "kids" -> getMovies(page)
+            "anime" -> getTvShows(page)
+            "asian" -> getTvShows(page)
+            else -> getMovies(page)
+        }
+    }
+
+    override suspend fun getMovies(page: Int): List<Movie> {
+        return try {
+            val response = api.filterSubjects(BffFilterRequest(channelId = 1, page = page))
+            response.data?.items?.mapNotNull { subjectToMovie(it) }.orEmpty()
+        } catch (e: Exception) {
+            Log.e("MovieBoxProvider", "Error in getMovies", e)
+            emptyList()
+        }
+    }
+
+    override suspend fun getTvShows(page: Int): List<TvShow> {
+        return try {
+            val response = api.filterSubjects(BffFilterRequest(channelId = 2, page = page))
+            response.data?.items?.mapNotNull { subjectToTvShow(it) }.orEmpty()
+        } catch (e: Exception) {
+            Log.e("MovieBoxProvider", "Error in getTvShows", e)
+            emptyList()
+        }
+    }
 
     override suspend fun search(
         query: String,
         page: Int,
         filters: SearchFilters?
-    ): List<AppAdapter.Item> = GengaProvider.search(query, page, filters)
+    ): List<AppAdapter.Item> {
+        return try {
+            val token = getGuestToken()
+            val response = api.searchSubjects(
+                authHeader = if (token.isNotBlank()) "Bearer $token" else "",
+                referer = "https://themoviebox.xyz/newWeb/searchResult?keyword=$query",
+                request = BffSearchRequest(keyword = query, page = page)
+            )
+            response.data?.items?.mapNotNull { subjectToAppItem(it) }.orEmpty()
+        } catch (e: Exception) {
+            Log.e("MovieBoxProvider", "Error in search", e)
+            emptyList()
+        }
+    }
 
-    override suspend fun getMovies(page: Int): List<Movie> = GengaProvider.getMovies(page)
+    override suspend fun getMovie(id: String): Movie {
+        val detailResponse = api.getDetail(detailPath = id)
+        val data = detailResponse.data ?: throw IllegalStateException("Movie data not found: $id")
+        val subject = data.subject ?: throw IllegalStateException("Movie subject not found: $id")
+        val stars = data.stars.orEmpty()
 
-    override suspend fun getTvShows(page: Int): List<TvShow> = GengaProvider.getTvShows(page)
+        val dubRecommendations = mutableListOf<Show>()
+        subject.dubs?.forEach { dub ->
+            val dubPath = dub.detailPath ?: dub.subjectId ?: return@forEach
+            val label = dub.lanName ?: dub.lanCode ?: "Audio"
+            val dubTitle = if (dub.original == true) "$label (Original)" else "$label Audio"
+            dubRecommendations.add(
+                Movie(
+                    id = dubPath,
+                    title = dubTitle,
+                    overview = subject.description,
+                    poster = subject.cover?.url,
+                    banner = subject.stills?.url ?: subject.cover?.url,
+                    rating = subject.imdbRatingValue?.toDoubleOrNull(),
+                    released = subject.releaseDate,
+                    providerName = name
+                )
+            )
+        }
 
-    override suspend fun getMovie(id: String): Movie = GengaProvider.getMovie(id)
+        val castMembers = stars.map { star ->
+            People(
+                id = star.name ?: "",
+                name = star.name ?: "",
+                image = star.avatarUrl
+            )
+        }
 
-    override suspend fun getTvShow(id: String): TvShow = GengaProvider.getTvShow(id)
+        val genreList = subject.genre?.split(",")?.map { Genre(id = it.trim(), name = it.trim()) }.orEmpty()
 
-    override suspend fun getEpisodesBySeason(seasonId: String): List<Episode> = GengaProvider.getEpisodesBySeason(seasonId)
+        return Movie(
+            id = subject.detailPath?.takeIf { it.isNotBlank() } ?: subject.subjectId ?: id,
+            title = subject.title ?: "",
+            overview = subject.description,
+            poster = subject.cover?.url,
+            banner = subject.stills?.url ?: subject.cover?.url,
+            rating = subject.imdbRatingValue?.toDoubleOrNull(),
+            released = subject.releaseDate,
+            genres = genreList,
+            cast = castMembers,
+            recommendations = dubRecommendations,
+            providerName = name
+        )
+    }
 
-    override suspend fun getGenre(id: String, page: Int): Genre = GengaProvider.getGenre(id, page)
+    override suspend fun getTvShow(id: String): TvShow {
+        val detailResponse = api.getDetail(detailPath = id)
+        val data = detailResponse.data ?: throw IllegalStateException("TvShow data not found: $id")
+        val subject = data.subject ?: throw IllegalStateException("TvShow subject not found: $id")
+        val stars = data.stars.orEmpty()
+        val seasonsResource = data.resource?.seasons.orEmpty()
 
-    override suspend fun getPeople(id: String, page: Int): People = GengaProvider.getPeople(id, page)
+        val dubRecommendations = mutableListOf<Show>()
+        subject.dubs?.forEach { dub ->
+            val dubPath = dub.detailPath ?: dub.subjectId ?: return@forEach
+            val label = dub.lanName ?: dub.lanCode ?: "Audio"
+            val dubTitle = if (dub.original == true) "$label (Original)" else "$label Audio"
+            dubRecommendations.add(
+                TvShow(
+                    id = dubPath,
+                    title = dubTitle,
+                    overview = subject.description,
+                    poster = subject.cover?.url,
+                    banner = subject.stills?.url ?: subject.cover?.url,
+                    rating = subject.imdbRatingValue?.toDoubleOrNull(),
+                    released = subject.releaseDate,
+                    providerName = name
+                )
+            )
+        }
+
+        val seasons = seasonsResource.map { seasonRes ->
+            val seasonNum = seasonRes.se ?: 1
+            val maxEp = seasonRes.maxEp ?: 1
+            val episodes = (1..maxEp).map { epNum ->
+                Episode(
+                    id = "${subject.detailPath}_${seasonNum}_$epNum",
+                    number = epNum,
+                    title = "Episode $epNum"
+                )
+            }
+            Season(
+                id = "${subject.detailPath}_$seasonNum",
+                number = seasonNum,
+                title = "Season $seasonNum",
+                episodes = episodes
+            )
+        }
+
+        val castMembers = stars.map { star ->
+            People(
+                id = star.name ?: "",
+                name = star.name ?: "",
+                image = star.avatarUrl
+            )
+        }
+
+        val genreList = subject.genre?.split(",")?.map { Genre(id = it.trim(), name = it.trim()) }.orEmpty()
+
+        return TvShow(
+            id = subject.detailPath?.takeIf { it.isNotBlank() } ?: subject.subjectId ?: id,
+            title = subject.title ?: "",
+            overview = subject.description,
+            poster = subject.cover?.url,
+            banner = subject.stills?.url ?: subject.cover?.url,
+            rating = subject.imdbRatingValue?.toDoubleOrNull(),
+            released = subject.releaseDate,
+            seasons = seasons,
+            genres = genreList,
+            cast = castMembers,
+            recommendations = dubRecommendations,
+            providerName = name
+        )
+    }
+
+    override suspend fun getEpisodesBySeason(seasonId: String): List<Episode> {
+        val parts = seasonId.split("_")
+        if (parts.size >= 2) {
+            val detailPath = parts[0]
+            val seasonNum = parts[1].toIntOrNull() ?: 1
+            val tvShow = getTvShow(detailPath)
+            return tvShow.seasons.find { it.number == seasonNum }?.episodes.orEmpty()
+        }
+        return emptyList()
+    }
+
+    override suspend fun getGenre(id: String, page: Int): Genre {
+        return Genre(id = id, name = id)
+    }
+
+    override suspend fun getPeople(id: String, page: Int): People {
+        return People(id = id, name = id)
+    }
 
     override suspend fun getServers(id: String, videoType: Video.Type): List<Video.Server> {
-        return com.nexastream.app.extractors.MovieBoxExtractor().servers(videoType)
+        val servers = mutableListOf<Video.Server>()
+        try {
+            val detailPath = when (videoType) {
+                is Video.Type.Episode -> videoType.tvShow.id.takeIf { it.isNotBlank() } ?: id.split("_").firstOrNull() ?: id
+                else -> id
+            }
+            val (season, episode) = when (videoType) {
+                is Video.Type.Episode -> Pair(videoType.season.number, videoType.number)
+                else -> Pair(0, 0)
+            }
+
+            val playResponse = api.getPlayInfo(
+                subjectId = null,
+                season = season,
+                episode = episode,
+                detailPath = detailPath,
+                referer = "https://themoviebox.xyz/movies/$detailPath"
+            )
+
+            val streams = playResponse.data?.streams.orEmpty()
+            for (stream in streams) {
+                val streamUrl = stream.url ?: continue
+                if (stream.vipLocked == true && streamUrl.isBlank()) continue
+
+                val res = stream.resolutions ?: "1080"
+                val streamId = stream.id ?: res
+                val sizeBytes = stream.size
+
+                val subtitlesList = try {
+                    val captionResponse = api.getCaptions(
+                        streamId = streamId,
+                        detailPath = detailPath,
+                        referer = "https://themoviebox.xyz/movies/$detailPath"
+                    )
+                    captionResponse.data?.captions?.map { cap ->
+                        Video.Subtitle(
+                            label = cap.lanName ?: cap.lan ?: "Subtitle",
+                            file = cap.url ?: "",
+                            language = cap.lan,
+                            default = cap.lan?.lowercase(Locale.US)?.startsWith("en") == true
+                        )
+                    }.orEmpty()
+                } catch (e: Exception) {
+                    emptyList()
+                }
+
+                val formattedSize = if (sizeBytes != null && sizeBytes > 0) {
+                    val mb = sizeBytes.toDouble() / (1024.0 * 1024.0)
+                    if (mb >= 1000.0) String.format(Locale.US, "%.1f GB", mb / 1024.0)
+                    else String.format(Locale.US, "%.0f MB", mb)
+                } else null
+
+                val serverName = if (formattedSize != null) {
+                    "${res}p ($formattedSize · ${stream.format ?: "MP4"})"
+                } else {
+                    "${res}p (${stream.format ?: "MP4"})"
+                }
+
+                val server = Video.Server(
+                    id = "moviebox_${streamId}_$res",
+                    name = serverName,
+                    src = streamUrl
+                ).apply {
+                    this.video = Video(
+                        source = streamUrl,
+                        subtitles = subtitlesList,
+                        headers = mapOf(
+                            "Referer" to "https://themoviebox.xyz/movies/$detailPath",
+                            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                        ),
+                        type = "video/mp4"
+                    )
+                }
+                servers.add(server)
+            }
+        } catch (e: Exception) {
+            Log.e("MovieBoxProvider", "Error fetching play info", e)
+        }
+        return servers
     }
 
     override suspend fun getVideo(server: Video.Server): Video {
-        return com.nexastream.app.extractors.Extractor.extract(server.src)
+        return server.video ?: Video(
+            source = server.src,
+            headers = mapOf("Referer" to "https://themoviebox.xyz/"),
+            type = "video/mp4"
+        )
+    }
+
+    private fun subjectToAppItem(subject: BffSubject): AppAdapter.Item? {
+        val isTv = subject.subjectType == 2
+        return if (isTv) {
+            subjectToTvShow(subject)
+        } else {
+            subjectToMovie(subject)
+        }
+    }
+
+    private fun subjectToMovie(subject: BffSubject): Movie? {
+        val detailPath = subject.detailPath?.takeIf { it.isNotBlank() } ?: subject.subjectId ?: return null
+        return Movie(
+            id = detailPath,
+            title = subject.title ?: "",
+            overview = subject.description,
+            poster = subject.cover?.url,
+            banner = subject.stills?.url ?: subject.cover?.url,
+            rating = subject.imdbRatingValue?.toDoubleOrNull(),
+            released = subject.releaseDate,
+            providerName = name
+        )
+    }
+
+    private fun subjectToTvShow(subject: BffSubject): TvShow? {
+        val detailPath = subject.detailPath?.takeIf { it.isNotBlank() } ?: subject.subjectId ?: return null
+        return TvShow(
+            id = detailPath,
+            title = subject.title ?: "",
+            overview = subject.description,
+            poster = subject.cover?.url,
+            banner = subject.stills?.url ?: subject.cover?.url,
+            rating = subject.imdbRatingValue?.toDoubleOrNull(),
+            released = subject.releaseDate,
+            providerName = name
+        )
     }
 }
