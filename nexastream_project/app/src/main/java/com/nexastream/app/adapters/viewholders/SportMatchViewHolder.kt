@@ -15,7 +15,6 @@ import com.nexastream.app.models.ProgramReminder
 import com.nexastream.app.models.SportMatch
 import com.nexastream.app.models.Video
 import com.nexastream.app.providers.AkSportsLiveProvider
-import com.nexastream.app.providers.NexaHomeProvider
 import com.nexastream.app.utils.UserPreferences
 import com.nexastream.app.utils.loadSportMatchPoster
 import kotlinx.coroutines.CoroutineScope
@@ -83,15 +82,13 @@ class SportMatchViewHolder(
     }
 
     private fun openMatch(view: android.view.View, match: SportMatch) {
-        val playbackId = if (UserPreferences.currentProvider == NexaHomeProvider) {
+        if (UserPreferences.currentProvider != AkSportsLiveProvider) {
             if (UserPreferences.previousProviderToRestore == null) {
                 UserPreferences.previousProviderToRestore = UserPreferences.currentProvider
             }
             UserPreferences.currentProvider = AkSportsLiveProvider
-            AkSportsLiveProvider.playbackId(match)
-        } else {
-            match.id
         }
+        val playbackId = AkSportsLiveProvider.playbackId(match)
 
         view.findNavController().navigate(
             R.id.action_global_player,

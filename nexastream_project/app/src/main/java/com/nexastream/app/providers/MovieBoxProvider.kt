@@ -3,6 +3,16 @@ package com.nexastream.app.providers
 import android.util.Log
 import com.google.gson.JsonParser
 import com.nexastream.app.adapters.AppAdapter
+import com.nexastream.app.extractors.Extractor
+import com.nexastream.app.extractors.PrimeSrcExtractor
+import com.nexastream.app.extractors.TwoEmbedExtractor
+import com.nexastream.app.extractors.VidLinkExtractor
+import com.nexastream.app.extractors.VidflixExtractor
+import com.nexastream.app.extractors.VidsrcNetExtractor
+import com.nexastream.app.extractors.VidsrcRuExtractor
+import com.nexastream.app.extractors.VidsrcToExtractor
+import com.nexastream.app.extractors.VixSrcExtractor
+import com.nexastream.app.utils.TmdbUtils
 import com.nexastream.app.models.Category
 import com.nexastream.app.models.Episode
 import com.nexastream.app.models.Genre
@@ -226,7 +236,7 @@ object MovieBoxProvider : Provider {
 
         val genreList = subject.genre?.split(",")?.map { Genre(id = it.trim(), name = it.trim()) }.orEmpty()
 
-        return TvShow(
+        val show = TvShow(
             id = subject.detailPath?.takeIf { it.isNotBlank() } ?: subject.subjectId ?: id,
             title = subject.title ?: "",
             overview = subject.description,
@@ -240,6 +250,14 @@ object MovieBoxProvider : Provider {
             recommendations = dubRecommendations,
             providerName = name
         )
+        seasons.forEach { season ->
+            season.tvShow = show
+            season.episodes.forEach {
+                it.tvShow = show
+                it.season = season
+            }
+        }
+        return TmdbUtils.enrichTvShow(show)
     }
 
     override suspend fun getEpisodesBySeason(seasonId: String): List<Episode> {
@@ -261,8 +279,63 @@ object MovieBoxProvider : Provider {
         return People(id = id, name = id)
     }
 
+    private suspend fun resolveTmdbVideoType(videoType: Video.Type): Video.Type? {
+        return try {
+            when (videoType) {
+                is Video.Type.Episode -> {
+                    val rawId = videoType.tvShow.id
+                    if (rawId.toIntOrNull() != null) {
+                        videoType
+                    } else {
+                        val rawTitle = videoType.tvShow.title
+                        val cleanTitle = rawTitle.replace(Regex("""\s*\[.*?\]"""), "").trim()
+                        val tmdbShow = TmdbUtils.getTvShow(cleanTitle.ifBlank { rawTitle })
+                        if (tmdbShow != null) {
+                            videoType.copy(
+                                tvShow = videoType.tvShow.copy(
+                                    id = tmdbShow.id,
+                                    imdbId = tmdbShow.imdbId ?: videoType.tvShow.imdbId
+                                )
+                            )
+                        } else null
+                    }
+                }
+                is Video.Type.Movie -> {
+                    val rawId = videoType.id
+                    if (rawId.toIntOrNull() != null) {
+                        videoType
+                    } else {
+                        val rawTitle = videoType.title
+                        val cleanTitle = rawTitle.replace(Regex("""\s*\[.*?\]"""), "").trim()
+                        val tmdbMovie = TmdbUtils.getMovie(cleanTitle.ifBlank { rawTitle })
+                        if (tmdbMovie != null) {
+                            videoType.copy(
+                                id = tmdbMovie.id,
+                                imdbId = tmdbMovie.imdbId ?: videoType.imdbId
+                            )
+                        } else null
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("MovieBoxProvider", "Failed to resolve TMDB videoType", e)
+            null
+        }
+    }
+
     override suspend fun getServers(id: String, videoType: Video.Type): List<Video.Server> {
         val servers = mutableListOf<Video.Server>()
+
+        val tmdbVideoType = resolveTmdbVideoType(videoType)
+
+        if (tmdbVideoType != null) {
+            try {
+                servers.add(VixSrcExtractor().server(tmdbVideoType))
+            } catch (e: Exception) {
+                Log.w("MovieBoxProvider", "Failed to add VixSrc server", e)
+            }
+        }
+
         try {
             val detailPath = when (videoType) {
                 is Video.Type.Episode -> videoType.tvShow.id.takeIf { it.isNotBlank() } ?: id.split("_").firstOrNull() ?: id
@@ -340,15 +413,32 @@ object MovieBoxProvider : Provider {
         } catch (e: Exception) {
             Log.e("MovieBoxProvider", "Error fetching play info", e)
         }
+
+        if (tmdbVideoType != null) {
+            try {
+                servers.addAll(
+                    listOf(
+                        TwoEmbedExtractor().server(tmdbVideoType),
+                        VidsrcNetExtractor().server(tmdbVideoType),
+                        VidLinkExtractor().server(tmdbVideoType),
+                        VidsrcRuExtractor().server(tmdbVideoType),
+                        VidflixExtractor().server(tmdbVideoType),
+                        VidsrcToExtractor().server(tmdbVideoType),
+                        PrimeSrcExtractor().server(tmdbVideoType)
+                    )
+                )
+            } catch (e: Exception) {
+                Log.w("MovieBoxProvider", "Failed to add multi-embed fallbacks", e)
+            }
+        }
+
         return servers
     }
 
     override suspend fun getVideo(server: Video.Server): Video {
-        return server.video ?: Video(
-            source = server.src,
-            headers = mapOf("Referer" to "https://themoviebox.xyz/"),
-            type = "video/mp4"
-        )
+        if (server.video != null) return server.video!!
+        val url = server.src.ifEmpty { server.id }
+        return Extractor.extract(url, server)
     }
 
     private fun subjectToAppItem(subject: BffSubject): AppAdapter.Item? {

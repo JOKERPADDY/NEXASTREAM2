@@ -105,6 +105,52 @@ object TmdbUtils {
         } catch (_: Exception) { null }
     }
 
+    suspend fun enrichTvShow(show: TvShow): TvShow {
+        if (!UserPreferences.enableTmdb) return show
+        return try {
+            val cleanTitle = show.title.replace(Regex("""\s*\[.*?\]"""), "").trim()
+            val tmdb = getTvShow(cleanTitle.ifBlank { show.title })
+            android.util.Log.d("TmdbUtils", "enrichTvShow: title=${show.title}, cleanTitle=$cleanTitle, tmdb found=${tmdb != null}")
+
+            val enrichedSeasons = show.seasons.map { season ->
+                val tmdbSeason = tmdb?.seasons?.find { it.number == season.number }
+                val tmdbEpisodes = if (tmdb != null) getEpisodesBySeason(tmdb.id, season.number) else emptyList()
+                
+                val enrichedEpisodes = season.episodes.map { episode ->
+                    val tmdbEp = tmdbEpisodes.find { it.number == episode.number }
+                    episode.copy(
+                        title = tmdbEp?.title?.ifBlank { episode.title } ?: episode.title,
+                        overview = tmdbEp?.overview ?: episode.overview,
+                        poster = tmdbEp?.poster ?: show.banner ?: show.poster ?: episode.poster
+                    )
+                }
+
+                season.copy(
+                    title = tmdbSeason?.title?.ifBlank { season.title } ?: season.title,
+                    poster = tmdbSeason?.poster ?: show.banner ?: show.poster ?: season.poster,
+                    episodes = enrichedEpisodes
+                ).apply {
+                    this.tvShow = show
+                    this.episodes.forEach { ep ->
+                        ep.tvShow = show
+                        ep.season = this
+                    }
+                }
+            }
+
+            show.copy(
+                poster = tmdb?.poster ?: show.poster,
+                banner = tmdb?.banner ?: show.banner,
+                overview = tmdb?.overview?.takeIf { it.isNotBlank() } ?: show.overview,
+                rating = tmdb?.rating ?: show.rating,
+                seasons = enrichedSeasons
+            )
+        } catch (e: Exception) {
+            android.util.Log.w("TmdbUtils", "Failed to enrich TV show: ${show.title}", e)
+            show
+        }
+    }
+
     suspend fun getEpisodesBySeason(tvShowId: String, seasonNumber: Int, language: String? = null): List<Episode> {
         if (!UserPreferences.enableTmdb) return listOf()
         return try {

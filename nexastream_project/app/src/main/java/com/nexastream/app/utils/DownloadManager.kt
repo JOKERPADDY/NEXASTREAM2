@@ -51,6 +51,20 @@ class DownloadManager @Inject constructor(
             val extension = if (url.contains(".mkv", ignoreCase = true)) "mkv" else "mp4"
             val targetFile = File(downloadsDir, "${sanitizedTitle}_${id.takeLast(6)}.$extension")
 
+            val existing = database.downloadDao().getById(id)
+            if (existing != null) {
+                if (existing.status == Download.Status.COMPLETED) {
+                    val file = File(existing.filePath)
+                    if (file.exists() && file.length() > 0) {
+                        Log.d(TAG, "Download $id is already COMPLETED. Skipping new insert.")
+                        return@launch
+                    }
+                } else if (existing.status == Download.Status.DOWNLOADING) {
+                    Log.d(TAG, "Download $id is already DOWNLOADING. Skipping new insert.")
+                    return@launch
+                }
+            }
+
             val download = Download(
                 id = id,
                 title = title,

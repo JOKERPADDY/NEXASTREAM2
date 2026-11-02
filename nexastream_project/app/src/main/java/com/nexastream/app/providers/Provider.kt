@@ -65,6 +65,7 @@ interface Provider {
         )
 
         val providers: Map<Provider, ProviderSupport> = mapOf(
+            StreamsProvider to ProviderSupport(movies = true, tvShows = true),
             GengaProvider to ProviderSupport(movies = true, tvShows = true),
             MovieBoxProvider to ProviderSupport(movies = true, tvShows = true),
             MovieBox2Provider to ProviderSupport(movies = true, tvShows = true),

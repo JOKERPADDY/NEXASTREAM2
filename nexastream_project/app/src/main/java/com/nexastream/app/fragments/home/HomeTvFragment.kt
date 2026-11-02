@@ -350,30 +350,32 @@ class HomeTvFragment : Fragment() {
                         "All TV Shows" -> "tmdb_tv_popular" to category.name
                         "Trending Series" -> "tmdb_tv_popular" to category.name
 
+                        "STREAMS Kids" -> "streams_kids" to "Kids"
                         "Kids & Family" -> "tmdb_kids_family" to category.name
-                        "Cartoon Movies", "CartoonMovies" -> "tmdb_cartoon_movies" to category.name
-                        "Cartoon Series" -> "tmdb_cartoon_series" to category.name
+                        "Cartoon Movies", "CartoonMovies" -> "streams_cartoon_movies" to category.name
+                        "Cartoon Series" -> "streams_cartoon_series" to category.name
                         "Baby" -> "tmdb_keyword_10229" to category.name
                         "Age 2-6" -> "tmdb_kids_family" to category.name
-                        "Pixar" -> "tmdb_studio_3" to category.name
-                        "DreamWorks" -> "tmdb_studio_521" to category.name
+                        "Pixar", "Pixar Studio" -> "streams_pixar" to category.name
+                        "DreamWorks", "DreamWorks Studio" -> "streams_dreamworks" to category.name
                         "Blue Sky Studios", "BlueSky Studios", "Bluesky Studios" -> "tmdb_studio_10378" to category.name
-                        "Illumination" -> "tmdb_studio_6704" to category.name
+                        "Illumination", "Illumination Studio" -> "streams_illumination" to category.name
                         "Toys" -> "tmdb_keyword_11134" to category.name
-                        "Kung Fu Panda" -> "search_Kung Fu Panda" to category.name
-                        "Cars" -> "search_Cars" to category.name
-                        "Frozen" -> "search_Frozen" to category.name
-                        "Minions" -> "search_Minions" to category.name
+                        "Kung Fu Panda" -> "streams_kung_fu_panda" to category.name
+                        "Cars" -> "streams_cars" to category.name
+                        "Frozen" -> "streams_frozen" to category.name
+                        "Minions" -> "streams_minions" to category.name
                         "Peppa Pig" -> "search_Peppa Pig" to category.name
 
+                        "STREAMS Anime" -> "streams_anime" to "Anime"
                         "Anime Universe" -> "tmdb_anime_universe" to category.name
-                        "Anime Movies" -> "tmdb_anime_movies" to category.name
-                        "Japanese Anime" -> "tmdb_japanese_anime" to category.name
-                        "European & American Anime", "American Anime" -> "tmdb_western_anime" to category.name
+                        "Anime Movies" -> "streams_anime_movies" to category.name
+                        "Japanese Anime" -> "streams_japanese_anime" to category.name
+                        "European & American Anime", "American Anime", "Western Anime" -> "streams_western_anime" to category.name
                         "Age 7-12" -> "tmdb_anime_age_7_12" to category.name
-                        "Dragon Ball" -> "search_Dragon Ball" to category.name
-                        "Naruto" -> "search_Naruto" to category.name
-                        "One Piece" -> "search_One Piece" to category.name
+                        "Dragon Ball" -> "streams_dragon_ball" to category.name
+                        "Naruto" -> "streams_naruto" to category.name
+                        "One Piece" -> "streams_one_piece" to category.name
 
                         "Movies Banner" -> "tmdb_movies_popular" to "Movies"
                         "Series Banner" -> "tmdb_tv_popular" to "Series"

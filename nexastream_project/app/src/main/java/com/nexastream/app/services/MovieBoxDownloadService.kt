@@ -85,6 +85,12 @@ class MovieBoxDownloadService : Service() {
         val job = serviceScope.launch {
             val download = database.downloadDao().getById(downloadId) ?: return@launch
 
+            if (download.status == Download.Status.COMPLETED) {
+                Log.d(TAG, "Download $downloadId is already COMPLETED. Skipping start request.")
+                checkStopService()
+                return@launch
+            }
+
             val downloadsDir = File(download.filePath).parentFile
             if (downloadsDir != null && !downloadsDir.exists()) {
                 downloadsDir.mkdirs()
@@ -92,6 +98,23 @@ class MovieBoxDownloadService : Service() {
 
             val targetFile = File(download.filePath)
             var currentBytes = if (targetFile.exists()) targetFile.length() else 0L
+
+            if (download.totalSize > 0 && currentBytes >= download.totalSize) {
+                database.downloadDao().updateProgress(
+                    id = downloadId,
+                    status = Download.Status.COMPLETED,
+                    progress = 100,
+                    downloadedSize = currentBytes,
+                    totalSize = download.totalSize,
+                    downloadSpeed = 0,
+                    etaSeconds = 0
+                )
+                extractThumbnailLocally(downloadId, targetFile)
+                downloadSubtitleIfAvailable(download)
+                updateNotification(downloadId, download.title, "Download complete", 100, false)
+                checkStopService()
+                return@launch
+            }
 
             database.downloadDao().updateStatus(downloadId, Download.Status.DOWNLOADING)
             showForegroundNotification(download.title, 0, "Starting download...")
@@ -123,6 +146,25 @@ class MovieBoxDownloadService : Service() {
                 }
 
                 val response = okHttpClient.newCall(requestBuilder.build()).execute()
+                if (response.code == 416) {
+                    if (currentBytes > 0) {
+                        database.downloadDao().updateProgress(
+                            id = downloadId,
+                            status = Download.Status.COMPLETED,
+                            progress = 100,
+                            downloadedSize = currentBytes,
+                            totalSize = if (download.totalSize > 0) download.totalSize else currentBytes,
+                            downloadSpeed = 0,
+                            etaSeconds = 0
+                        )
+                        extractThumbnailLocally(downloadId, targetFile)
+                        downloadSubtitleIfAvailable(download)
+                        updateNotification(downloadId, download.title, "Download complete", 100, false)
+                        checkStopService()
+                        return@launch
+                    }
+                }
+
                 if (!response.isSuccessful && response.code != 206) {
                     database.downloadDao().updateFailure(downloadId, "HTTP Error ${response.code}")
                     updateNotification(downloadId, download.title, "Download failed (HTTP ${response.code})", 0, false)
@@ -259,6 +301,12 @@ class MovieBoxDownloadService : Service() {
     }
 
     private suspend fun downloadHlsTask(downloadId: String, download: Download) = withContext(Dispatchers.IO) {
+        if (download.status == Download.Status.COMPLETED) {
+            Log.d(TAG, "Download $downloadId is already COMPLETED. Skipping HLS download.")
+            checkStopService()
+            return@withContext
+        }
+
         val downloadsDir = File(download.filePath).parentFile
         if (downloadsDir != null && !downloadsDir.exists()) {
             downloadsDir.mkdirs()
@@ -533,7 +581,10 @@ class MovieBoxDownloadService : Service() {
                         }
                     }
                     runBlocking {
-                        database.downloadDao().insert(download.copy(subtitlePath = subFile.absolutePath))
+                        val current = database.downloadDao().getById(download.id)
+                        if (current != null) {
+                            database.downloadDao().insert(current.copy(subtitlePath = subFile.absolutePath))
+                        }
                     }
                 }
             }

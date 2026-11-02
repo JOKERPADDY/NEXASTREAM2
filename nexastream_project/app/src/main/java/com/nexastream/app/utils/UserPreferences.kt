@@ -19,6 +19,7 @@ import com.nexastream.app.providers.TmdbProvider
 import com.nexastream.app.providers.NexaHomeProvider
 import com.nexastream.app.providers.MovieBoxProvider
 import com.nexastream.app.providers.AkSportsLiveProvider
+import com.nexastream.app.providers.StreamsProvider
 import androidx.core.content.edit
 import androidx.preference.PreferenceManager
 import com.nexastream.app.database.AppDatabase
@@ -70,10 +71,18 @@ object UserPreferences {
         val jsonString = Key.PROVIDER_CACHE.getString() ?: "{}"
         providerCache = runCatching { JSONObject(jsonString) }.getOrDefault(JSONObject())
         
-        // Default to HOME provider if no provider set yet
+        // Keep the TV experience unchanged; use STREAMS by default on fresh mobile installs.
         if (Key.CURRENT_PROVIDER.getString().isNullOrEmpty()) {
-            Key.CURRENT_PROVIDER.setString(NexaHomeProvider.name)
-            cachedProvider = NexaHomeProvider
+            val defaultProvider = if (
+                BuildConfig.APP_LAYOUT == "tv" ||
+                context.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK)
+            ) {
+                NexaHomeProvider
+            } else {
+                StreamsProvider
+            }
+            Key.CURRENT_PROVIDER.setString(defaultProvider.name)
+            cachedProvider = defaultProvider
         }
     }
 
