@@ -47,7 +47,7 @@ class UpdateAppTvDialog(
         } else {
             "New release available: v${updateInfo.versionName}"
         }
-        if (!notes.contains("nexastream.app") && updateInfo.websiteUrl.isNotBlank()) {
+        if (!notes.contains("nexastream") && updateInfo.websiteUrl.isNotBlank()) {
             notes += "\n\n🌐 Or download through our website: ${updateInfo.websiteUrl}"
         }
         if (!notes.contains("t.me") && updateInfo.supportTelegramUrl.isNotBlank()) {

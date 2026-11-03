@@ -23,8 +23,8 @@ object InAppUpdater {
 
     // Primary Production & Fallback Update Configuration URLs
     private val UPDATE_CONFIG_URLS = listOf(
-        "https://nexastream.app/update.json",
         "https://nexastream-73801.web.app/update.json",
+        "https://nexastream.app/update.json",
         "https://raw.githubusercontent.com/JOKERPADDY/NEXASTREAM2/main/update.json",
         "https://raw.githubusercontent.com/THWAYNESHOP/NEXASTREAM2/main/update.json"
     )
@@ -107,7 +107,7 @@ object InAppUpdater {
                             versionCode = BuildConfig.VERSION_CODE + 1,
                             versionName = releaseVersion,
                             apkUrl = apkAsset.browserDownloadUrl,
-                            websiteUrl = "https://nexastream.app",
+                            websiteUrl = "https://nexastream-73801.web.app",
                             changelog = release.body ?: "New release available: v$releaseVersion",
                             forceUpdate = false,
                             supportTelegramUrl = "https://t.me/NEXASTREAM2"

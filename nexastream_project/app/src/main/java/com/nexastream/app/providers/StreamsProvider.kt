@@ -110,10 +110,17 @@ object StreamsProvider : Provider {
         if (categories.none { it.name == "Series Banner" } && series.isNotEmpty()) {
             categories.add(0, Category("Series Banner", series.take(10)))
         }
-        suspend fun addCatalogCategory(name: String, catalog: String) {
+        suspend fun addCatalogCategory(name: String, catalog: String, fallbackQuery: String? = null) {
             if (categories.any { it.name == name }) return
             try {
-                val items = api.getCatalog(catalog, 1).items.orEmpty()
+                val catalogItems = try {
+                    api.getCatalog(catalog, 1).items.orEmpty()
+                } catch (e: Exception) {
+                    if (fallbackQuery == null) throw e
+                    Log.w("StreamsProvider", "$catalog catalog unavailable; using search fallback", e)
+                    api.search(fallbackQuery, 1).items.orEmpty()
+                }
+                val items = catalogItems
                     .distinctBy { it.detailPath ?: it.subjectId }
                     .mapNotNull { subject ->
                     cacheSubject(subject)
@@ -127,7 +134,7 @@ object StreamsProvider : Provider {
             }
         }
 
-        addCatalogCategory("STREAMS Kids", "kids")
+        addCatalogCategory("STREAMS Kids", "kids", fallbackQuery = "kids cartoons")
 
         val (liveMatches, upcomingMatches, liveTvCategories) = coroutineScope {
             val liveMatchesDeferred = async {
@@ -255,7 +262,7 @@ object StreamsProvider : Provider {
 
     private suspend fun searchCategorySubjects(category: SearchCategory, page: Int): List<StreamsSubject> =
         api.search(category.query, page).items.orEmpty().filter { subject ->
-            (category.subjectType == null || subject.subjectType == category.subjectType) &&
+            (category.subjectType == null || subject.typeCode == category.subjectType) &&
                 (category.requiredTitle == null ||
                     subject.title?.contains(category.requiredTitle, ignoreCase = true) == true)
         }
@@ -271,7 +278,7 @@ object StreamsProvider : Provider {
     }
 
     override suspend fun getTvShows(page: Int): List<TvShow> = try {
-        api.getCatalog("tv", page).items.orEmpty().mapNotNull { subject ->
+        api.getCatalog("series", page).items.orEmpty().mapNotNull { subject ->
             cacheSubject(subject)
             subjectToTvShow(subject)
         }
@@ -367,7 +374,7 @@ object StreamsProvider : Provider {
             }
 
             if (catalogItems.isNotEmpty()) catalogItems else try {
-                api.search(categoryKey, page).items.orEmpty()
+                api.search(if (categoryKey == "kids") "kids cartoons" else categoryKey, page).items.orEmpty()
             } catch (_: Exception) {
                 emptyList()
             }
@@ -594,7 +601,7 @@ object StreamsProvider : Provider {
                 null
             }
             if (directSubject != null &&
-                directSubject.subjectType == expectedType &&
+                directSubject.typeCode == expectedType &&
                 titlesMatch(title, releaseDate, directSubject)
             ) {
                 cacheSubject(directSubject)
@@ -610,7 +617,7 @@ object StreamsProvider : Provider {
         val normalizedTitle = normalizeTitle(title)
 
         val cached = subjectCache.values.filter { subject ->
-            subject.subjectType == expectedType && titlesMatch(title, releaseDate, subject)
+            subject.typeCode == expectedType && titlesMatch(title, releaseDate, subject)
         }
         val cachedMatch = chooseTitleMatch(cached, releaseYear, title)
         val subject = cachedMatch ?: findSubject(title, expectedType, releaseYear)
@@ -637,7 +644,7 @@ object StreamsProvider : Provider {
         }
 
         if (                candidates.none {
-            it.subjectType == type && titlesMatch(title, releaseYear?.toString(), it)
+            it.typeCode == type && titlesMatch(title, releaseYear?.toString(), it)
         }) {
             try {
                 val home = api.getHome()
@@ -654,7 +661,7 @@ object StreamsProvider : Provider {
         }
 
         val titleMatches = candidates.filter {
-            it.subjectType == type && titlesMatch(title, releaseYear?.toString(), it)
+            it.typeCode == type && titlesMatch(title, releaseYear?.toString(), it)
         }
         if (titleMatches.isEmpty()) {
             val category = if (type == 2) "tv" else "movies"
@@ -668,14 +675,14 @@ object StreamsProvider : Provider {
                 candidates += result.items.orEmpty()
                 if (result.items.isNullOrEmpty() || result.nextPage == null) break
                 val matches = candidates.filter {
-                    it.subjectType == type && titlesMatch(title, releaseYear?.toString(), it)
+                    it.typeCode == type && titlesMatch(title, releaseYear?.toString(), it)
                 }
                 if (matches.isNotEmpty()) break
             }
         }
 
         if (candidates.none {
-                it.subjectType == type && titlesMatch(title, releaseYear?.toString(), it)
+                it.typeCode == type && titlesMatch(title, releaseYear?.toString(), it)
             }
         ) {
             try {
@@ -702,7 +709,7 @@ object StreamsProvider : Provider {
 
         return chooseTitleMatch(
             candidates.filter {
-                it.subjectType == type && titlesMatch(title, releaseYear?.toString(), it)
+                it.typeCode == type && titlesMatch(title, releaseYear?.toString(), it)
             },
             releaseYear,
             title
@@ -733,7 +740,7 @@ object StreamsProvider : Provider {
             val detail = api.getDetail(path)
             val subject = detail.subject ?: cached
             if (subject != null) cacheSubject(subject)
-            subject to detail.resource?.seasons.orEmpty()
+            subject to detail.seasonResources
         } catch (e: Exception) {
             Log.w("StreamsProvider", "Failed to fetch detail for $path", e)
             cached to emptyList()
@@ -746,7 +753,7 @@ object StreamsProvider : Provider {
     }
 
     private fun subjectToAppItem(subject: StreamsSubject): AppAdapter.Item? =
-        if (subject.subjectType == 2) subjectToTvShow(subject) else subjectToMovie(subject)
+        if (subject.typeCode == 2) subjectToTvShow(subject) else subjectToMovie(subject)
 
     private fun subjectToMovie(subject: StreamsSubject): Movie? {
         val id = subject.detailPath?.takeIf(String::isNotBlank) ?: subject.subjectId ?: return null
@@ -756,15 +763,15 @@ object StreamsProvider : Provider {
             overview = subject.description,
             released = subject.releaseDate,
             rating = subject.imdbRatingValue?.toDoubleOrNull(),
-            poster = subject.cover?.url,
-            banner = subject.stills?.url ?: subject.cover?.url,
+            poster = subject.posterImageUrl,
+            banner = subject.backdropImageUrl,
             providerName = name
         )
     }
 
     private fun subjectToTvShow(subject: StreamsSubject, seasons: List<Season> = emptyList()): TvShow? {
         val id = subject.detailPath?.takeIf(String::isNotBlank) ?: subject.subjectId ?: return null
-        val genres = subject.genre.orEmpty().split(",").map(String::trim).filter(String::isNotEmpty)
+        val genres = subject.genreText.orEmpty().split(",").map(String::trim).filter(String::isNotEmpty)
             .map { Genre(id = it, name = it) }
         return TvShow(
             id = id,
@@ -772,8 +779,8 @@ object StreamsProvider : Provider {
             overview = subject.description,
             released = subject.releaseDate,
             rating = subject.imdbRatingValue?.toDoubleOrNull(),
-            poster = subject.cover?.url,
-            banner = subject.stills?.url ?: subject.cover?.url,
+            poster = subject.posterImageUrl,
+            banner = subject.backdropImageUrl,
             providerName = name,
             seasons = seasons,
             genres = genres

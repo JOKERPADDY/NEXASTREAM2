@@ -2,7 +2,15 @@
   "versionCode": 10,
   "versionName": "1.0.9",
   "apkUrl": "https://github.com/JOKERPADDY/NEXASTREAM2/releases/download/v1.0.9/app-debug.apk",
-  "changelog": "1. Fixed several minor issues.\n2. Optimized user experience.\n\nJoin our Telegram: https://t.me/NEXASTREAM2",
+  "r2ApkUrl": "https://dl.nexastream.app/releases/v1.0.9/nexastream-v1.0.9.apk",
+  "websiteUrl": "https://nexastream-73801.web.app",
+  "apkSize": "55 MB",
+  "apkSizeBytes": 57693295,
+  "sha256": "2DD8E7CFD16FAAB786DF54481EE744ECA5A3A59F41A4514692357DDA6D30B74E",
+  "minSdk": "Android 6.0 (API 23+)",
+  "targetSdk": "Android 15 (API 35)",
+  "releaseDate": "October 19, 2026",
+  "changelog": "1. Download Quality Picker: Choose resolutions (360p to 4K), formats (MP4, HLS, DASH) and view file sizes before downloading.\n2. TV Show Episode Metadata Fix: Unique identifiers and episode titles for VixSrc server reliability.\n3. Search Reliability: Resolved search bar crash via Hilt DI optimization.\n4. Update Throttling: Optimized background update checker to prevent rate limiting.\n\n🌐 Or download through our website: https://nexastream-73801.web.app\n💬 Join our Telegram: https://t.me/NEXASTREAM2",
   "forceUpdate": false,
   "supportTelegramUrl": "https://t.me/NEXASTREAM2"
 }
