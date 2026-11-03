@@ -19,9 +19,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import com.nexastream.app.providers.Provider
+import com.nexastream.app.providers.StreamsProvider
 import com.nexastream.app.utils.UserPreferences
 import com.nexastream.app.utils.UserDataCache
 import com.nexastream.app.utils.DownloadQualityFormatter
+import com.nexastream.app.utils.format
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.URLDecoder
@@ -181,7 +183,22 @@ class DetailViewModel @Inject constructor(
             try {
                 _uiState.value = _uiState.value.copy(servers = emptyList(), error = null)
                 val servers = withContext(Dispatchers.IO) {
-                    UserPreferences.currentProvider.getServers(id, type)
+                    val provider = UserPreferences.currentProvider
+                    if (provider is StreamsProvider) {
+                        val (title, releaseDate) = when (val show = _uiState.value.show) {
+                            is Movie -> show.title to show.released?.format("yyyy-MM-dd")
+                            is TvShow -> show.title to show.released?.format("yyyy-MM-dd")
+                            else -> "" to null
+                        }
+                        provider.getDownloadServers(
+                            title = title,
+                            releaseDate = releaseDate,
+                            videoType = type,
+                            contentId = id
+                        )
+                    } else {
+                        provider.getServers(id, type)
+                    }
                 }
                 _uiState.value = _uiState.value.copy(servers = servers)
             } catch (e: Exception) {

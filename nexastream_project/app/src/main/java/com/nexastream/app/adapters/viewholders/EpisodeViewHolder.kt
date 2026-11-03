@@ -678,7 +678,16 @@ class EpisodeViewHolder(
         lifecycleScope.launch {
             try {
                 val servers = withContext(Dispatchers.IO) {
-                    provider.getServers(episode.id, videoType)
+                    if (provider is com.nexastream.app.providers.StreamsProvider) {
+                        provider.getDownloadServers(
+                            title = episode.tvShow?.title ?: episode.title ?: "",
+                            releaseDate = episode.tvShow?.released?.format("yyyy-MM-dd"),
+                            videoType = videoType,
+                            contentId = episode.id
+                        )
+                    } else {
+                        provider.getServers(episode.id, videoType)
+                    }
                 }
 
                 if (servers.isEmpty()) {

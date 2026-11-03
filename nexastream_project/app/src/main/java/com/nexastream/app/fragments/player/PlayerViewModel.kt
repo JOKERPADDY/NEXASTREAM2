@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nexastream.app.debrid.RealDebridManager
 import com.nexastream.app.models.Video
+import com.nexastream.app.providers.AkSportsLiveProvider
 import com.nexastream.app.providers.CdnLiveTvProvider
 import com.nexastream.app.providers.IptvProvider
 import com.nexastream.app.providers.Provider
@@ -111,6 +112,9 @@ class PlayerViewModel(
         get() {
             if (initialId.startsWith("cdn:")) {
                 return CdnLiveTvProvider
+            }
+            if (AkSportsLiveProvider.ownsPlaybackId(initialId)) {
+                return AkSportsLiveProvider
             }
             return UserPreferences.currentProvider
         }

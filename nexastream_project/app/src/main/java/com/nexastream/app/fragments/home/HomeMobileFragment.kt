@@ -374,9 +374,14 @@ class HomeMobileFragment : Fragment() {
     }
 
     private fun updateProviderLogo() {
-        val providerLogo = UserPreferences.currentProvider?.logo
+        val provider = UserPreferences.currentProvider
+        val providerLogo: Any = if (provider === com.nexastream.app.providers.StreamsProvider) {
+            R.mipmap.ic_launcher_foreground
+        } else {
+            provider.logo.takeIf { it.isNotEmpty() } ?: R.drawable.ic_provider_default_logo
+        }
         Glide.with(this)
-            .load(providerLogo?.takeIf { it.isNotEmpty() } ?: R.drawable.ic_provider_default_logo)
+            .load(providerLogo)
             .error(R.drawable.ic_provider_default_logo)
             .fitCenter()
             .into(binding.ivProviderLogo)

@@ -220,6 +220,18 @@ object DownloadQualityFormatter {
     }
 
     fun resolution(server: Video.Server, video: Video? = server.video): String {
+        val name = server.name.lowercase(Locale.US)
+        val namedResolution = Regex("""(?<!\d)(2160|1440|1080|720|576|540|480|360|240)p?(?!\d)""")
+            .find(name)
+            ?.groupValues
+            ?.getOrNull(1)
+        if (namedResolution != null) return "${namedResolution}p"
+        if (Regex("""\b(4k|uhd)\b""").containsMatchIn(name)) return "2160p"
+        if (Regex("""\b(full hd|fhd)\b""").containsMatchIn(name)) return "1080p"
+        if (Regex("""\bhd\b""").containsMatchIn(name)) return "720p"
+        if (Regex("""\bsd\b""").containsMatchIn(name)) return "480p"
+        if (Regex("""\bcam\b""").containsMatchIn(name)) return "CAM"
+
         val targetVideo = video ?: server.video
         val sourceUrl = targetVideo?.source.orEmpty()
         if (sourceUrl.startsWith("data:application/vnd.apple.mpegurl;base64,")) {

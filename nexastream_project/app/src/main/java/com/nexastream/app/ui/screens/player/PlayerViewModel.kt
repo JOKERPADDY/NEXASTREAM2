@@ -12,6 +12,7 @@ import com.nexastream.app.models.Movie
 import com.nexastream.app.models.TvShow
 import com.nexastream.app.models.Video
 import com.nexastream.app.models.WatchItem
+import com.nexastream.app.providers.AkSportsLiveProvider
 import com.nexastream.app.providers.CdnLiveTvProvider
 import com.nexastream.app.providers.Provider
 import com.nexastream.app.trakt.TraktManager
@@ -64,6 +65,9 @@ class PlayerViewModel @Inject constructor(
         get() {
             if (id.startsWith("cdn:")) {
                 return CdnLiveTvProvider
+            }
+            if (AkSportsLiveProvider.ownsPlaybackId(id)) {
+                return AkSportsLiveProvider
             }
             return UserPreferences.currentProvider
         }

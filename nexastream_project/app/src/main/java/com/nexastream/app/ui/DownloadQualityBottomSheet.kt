@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.nexastream.app.models.Video
+import com.nexastream.app.providers.StreamsProvider
 import com.nexastream.app.utils.DownloadManager
 import com.nexastream.app.utils.DownloadMetadataProbe
 import com.nexastream.app.utils.DownloadProbeException
@@ -134,6 +135,7 @@ class DownloadQualityBottomSheet : BottomSheetDialogFragment() {
         return ComposeView(requireContext()).apply {
             setContent {
                 val provider = remember { UserPreferences.currentProvider }
+                val showQualityPicker = provider != StreamsProvider
                 var updatedServers by remember { mutableStateOf(servers) }
                 val extractionStatus = remember { mutableStateMapOf<String, String>() }
                 val serverStreamMeta = remember { mutableStateMapOf<String, DownloadQualityFormatter.StreamMetadata>() }
@@ -149,7 +151,11 @@ class DownloadQualityBottomSheet : BottomSheetDialogFragment() {
                                     try {
                                         val video = provider.getVideo(server)
                                         server.video = video
-                                        val meta = DownloadQualityFormatter.inspectStreamMetadata(video)
+                                        val targetQuality = DownloadQualityFormatter
+                                            .resolution(server, video)
+                                            .takeUnless { it == "Unknown" }
+                                            .orEmpty()
+                                        val meta = DownloadQualityFormatter.inspectStreamMetadata(video, targetQuality)
                                         withContext(Dispatchers.Main) {
                                             serverStreamMeta[server.id] = meta
                                             updatedServers = updatedServers.map { if (it.id == server.id) it.copy().apply { this.video = video } else it }
@@ -164,7 +170,11 @@ class DownloadQualityBottomSheet : BottomSheetDialogFragment() {
                                 }
                             } else {
                                 launch(Dispatchers.IO) {
-                                    val meta = DownloadQualityFormatter.inspectStreamMetadata(server.video!!)
+                                    val targetQuality = DownloadQualityFormatter
+                                        .resolution(server, server.video)
+                                        .takeUnless { it == "Unknown" }
+                                        .orEmpty()
+                                    val meta = DownloadQualityFormatter.inspectStreamMetadata(server.video!!, targetQuality)
                                     withContext(Dispatchers.Main) {
                                         serverStreamMeta[server.id] = meta
                                         extractionStatus[server.id] = "done"
@@ -180,6 +190,11 @@ class DownloadQualityBottomSheet : BottomSheetDialogFragment() {
                 var showUnavailableSection by remember { mutableStateOf(false) }
 
                 fun getSupportedResolutions(server: Video.Server): List<String> {
+                    val serverResolution = DownloadQualityFormatter.resolution(server)
+                    if (serverResolution != "Unknown") {
+                        return listOf(serverResolution.uppercase())
+                    }
+
                     val meta = serverStreamMeta[server.id]
                     if (meta != null && meta.resolutionLabel.isNotBlank() && meta.resolutionLabel != "HD") {
                         return listOf(meta.resolutionLabel.uppercase())
@@ -233,15 +248,26 @@ class DownloadQualityBottomSheet : BottomSheetDialogFragment() {
                     }
                 }
 
-                val activeResolution = if (selectedResolution.isNotBlank() && selectedResolution in availableResolutions) {
+                val selectedServerForQuality = validServers.firstOrNull { it.id == selectedServerId }
+                    ?: validServers.firstOrNull()
+                    ?: updatedServers.firstOrNull()
+                val activeResolution = if (!showQualityPicker) {
+                    selectedServerForQuality?.let { getSupportedResolutions(it).firstOrNull() }
+                        ?: availableResolutions.firstOrNull()
+                        ?: "720P"
+                } else if (selectedResolution.isNotBlank() && selectedResolution in availableResolutions) {
                     selectedResolution
                 } else {
                     availableResolutions.firstOrNull() ?: "720P"
                 }
 
-                val activeServers = remember(activeResolution, validServers, updatedServers, serverStreamMeta.toMap()) {
+                val activeServers = remember(showQualityPicker, activeResolution, validServers, updatedServers, serverStreamMeta.toMap()) {
                     val pool = validServers.ifEmpty { updatedServers }
-                    pool.filter { activeResolution in getSupportedResolutions(it) }
+                    if (showQualityPicker) {
+                        pool.filter { activeResolution in getSupportedResolutions(it) }
+                    } else {
+                        pool
+                    }
                 }
 
                 // Default selection
@@ -304,8 +330,8 @@ class DownloadQualityBottomSheet : BottomSheetDialogFragment() {
 
                         Spacer(modifier = Modifier.height(14.dp))
 
-                        // Available Quality Chips Bar
-                        if (availableResolutions.isNotEmpty()) {
+                        // STREAMS servers expose their quality directly in the server list.
+                        if (showQualityPicker && availableResolutions.isNotEmpty()) {
                             LazyRow(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 modifier = Modifier.fillMaxWidth()
@@ -337,7 +363,9 @@ class DownloadQualityBottomSheet : BottomSheetDialogFragment() {
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        if (showQualityPicker && availableResolutions.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
 
                         // Active Working Stream Options List
                         LazyColumn(

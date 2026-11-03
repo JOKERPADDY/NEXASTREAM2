@@ -996,7 +996,16 @@ class MovieViewHolder(
         lifecycleScope.launch {
             try {
                 val servers = withContext(Dispatchers.IO) {
-                    provider.getServers(movie.id, videoType)
+                    if (provider is com.nexastream.app.providers.StreamsProvider) {
+                        provider.getDownloadServers(
+                            title = movie.title,
+                            releaseDate = movie.released?.format("yyyy-MM-dd"),
+                            videoType = videoType,
+                            contentId = movie.id
+                        )
+                    } else {
+                        provider.getServers(movie.id, videoType)
+                    }
                 }
 
                 if (servers.isEmpty()) {

@@ -602,22 +602,21 @@ object StreamsProvider : Provider {
             }
             if (directSubject != null &&
                 directSubject.typeCode == expectedType &&
-                titlesMatch(title, releaseDate, directSubject)
+                (title.isBlank() || titlesMatch(title, releaseDate, directSubject))
             ) {
                 cacheSubject(directSubject)
                 val directVideoType = when (videoType) {
                     is Video.Type.Episode -> videoType.copy(tvShow = videoType.tvShow.copy(id = directPath))
                     else -> videoType
                 }
-                val directServers = getServers(directPath, directVideoType)
+                val directServers = getMovieBoxDownloadServersOnly(directPath, directVideoType)
                 if (directServers.isNotEmpty()) return directServers
             }
         }
         val releaseYear = releaseDate?.take(4)?.toIntOrNull()
-        val normalizedTitle = normalizeTitle(title)
 
         val cached = subjectCache.values.filter { subject ->
-            subject.typeCode == expectedType && titlesMatch(title, releaseDate, subject)
+            subject.typeCode == expectedType && (title.isBlank() || titlesMatch(title, releaseDate, subject))
         }
         val cachedMatch = chooseTitleMatch(cached, releaseYear, title)
         val subject = cachedMatch ?: findSubject(title, expectedType, releaseYear)
@@ -629,8 +628,88 @@ object StreamsProvider : Provider {
             is Video.Type.Episode -> videoType.copy(tvShow = videoType.tvShow.copy(id = detailPath))
             else -> videoType
         }
-        val servers = getServers(detailPath, streamsType)
+        val servers = getMovieBoxDownloadServersOnly(detailPath, streamsType)
         if (servers.isEmpty()) throw IllegalStateException("STREAMS returned no playable sources for \"$title\"")
+        return servers
+    }
+
+    /**
+     * Retrieves download servers strictly from the Vercel MovieBox API endpoint (movie-box),
+     * excluding VixSrc and fallback extractors.
+     */
+    private suspend fun getMovieBoxDownloadServersOnly(
+        path: String,
+        videoType: Video.Type
+    ): List<Video.Server> {
+        val servers = mutableListOf<Video.Server>()
+
+        val (season, episode) = when (videoType) {
+            is Video.Type.Episode -> videoType.season.number to videoType.number
+            else -> 0 to 0
+        }
+
+        val playbackServers = try {
+            val playback = api.getPlayback(path, season, episode)
+            playback.streams.orEmpty().mapNotNull { stream ->
+                val url = stream.url?.takeIf(String::isNotBlank) ?: return@mapNotNull null
+                if (stream.vipLocked == true) return@mapNotNull null
+                val subtitles = try {
+                    api.getCaptions(path, stream.id, season, episode).mapNotNull { caption ->
+                        val captionUrl = caption.url?.takeIf(String::isNotBlank) ?: return@mapNotNull null
+                        Video.Subtitle(
+                            label = caption.lanName ?: caption.lan ?: "Subtitle",
+                            file = captionUrl,
+                            language = caption.lan,
+                            default = caption.lan?.startsWith("en", ignoreCase = true) == true
+                        )
+                    }
+                } catch (e: Exception) {
+                    Log.w("StreamsProvider", "Could not load captions for $path", e)
+                    emptyList()
+                }
+                val resolution = stream.resolutions?.toIntOrNull()
+                    ?: Regex("""\d{3,4}""").find(stream.resolutions.orEmpty())?.value?.toIntOrNull()
+                val format = stream.format.orEmpty()
+                val mimeType = if (format.contains("m3u8", true) || format.contains("hls", true)) {
+                    "application/x-mpegURL"
+                } else {
+                    "video/mp4"
+                }
+                Video.Server(
+                    id = "streams_${stream.id ?: url}_$resolution",
+                    name = buildString {
+                        if (resolution != null) append("${resolution}p")
+                        else append("STREAMS")
+                        if (format.isNotBlank()) append(" ($format)")
+                    },
+                    src = url
+                ).apply {
+                    video = Video(
+                        source = url,
+                        subtitles = subtitles,
+                        headers = mapOf(
+                            "Referer" to "https://themoviebox.xyz/",
+                            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                        ),
+                        type = mimeType
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("StreamsProvider", "Playback API failed for download on $path", e)
+            emptyList()
+        }
+
+        if (playbackServers.isNotEmpty()) {
+            servers.addAll(playbackServers)
+        } else {
+            try {
+                servers.addAll(MovieBoxProvider.getServers(path, videoType))
+            } catch (e: Exception) {
+                Log.w("StreamsProvider", "MovieBox fallback failed for download on $path", e)
+            }
+        }
+
         return servers
     }
 

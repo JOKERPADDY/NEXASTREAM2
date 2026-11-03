@@ -54,7 +54,7 @@ interface StreamsApi {
     ): List<StreamsCaption>
 
     companion object {
-        private const val BASE_URL = "https://movie-box-sepia-six.vercel.app/"
+        private const val BASE_URL = "https://movie-box-thwayneshops-projects.vercel.app/"
 
         fun create(): StreamsApi {
             val client = OkHttpClient.Builder()

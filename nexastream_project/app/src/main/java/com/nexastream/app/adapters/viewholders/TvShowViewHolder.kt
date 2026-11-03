@@ -306,8 +306,12 @@ class TvShowViewHolder(
 
     private fun displayLivestreamMobileItem(binding: ItemLivestreamMobileBinding) {
         binding.root.setOnClickListener {
-            checkProviderAndRun {
+            if (tvShow.id.startsWith("cdn:")) {
                 handleDirectPlay(binding.root.findNavController())
+            } else {
+                checkProviderAndRun {
+                    handleDirectPlay(binding.root.findNavController())
+                }
             }
         }
         binding.root.setOnLongClickListener {
@@ -330,8 +334,12 @@ class TvShowViewHolder(
 
     private fun displayLivestreamTvItem(binding: ItemLivestreamTvBinding) {
         binding.root.setOnClickListener {
-            checkProviderAndRun {
+            if (tvShow.id.startsWith("cdn:")) {
                 handleDirectPlay(binding.root.findNavController())
+            } else {
+                checkProviderAndRun {
+                    handleDirectPlay(binding.root.findNavController())
+                }
             }
         }
         binding.root.setOnLongClickListener {
