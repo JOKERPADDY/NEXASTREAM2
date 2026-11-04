@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <androidx.media3.ui.PlayerView
+        android:id="@+id/pv_short_video"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#000000"
+        app:resize_mode="zoom"
+        app:show_buffering="never"
+        app:surface_type="texture_view"
+        app:use_controller="false" />
+
+    <ImageView
+        android:id="@+id/iv_short_poster"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@string/short_tv_poster_description"
+        android:scaleType="centerCrop" />
+
+    <ProgressBar
+        android:id="@+id/pb_short_video"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:layout_gravity="center"
+        android:indeterminateTint="#FFFFFF"
+        android:visibility="gone" />
+
+    <View
+        android:id="@+id/short_video_tap_target"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clickable="true"
+        android:contentDescription="@string/short_tv_toggle_playback"
+        android:focusable="false" />
+
+    <ImageView
+        android:id="@+id/iv_short_playback_state"
+        android:layout_width="64dp"
+        android:layout_height="64dp"
+        android:layout_gravity="center"
+        android:background="@drawable/bg_short_episode_selector"
+        android:contentDescription="@string/short_tv_paused"
+        android:padding="16dp"
+        android:src="@drawable/ic_pause"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/short_feed_actions"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|bottom"
+        android:layout_marginEnd="12dp"
+        android:layout_marginBottom="208dp"
+        android:gravity="center"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:id="@+id/action_short_like"
+            android:layout_width="56dp"
+            android:layout_height="64dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <ImageView
+                android:id="@+id/iv_short_like"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:contentDescription="@string/short_tv_like"
+                android:src="@drawable/ic_favorite_disable"
+                android:tint="#FFFFFF" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:shadowColor="#CC000000"
+                android:shadowDx="0"
+                android:shadowDy="1"
+                android:shadowRadius="3"
+                android:text="@string/short_tv_like"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/action_short_list"
+            android:layout_width="56dp"
+            android:layout_height="64dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <ImageView
+                android:id="@+id/iv_short_list"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:contentDescription="@string/short_tv_my_list"
+                android:src="@drawable/ic_star"
+                android:tint="#FFFFFF" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:shadowColor="#CC000000"
+                android:shadowDx="0"
+                android:shadowDy="1"
+                android:shadowRadius="3"
+                android:text="@string/short_tv_my_list"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/action_short_share"
+            android:layout_width="56dp"
+            android:layout_height="64dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <ImageView
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:contentDescription="@string/short_tv_share"
+                android:src="@drawable/ic_short_share"
+                android:tint="#FFFFFF" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:shadowColor="#CC000000"
+                android:shadowDx="0"
+                android:shadowDy="1"
+                android:shadowRadius="3"
+                android:text="@string/short_tv_share"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/short_feed_information"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_marginStart="20dp"
+        android:layout_marginEnd="84dp"
+        android:layout_marginBottom="24dp"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/tv_short_drama_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="2"
+            android:shadowColor="#CC000000"
+            android:shadowDx="0"
+            android:shadowDy="2"
+            android:shadowRadius="5"
+            android:textColor="#FFFFFF"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tv_short_drama_description"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="7dp"
+            android:ellipsize="end"
+            android:maxLines="2"
+            android:shadowColor="#CC000000"
+            android:shadowDx="0"
+            android:shadowDy="1"
+            android:shadowRadius="3"
+            android:textColor="#EEEEEE"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/tv_short_drama_metadata"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="7dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:shadowColor="#CC000000"
+            android:shadowDx="0"
+            android:shadowDy="1"
+            android:shadowRadius="3"
+            android:textColor="#E0E0E0"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/btn_short_watch_now"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="14dp"
+            android:background="@drawable/bg_short_episode_selector"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:text="@string/short_tv_watch_now"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+</FrameLayout>

@@ -22,9 +22,11 @@ import com.nexastream.app.R
 import com.nexastream.app.adapters.AppAdapter
 import com.nexastream.app.databinding.FragmentSearchTvBinding
 import com.nexastream.app.models.Category
+import com.nexastream.app.models.Episode
 import com.nexastream.app.models.Genre
 import com.nexastream.app.models.Movie
 import com.nexastream.app.models.People
+import com.nexastream.app.models.SportMatch
 import com.nexastream.app.models.TvShow
 import com.nexastream.app.utils.CacheUtils
 import com.nexastream.app.utils.LoggingUtils
@@ -164,6 +166,13 @@ class SearchTvFragment : Fragment() {
                             when (it) {
                                 is Movie -> it.itemType = AppAdapter.Type.MOVIE_TV_ITEM
                                 is TvShow -> it.itemType = AppAdapter.Type.TV_SHOW_TV_ITEM
+                                else -> {
+                                    it.itemType = when (it) {
+                                        is Episode -> AppAdapter.Type.EPISODE_TV_ITEM
+                                        is SportMatch -> AppAdapter.Type.SPORT_MATCH_ITEM
+                                        else -> AppAdapter.Type.MOVIE_TV_ITEM
+                                    }
+                                }
                             }
                         }).apply { itemType = AppAdapter.Type.CATEGORY_TV_ITEM })
                     }
@@ -172,6 +181,13 @@ class SearchTvFragment : Fragment() {
                             when (it) {
                                 is Movie -> it.itemType = AppAdapter.Type.MOVIE_TV_ITEM
                                 is TvShow -> it.itemType = AppAdapter.Type.TV_SHOW_TV_ITEM
+                                else -> {
+                                    it.itemType = when (it) {
+                                        is Episode -> AppAdapter.Type.EPISODE_TV_ITEM
+                                        is SportMatch -> AppAdapter.Type.SPORT_MATCH_ITEM
+                                        else -> AppAdapter.Type.MOVIE_TV_ITEM
+                                    }
+                                }
                             }
                         }).apply { itemType = AppAdapter.Type.CATEGORY_TV_ITEM })
                     }
@@ -180,6 +196,13 @@ class SearchTvFragment : Fragment() {
                             when (it) {
                                 is Movie -> it.itemType = AppAdapter.Type.MOVIE_TV_ITEM
                                 is TvShow -> it.itemType = AppAdapter.Type.TV_SHOW_TV_ITEM
+                                else -> {
+                                    it.itemType = when (it) {
+                                        is Episode -> AppAdapter.Type.EPISODE_TV_ITEM
+                                        is SportMatch -> AppAdapter.Type.SPORT_MATCH_ITEM
+                                        else -> AppAdapter.Type.TV_SHOW_TV_ITEM
+                                    }
+                                }
                             }
                         }).apply { itemType = AppAdapter.Type.CATEGORY_TV_ITEM })
                     }
@@ -427,6 +450,13 @@ class SearchTvFragment : Fragment() {
                 is Movie -> it.itemType = AppAdapter.Type.MOVIE_GRID_TV_ITEM
                 is TvShow -> it.itemType = AppAdapter.Type.TV_SHOW_GRID_TV_ITEM
                 is People -> it.itemType = AppAdapter.Type.PEOPLE_TV_ITEM
+                else -> {
+                    it.itemType = when (it) {
+                        is Episode -> AppAdapter.Type.EPISODE_TV_GRID_ITEM
+                        is SportMatch -> AppAdapter.Type.SPORT_MATCH_ITEM
+                        else -> AppAdapter.Type.MOVIE_GRID_TV_ITEM
+                    }
+                }
             }
         })
 
@@ -453,6 +483,13 @@ class SearchTvFragment : Fragment() {
                 when (it) {
                     is Movie -> it.itemType = AppAdapter.Type.MOVIE_TV_ITEM
                     is TvShow -> it.itemType = AppAdapter.Type.TV_SHOW_TV_ITEM
+                    else -> {
+                        it.itemType = when (it) {
+                            is Episode -> AppAdapter.Type.EPISODE_TV_ITEM
+                            is SportMatch -> AppAdapter.Type.SPORT_MATCH_ITEM
+                            else -> AppAdapter.Type.MOVIE_TV_ITEM
+                        }
+                    }
                 }
             } ?: emptyList()
 

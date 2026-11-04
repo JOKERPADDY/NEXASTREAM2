@@ -19,6 +19,12 @@ interface StreamsApi {
         @Query("page") page: Int
     ): StreamsCatalogResponse
 
+    @GET("v1/browse")
+    suspend fun getBrowse(
+        @Query("kind") kind: String,
+        @Query("page") page: Int
+    ): StreamsCatalogResponse
+
     @GET("v1/search")
     suspend fun search(
         @Query("q") query: String,
@@ -54,7 +60,7 @@ interface StreamsApi {
     ): List<StreamsCaption>
 
     companion object {
-        private const val BASE_URL = "https://movie-box-thwayneshops-projects.vercel.app/"
+        private const val BASE_URL = "https://movie-box-sepia-six.vercel.app/"
 
         fun create(): StreamsApi {
             val client = OkHttpClient.Builder()

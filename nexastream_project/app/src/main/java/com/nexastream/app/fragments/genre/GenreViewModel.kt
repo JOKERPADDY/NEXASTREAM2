@@ -91,7 +91,7 @@ class GenreViewModel @Inject constructor(
 
         try {
             val genre = runCatching {
-                UserPreferences.currentProvider.getGenre(id, 1)
+                getGenreFromProvider(id, 1)
             }.getOrElse {
                 com.nexastream.app.providers.NexaHomeProvider.getGenre(id, 1)
             }.let { g ->
@@ -123,7 +123,7 @@ class GenreViewModel @Inject constructor(
 
             try {
                 val genre = runCatching {
-                    UserPreferences.currentProvider.getGenre(id, page + 1)
+                    getGenreFromProvider(id, page + 1)
                 }.getOrElse {
                     com.nexastream.app.providers.NexaHomeProvider.getGenre(id, page + 1)
                 }
@@ -144,4 +144,11 @@ class GenreViewModel @Inject constructor(
             }
         }
     }
+
+    private suspend fun getGenreFromProvider(id: String, page: Int): Genre =
+        if (id.lowercase() in setOf("short_tv", "short_series", "shorts")) {
+            com.nexastream.app.providers.StreamsProvider.getGenre(id, page)
+        } else {
+            UserPreferences.currentProvider.getGenre(id, page)
+        }
 }

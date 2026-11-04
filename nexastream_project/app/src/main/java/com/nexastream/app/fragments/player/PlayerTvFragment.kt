@@ -1505,6 +1505,9 @@ class PlayerTvFragment : Fragment() {
 
             override fun onVideoSizeChanged(videoSize: VideoSize) {
                 super.onVideoSizeChanged(videoSize)
+                if (videoSize.height > videoSize.width && videoSize.height > 0) {
+                    binding.pvPlayer.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                }
                 updatePlayerScale()
             }
 

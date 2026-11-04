@@ -115,41 +115,15 @@ object NexaHomeProvider : Provider {
         val seriesBannerDef = async { limited {
             runCatching { kotlinx.coroutines.withTimeoutOrNull(phase0Timeout) { tmdb.getFeaturedTvShows() } }.getOrNull()
         } }
-        val liveSportsMatchesDef = async { limited {
-            runCatching {
-                kotlinx.coroutines.withTimeoutOrNull(2500) {
-                    AkSportsLiveProvider.getLiveMatches()
-                }
-            }.getOrNull().orEmpty()
-        } }
-        val upcomingSportsMatchesDef = async { limited {
-            runCatching {
-                kotlinx.coroutines.withTimeoutOrNull(2500) {
-                    AkSportsLiveProvider.getUpcomingMatches()
-                }
-            }.getOrNull().orEmpty()
-        } }
 
         val cdnHome: List<Category> = cdnHomeDeferred.await() ?: emptyList()
         val moviesBanner = moviesBannerDef.await()
         val seriesBanner = seriesBannerDef.await()
-        val liveSportsMatches = liveSportsMatchesDef.await()
-        val upcomingSportsMatches = upcomingSportsMatchesDef.await()
-        AkSportsLiveProvider.prefetchResolverStreams((liveSportsMatches + upcomingSportsMatches).take(8))
 
         val categories = mutableListOf<Category>()
 
         moviesBanner?.let { categories.add(it.copy(name = "Movies Banner", list = it.list.safeSubList(0, 10))) }
         seriesBanner?.let { categories.add(it.copy(name = "Series Banner", list = it.list.safeSubList(0, 10))) }
-
-        if (liveSportsMatches.isNotEmpty()) {
-            categories.add(
-                Category(
-                    name = "Live Sports",
-                    list = liveSportsMatches
-                ).apply { itemType = AppAdapter.Type.CATEGORY_MOBILE_ITEM }
-            )
-        }
 
         // LIVE CHANNELS
         var livestreamCategory: Category? = null
@@ -192,21 +166,32 @@ object NexaHomeProvider : Provider {
 
         livestreamCategory?.let { categories.add(it) }
 
-        if (upcomingSportsMatches.isNotEmpty()) {
-            categories.add(
-                Category(
-                    name = "Upcoming Matches",
-                    list = upcomingSportsMatches
-                ).apply { itemType = AppAdapter.Type.CATEGORY_MOBILE_ITEM }
-            )
-        }
-
         categories
     }
 
     suspend fun getHomePhase1(phase0Categories: List<Category>): List<Category> = coroutineScope {
         val timeout = if (isTvUi()) PHASE0_TIMEOUT_TV_MS else PHASE0_TIMEOUT_MOBILE_MS
-        // Phase 1: Core Content (Trending, Popular, Cinema, New Seasons)
+        // Phase 1: Core Content (Trending, Popular, Cinema, New Seasons) + Live Sports
+        val liveSportsMatchesDef = async { limited {
+            runCatching {
+                kotlinx.coroutines.withTimeoutOrNull(2500) {
+                    AkSportsLiveProvider.getLiveMatches()
+                }
+            }.getOrNull().orEmpty()
+        } }
+
+        val upcomingSportsMatchesDef = async { limited {
+            runCatching {
+                kotlinx.coroutines.withTimeoutOrNull(2500) {
+                    AkSportsLiveProvider.getUpcomingMatches()
+                }
+            }.getOrNull().orEmpty()
+        } }
+
+        val liveSportsMatches = liveSportsMatchesDef.await()
+        val upcomingSportsMatches = upcomingSportsMatchesDef.await()
+        AkSportsLiveProvider.prefetchResolverStreams((liveSportsMatches + upcomingSportsMatches).take(8))
+
         val movieBoxHomeDeferred = async { limited {
             runCatching {
                 kotlinx.coroutines.withTimeoutOrNull(timeout) { MovieBoxProvider.getHome() }
@@ -231,6 +216,23 @@ object NexaHomeProvider : Provider {
 
         val categories = mutableListOf<Category>()
         categories.addAll(phase0Categories)
+
+        if (liveSportsMatches.isNotEmpty()) {
+            categories.add(
+                Category(
+                    name = "Live Sports",
+                    list = liveSportsMatches
+                ).apply { itemType = AppAdapter.Type.CATEGORY_MOBILE_ITEM }
+            )
+        }
+        if (upcomingSportsMatches.isNotEmpty()) {
+            categories.add(
+                Category(
+                    name = "Upcoming Matches",
+                    list = upcomingSportsMatches
+                ).apply { itemType = AppAdapter.Type.CATEGORY_MOBILE_ITEM }
+            )
+        }
 
         tmdbHome.find { it.name == Category.FEATURED }?.let {
             if (categories.none { cat -> cat.name == Category.FEATURED }) {
@@ -264,11 +266,13 @@ object NexaHomeProvider : Provider {
         val recommendedForYouDeferred = async { limited { runCatching { fetchRecommendedForYouRow() }.getOrNull() } }
         val timeOfDayVibeDeferred = async { limited { runCatching { fetchTimeOfDayVibeRow() }.getOrNull() } }
         val upcomingReleasesDeferred = async { limited { runCatching { fetchUpcomingReleasesRow() }.getOrNull() } }
+        val hotShortTvDeferred = async { limited { runCatching { fetchHotShortTvRow() }.getOrNull() } }
 
         becauseYouWatchedDeferred.await()?.let { categories.add(it) }
         recommendedForYouDeferred.await()?.let { categories.add(it) }
         timeOfDayVibeDeferred.await()?.let { categories.add(it) }
         upcomingReleasesDeferred.await()?.let { categories.add(it) }
+        hotShortTvDeferred.await()?.let { categories.add(it) }
 
         // NETWORK ROWS
         tmdbHome.filter { it.name.startsWith("Popular on") || it.name.startsWith("Popolari su") || it.name.startsWith("Popular en") }.forEach {
@@ -290,6 +294,13 @@ object NexaHomeProvider : Provider {
     ): Category = coroutineScope {
         val tmdbCat = runCatching { tmdbFallback() }.getOrNull()
         tmdbCat ?: Category(name = name, list = emptyList())
+    }
+
+    private suspend fun fetchHotShortTvRow(): Category? {
+        val shorts = runCatching { StreamsProvider.getShortTvSeries(1) }.getOrElse { emptyList() }
+        return if (shorts.isNotEmpty()) {
+            Category(name = "🔥 Hot Short TV", list = shorts)
+        } else null
     }
 
     suspend fun getHomePhase2(phase1Categories: List<Category>): List<Category> = coroutineScope {
@@ -725,6 +736,10 @@ object NexaHomeProvider : Provider {
     }
 
     private suspend fun getGenreUncached(id: String, page: Int): Genre = when {
+        id == "short_tv" || id == "short_series" || id == "shorts" -> {
+            val shortShows = runCatching { StreamsProvider.getShortTvSeries(page) }.getOrElse { emptyList() }
+            Genre(id = id, name = "Short TV", shows = shortShows)
+        }
         id == "cdn_all_channels" -> {
             runCatching { CdnLiveTvProvider.getGenre(id, page) }.getOrElse {
                 Log.w("NexaHomeProvider", "CDN getGenre failed for $id, trying IPTV fallback")

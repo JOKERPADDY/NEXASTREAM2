@@ -131,7 +131,7 @@ class MainTvActivity : FragmentActivity() {
                     }
 
                     when (destination.id) {
-                        R.id.search, R.id.providers, R.id.home, R.id.movies, R.id.tv_shows, R.id.kids, R.id.anime, R.id.explore, R.id.live_guide, R.id.downloads, R.id.settings -> {
+                        R.id.search, R.id.providers, R.id.home, R.id.movies, R.id.tv_shows, R.id.kids, R.id.short_tv, R.id.anime, R.id.explore, R.id.live_guide, R.id.downloads, R.id.settings -> {
                             binding.navMain.visibility = View.VISIBLE
                             updateNavigationVisibility()
                         }
@@ -186,7 +186,7 @@ class MainTvActivity : FragmentActivity() {
                     R.id.home -> {
                         if (binding.navMain.hasFocus()) finish() else binding.navMain.requestFocus()
                     }
-                    R.id.settings, R.id.search, R.id.providers, R.id.movies, R.id.tv_shows, R.id.live_guide, R.id.downloads -> {
+                    R.id.settings, R.id.search, R.id.providers, R.id.movies, R.id.tv_shows, R.id.short_tv, R.id.live_guide, R.id.downloads -> {
                         navigateToProviderHome(controller)
                         binding.navMain.requestFocus()
                     }

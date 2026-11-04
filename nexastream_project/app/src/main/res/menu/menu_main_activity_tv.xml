@@ -24,6 +24,11 @@
         android:title="KIDS" />
 
     <item
+        android:id="@+id/short_tv"
+        android:icon="@drawable/ic_menu_tv"
+        android:title="SHORT TV" />
+
+    <item
         android:id="@+id/anime"
         android:icon="@drawable/ic_menu_movie"
         android:title="ANIME" />

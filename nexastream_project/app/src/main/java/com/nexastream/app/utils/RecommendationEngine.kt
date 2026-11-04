@@ -5,6 +5,7 @@ import com.nexastream.app.database.AppDatabase
 import com.nexastream.app.models.Category
 import com.nexastream.app.models.Movie
 import com.nexastream.app.models.TvShow
+import com.nexastream.app.providers.StreamsProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -132,6 +133,10 @@ object RecommendationEngine {
             cat.name.endsWith("Banner", ignoreCase = true)
         }
 
+        val streamsTrending = if (UserPreferences.currentProvider === StreamsProvider) {
+            categories.find { it.name.equals("Trending Today", ignoreCase = true) }
+        } else null
+
         // 2. Live Sports
         val liveSports = categories.find { cat ->
             cat.name.equals("Live Sports", ignoreCase = true) && cat != heroBanner
@@ -189,6 +194,7 @@ object RecommendationEngine {
 
         val prioritySet = setOfNotNull(
             heroBanner,
+            streamsTrending,
             liveSports,
             continueWatching,
             recommended,
@@ -218,6 +224,7 @@ object RecommendationEngine {
         val result = mutableListOf<Category>()
         heroBanner?.let { result.add(it) }
         liveSports?.let { result.add(it) }
+        streamsTrending?.let { result.add(it) }
         continueWatching?.let { result.add(it) }
         recommended?.let { result.add(it) }
         livestream?.let { result.add(it) }

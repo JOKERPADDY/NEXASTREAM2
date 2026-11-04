@@ -19,15 +19,20 @@ data class StreamsSubject(
     @SerializedName(value = "detailPath", alternate = ["detail_path"]) val detailPath: String? = null,
     @SerializedName("genre") val genre: String? = null,
     @SerializedName("genres") val genres: List<String>? = null,
+    @SerializedName("country") val country: String? = null,
+    @SerializedName("duration_seconds") val durationSeconds: Long? = null,
     @SerializedName("poster_url") val posterUrl: String? = null,
     @SerializedName("backdrop_url") val backdropUrl: String? = null
 ) {
     val typeCode: Int?
         get() = subjectType ?: when (kind?.lowercase()) {
-            "series", "tv" -> 2
+            "series", "tv", "short_series" -> 2
             "movie" -> 1
             else -> null
         }
+
+    val isTv: Boolean
+        get() = typeCode == 2 || typeCode == 7 || subjectType == 2 || subjectType == 7 || kind?.lowercase() in setOf("series", "tv", "short_series")
 
     val genreText: String?
         get() = genre ?: genres?.joinToString(",")
@@ -101,7 +106,9 @@ data class StreamsStream(
     @SerializedName("url") val url: String? = null,
     @SerializedName(value = "vipLocked", alternate = ["vip_locked"]) val vipLocked: Boolean? = false,
     @SerializedName("resolutions") val resolutions: String? = null,
-    @SerializedName("format") val format: String? = null
+    @SerializedName("format") val format: String? = null,
+    @SerializedName(value = "request_headers", alternate = ["requestHeaders"])
+    val requestHeaders: Map<String, String>? = null
 )
 
 data class StreamsPlaybackResponse(

@@ -4,6 +4,31 @@
 
     <string name="loading_error_title">An error occurred</string>
     <string name="loading_error_retry">Retry</string>
+    <string name="short_tv_title">Short TV</string>
+    <string name="short_tv_poster_description">Short drama poster</string>
+    <string name="short_tv_like">Like</string>
+    <string name="short_tv_my_list">My List</string>
+    <string name="short_tv_share">Share</string>
+    <string name="short_tv_watch">Watch</string>
+    <string name="short_tv_watch_now">Watch Now</string>
+    <string name="short_tv_description_fallback">Discover this short drama and start watching now.</string>
+    <string name="short_tv_episode_count_loading">Loading episode count…</string>
+    <string name="short_tv_episode_count_unavailable">Episode count unavailable</string>
+    <string name="short_tv_episode_count">%1$d episodes</string>
+    <string name="short_tv_current_episode">EP%1$02d | %2$s</string>
+    <string name="short_tv_episode_selector">EP%1$02d / EP%2$02d</string>
+    <string name="short_tv_episode_selector_unknown">EP%1$02d / Episodes</string>
+    <string name="short_tv_episode_option">Episode %1$d</string>
+    <string name="short_tv_toggle_playback">Pause or resume video</string>
+    <string name="short_tv_paused">Paused</string>
+    <string name="short_tv_playing">Playing</string>
+    <string name="short_tv_video_unavailable">Video unavailable. You can still open the drama.</string>
+    <string name="short_tv_empty">No short dramas are available right now.</string>
+    <string name="short_tv_load_failed">Couldn’t load Short TV.</string>
+    <string name="short_tv_added_to_list">Added to My List</string>
+    <string name="short_tv_removed_from_list">Removed from My List</string>
+    <string name="short_tv_share_text">Check out %1$s on NexaStream</string>
+    <string name="short_tv_share_chooser">Share short drama</string>
     <string name="loading_error_clear_cache">Clear Cache</string>
     <string name="loading_error_details">Error Details</string>
 

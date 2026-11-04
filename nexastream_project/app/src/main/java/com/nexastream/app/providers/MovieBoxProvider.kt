@@ -346,13 +346,26 @@ object MovieBoxProvider : Provider {
                 else -> Pair(0, 0)
             }
 
-            val playResponse = api.getPlayInfo(
+            val rawResponse = api.getPlayInfo(
                 subjectId = null,
                 season = season,
                 episode = episode,
                 detailPath = detailPath,
                 referer = "https://themoviebox.xyz/movies/$detailPath"
             )
+            val playResponse = if (rawResponse.data?.streams.isNullOrEmpty() && season == 0 && episode == 0) {
+                runCatching {
+                    api.getPlayInfo(
+                        subjectId = null,
+                        season = 1,
+                        episode = 1,
+                        detailPath = detailPath,
+                        referer = "https://themoviebox.xyz/movies/$detailPath"
+                    )
+                }.getOrDefault(rawResponse)
+            } else {
+                rawResponse
+            }
 
             val streams = playResponse.data?.streams.orEmpty()
             for (stream in streams) {
@@ -442,7 +455,7 @@ object MovieBoxProvider : Provider {
     }
 
     private fun subjectToAppItem(subject: BffSubject): AppAdapter.Item? {
-        val isTv = subject.subjectType == 2
+        val isTv = subject.subjectType == 2 || subject.subjectType == 7
         return if (isTv) {
             subjectToTvShow(subject)
         } else {

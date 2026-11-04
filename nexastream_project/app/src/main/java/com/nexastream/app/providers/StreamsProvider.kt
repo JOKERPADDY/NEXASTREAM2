@@ -24,6 +24,7 @@ import com.nexastream.app.models.TvShow
 import com.nexastream.app.models.Video
 import com.nexastream.app.providers.streams.StreamsApi
 import com.nexastream.app.providers.streams.StreamsSeasonRes
+import com.nexastream.app.providers.streams.StreamsStream
 import com.nexastream.app.providers.streams.StreamsSubject
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -34,6 +35,12 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
+
+data class StreamsShortEpisodePlayback(
+    val url: String,
+    val mimeType: String,
+    val requestHeaders: Map<String, String>
+)
 
 object StreamsProvider : Provider {
 
@@ -69,6 +76,44 @@ object StreamsProvider : Provider {
         "streams_one_piece" to SearchCategory("One Piece", "One Piece", requiredTitle = "One Piece")
     )
 
+    fun viewAllRoute(categoryName: String): Pair<String, String> {
+        val name = categoryName.trim()
+        val normalized = name.lowercase(Locale.US)
+        val searchCategory = searchCategories.entries.firstOrNull {
+            it.value.name.equals(name, ignoreCase = true)
+        }
+
+        return when {
+            normalized in setOf("live sports", "live sports (cdn)", "sports") ->
+                "cdn_sports" to "Live Sports"
+            normalized in setOf("livestream", "cdn live channels", "live channels") ->
+                "cdn_all_channels" to "CDN Live TV"
+            normalized in setOf("upcoming matches", "upcoming sports", "daily agenda", "upcoming & recent") ->
+                "upcoming_matches" to "Upcoming Matches"
+            normalized == "trending today" ->
+                "streams_trending_today" to name
+            normalized in setOf("kenyan series & movies", "kenyan movies & series", "kenyan series", "kenyan movies") ->
+                "streams_kenyan_content" to name
+            searchCategory != null -> searchCategory.key to name
+            normalized in setOf("streams kids", "kids", "kids & family", "kids banner", "cartoon", "family") ->
+                "streams_kids" to name
+            normalized in setOf("movies banner", "popular movie", "popular movies", "all movies", "top movies", "latest movies") ->
+                "streams_catalog_movies" to name
+            normalized in setOf("series banner", "popular series", "popular tv shows", "all tv shows", "top tv shows") ->
+                "streams_catalog_series" to name
+            normalized in setOf("anime banner", "anime", "anime universe", "streams anime") ->
+                "streams_search:anime" to name
+            else -> "streams_search:$name" to name
+        }
+    }
+
+    private val kenyanMediaExclusions = listOf(
+        "music", "song", "soundtrack", "album", "concert", "remix", "mixtape",
+        "playlist", "dj ", "official video", "music video", "video mix", "hits mix",
+        "throwback", "radio", "instrumental", "lyrics", "lyric video", "dancehall",
+        "afrobeats", "hip hop", "hiphop", "drill", "gospel", "rnb", "r&b", "mix"
+    )
+
     override suspend fun getHome(): List<Category> = try {
         val categories = mutableListOf<Category>()
         val homeRes = api.getHome()
@@ -89,6 +134,23 @@ object StreamsProvider : Provider {
                     else -> section.title
                 }
                 categories += Category(name, items)
+            }
+        }
+
+        if (categories.none { it.name.equals("Trending Today", ignoreCase = true) }) {
+            val trendingItems = categories
+                .filter { it.name.contains("popular", ignoreCase = true) || it.name.contains("trending", ignoreCase = true) }
+                .flatMap { it.list }
+                .filter { it is Movie || it is TvShow }
+                .distinctBy { item ->
+                    when (item) {
+                        is Movie -> "movie:${item.id}"
+                        is TvShow -> "series:${item.id}"
+                        else -> item.hashCode().toString()
+                    }
+                }
+            if (trendingItems.isNotEmpty()) {
+                categories += Category("Trending Today", trendingItems)
             }
         }
 
@@ -210,18 +272,35 @@ object StreamsProvider : Provider {
             categories += Category("Upcoming Matches", upcomingMatches)
         }
 
-        val searchCategoriesOnHome = coroutineScope {
-            searchCategories.values.map { category ->
-                async {
-                    val items = try {
-                        searchCategoryItems(category, 1)
-                    } catch (e: Exception) {
-                        Log.w("StreamsProvider", "Could not load ${category.name} home category", e)
-                        emptyList()
+        val (searchCategoriesOnHome, kenyanContent) = coroutineScope {
+            val kenyanDeferred = async {
+                runCatching { getKenyanSubjects(page = 1) }
+                    .onFailure { Log.w("StreamsProvider", "Could not load Kenyan home category", it) }
+                    .getOrDefault(emptyList())
+            }
+            val categoriesDeferred = async {
+                searchCategories.values.map { category ->
+                    async {
+                        val items = try {
+                            searchCategoryItems(category, 1)
+                        } catch (e: Exception) {
+                            Log.w("StreamsProvider", "Could not load ${category.name} home category", e)
+                            emptyList()
+                        }
+                        category to items
                     }
-                    category to items
+                }.awaitAll()
+            }
+            categoriesDeferred.await() to kenyanDeferred.await()
+        }
+        if (kenyanContent.isNotEmpty()) {
+            categories += Category(
+                "Kenyan Series & Movies",
+                kenyanContent.mapNotNull { subject ->
+                    cacheSubject(subject)
+                    subjectToAppItem(subject)
                 }
-            }.awaitAll()
+            )
         }
         searchCategoriesOnHome.forEach { (category, items) ->
             if (categories.none { it.name == category.name } && items.isNotEmpty()) {
@@ -267,6 +346,76 @@ object StreamsProvider : Provider {
                     subject.title?.contains(category.requiredTitle, ignoreCase = true) == true)
         }
 
+    private suspend fun getTrendingSubjects(page: Int): List<StreamsSubject> {
+        if (page == 1) {
+            try {
+                val home = api.getHome()
+                val trending = home.operatingList.orEmpty()
+                    .filter { section ->
+                        section.title.orEmpty().contains("popular", ignoreCase = true) ||
+                            section.title.orEmpty().contains("trending", ignoreCase = true)
+                    }
+                    .flatMap { section ->
+                        (if (section.type == "BANNER") {
+                            section.banner?.items.orEmpty().mapNotNull { it.subject }
+                        } else {
+                            section.subjects.orEmpty()
+                        }).filter { it.typeCode in setOf(1, 2) }
+                    }
+                    .distinctBy { it.detailPath ?: it.subjectId }
+                if (trending.isNotEmpty()) return trending
+            } catch (e: Exception) {
+                Log.w("StreamsProvider", "Could not load trending subjects from home", e)
+            }
+        }
+
+        return coroutineScope {
+            val movies = async {
+                runCatching { api.getCatalog("movies", page).items.orEmpty() }
+                    .onFailure { Log.w("StreamsProvider", "Could not load trending movies page $page", it) }
+                    .getOrDefault(emptyList())
+            }
+            val series = async {
+                runCatching { api.getCatalog("series", page).items.orEmpty() }
+                    .onFailure { Log.w("StreamsProvider", "Could not load trending series page $page", it) }
+                    .getOrDefault(emptyList())
+            }
+            (movies.await() + series.await())
+                .filter { it.typeCode in setOf(1, 2) }
+                .distinctBy { it.detailPath ?: it.subjectId }
+        }
+    }
+
+    private suspend fun getKenyanSubjects(page: Int): List<StreamsSubject> = coroutineScope {
+        listOf("nairobi", "kenya", "kenyan series").map { query ->
+            async {
+                try {
+                    api.search(query, page).items.orEmpty()
+                } catch (e: Exception) {
+                    Log.w("StreamsProvider", "Kenyan search failed for \"$query\"", e)
+                    emptyList()
+                }
+            }
+        }.awaitAll()
+            .flatten()
+            .filter(::isVerifiedKenyanTitle)
+            .distinctBy { it.detailPath ?: it.subjectId }
+    }
+
+    private fun isVerifiedKenyanTitle(subject: StreamsSubject): Boolean {
+        if (subject.typeCode !in setOf(1, 2)) return false
+        if (!subject.country.equals("Kenya", ignoreCase = true)) return false
+
+        val title = subject.title.orEmpty().lowercase(Locale.US)
+        val genres = subject.genres.orEmpty().joinToString(" ").lowercase(Locale.US) +
+            " " + subject.genre.orEmpty().lowercase(Locale.US)
+        val searchableText = "$title $genres"
+        if (kenyanMediaExclusions.any(searchableText::contains)) return false
+        if (genres.contains("music")) return false
+
+        return subject.typeCode != 1 || subject.durationSeconds?.let { it >= 20 * 60 } != false
+    }
+
     override suspend fun getMovies(page: Int): List<Movie> = try {
         api.getCatalog("movies", page).items.orEmpty().mapNotNull { subject ->
             cacheSubject(subject)
@@ -285,6 +434,98 @@ object StreamsProvider : Provider {
     } catch (e: Exception) {
         Log.e("StreamsProvider", "Error in getTvShows", e)
         emptyList()
+    }
+
+    suspend fun getShortTvSeries(page: Int = 1): List<TvShow> {
+        val shortSubjects = mutableListOf<StreamsSubject>()
+        try {
+            shortSubjects += api.getBrowse("short_series", page).items.orEmpty()
+                .filter { it.isShortSeries() }
+        } catch (e: Exception) {
+            Log.w("StreamsProvider", "Failed to browse short TV page $page", e)
+        }
+
+        if (shortSubjects.isEmpty() && page == 1) {
+            try {
+                api.getHome().operatingList.orEmpty().forEach { section ->
+                    val subjects = if (section.type == "BANNER") {
+                        section.banner?.items.orEmpty().mapNotNull { it.subject }
+                    } else {
+                        section.subjects.orEmpty()
+                    }
+                    shortSubjects += subjects.filter { it.isShortSeries() }
+                }
+            } catch (e: Exception) {
+                Log.w("StreamsProvider", "Failed to load short TV from home", e)
+            }
+        }
+
+        if (shortSubjects.isEmpty()) {
+            try {
+                shortSubjects += api.search("short", page).items.orEmpty()
+                    .filter { it.isShortSeries() }
+            } catch (e: Exception) {
+                Log.w("StreamsProvider", "Failed to search short TV page $page", e)
+            }
+        }
+
+        return shortSubjects.distinctBy { it.detailPath ?: it.subjectId }.mapNotNull { subject ->
+            cacheSubject(subject)
+            subjectToTvShow(subject)
+        }
+    }
+
+    private fun StreamsSubject.isShortSeries(): Boolean =
+        subjectType == 7 || kind.equals("short_series", ignoreCase = true)
+
+    suspend fun getShortTvEpisodeCount(id: String): Int? =
+        loadDetail(id).second.mapNotNull { it.maxEp }.sum().takeIf { it > 0 }
+
+    suspend fun getShortTvEpisodePlayback(id: String, episode: Int = 1): StreamsShortEpisodePlayback? {
+        require(episode >= 1) { "Short TV episode must be positive" }
+        val streams = api.getPlayback(id, season = 1, episode = episode).streams.orEmpty()
+            .filter { it.vipLocked != true && !it.url.isNullOrBlank() }
+        val stream = streams.minWithOrNull(
+            compareBy<StreamsStream> { item ->
+                when {
+                    item.format.equals("mp4", ignoreCase = true) -> 0
+                    item.format.orEmpty().contains("hls", ignoreCase = true) ||
+                        item.format.orEmpty().contains("m3u8", ignoreCase = true) -> 1
+                    else -> 2
+                }
+            }.thenBy { item ->
+                val resolution = Regex("""\d{3,4}""")
+                    .find(item.resolutions.orEmpty())
+                    ?.value
+                    ?.toIntOrNull()
+                when {
+                    resolution == null -> Int.MAX_VALUE
+                    resolution <= 480 -> 480 - resolution
+                    else -> 10_000 + resolution
+                }
+            }
+        ) ?: return null
+        val url = stream.url?.takeIf(String::isNotBlank) ?: return null
+
+        val format = stream.format.orEmpty()
+        val mimeType = when {
+            format.contains("dash", ignoreCase = true) -> "application/dash+xml"
+            format.contains("hls", ignoreCase = true) || format.contains("m3u8", ignoreCase = true) ->
+                "application/x-mpegURL"
+            else -> "video/mp4"
+        }
+        val headers = stream.requestHeaders.orEmpty().toMutableMap().apply {
+            putIfAbsent("Referer", "https://themoviebox.xyz/")
+            putIfAbsent(
+                "User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            )
+        }
+        return StreamsShortEpisodePlayback(
+            url = url,
+            mimeType = mimeType,
+            requestHeaders = headers
+        )
     }
 
     override suspend fun search(
@@ -352,31 +593,49 @@ object StreamsProvider : Provider {
     }
 
     override suspend fun getGenre(id: String, page: Int): Genre {
-        if (id.lowercase() in setOf("cdn_all_channels", "cdn_sports", "upcoming_matches")) {
+        val normalizedId = id.lowercase()
+        if (normalizedId in setOf("short_tv", "short_series", "shorts")) {
+            return Genre(id = id, name = "Short TV", shows = getShortTvSeries(page))
+        }
+        if (normalizedId in setOf("cdn_all_channels", "cdn_sports", "upcoming_matches")) {
             return NexaHomeProvider.getGenre(id, page)
         }
 
         return try {
-        val categoryKey = when (id.lowercase()) {
+        val categoryKey = when (normalizedId) {
             "kids", "family", "cartoon", "streams_kids" -> "kids"
             "anime", "streams_anime" -> "anime"
             else -> id.lowercase()
         }
+        val searchQuery = normalizedId
+            .takeIf { it.startsWith("streams_search:") }
+            ?.substringAfter("streams_search:")
+            ?.trim()
         
         val selectedSearchCategory = searchCategories[categoryKey]
-        val rawSubjects = if (selectedSearchCategory != null) {
+        val rawSubjects = if (searchQuery != null) {
+            api.search(searchQuery, page).items.orEmpty()
+        } else if (selectedSearchCategory != null) {
             searchCategorySubjects(selectedSearchCategory, page)
         } else {
-            val catalogItems = try {
-                api.getCatalog(categoryKey, page).items.orEmpty()
-            } catch (_: Exception) {
-                emptyList()
-            }
+            when (categoryKey) {
+                "streams_trending_today" -> getTrendingSubjects(page)
+                "streams_kenyan_content" -> getKenyanSubjects(page)
+                "streams_catalog_movies" -> api.getCatalog("movies", page).items.orEmpty()
+                "streams_catalog_series" -> api.getCatalog("series", page).items.orEmpty()
+                else -> {
+                    val catalogItems = try {
+                        api.getCatalog(categoryKey, page).items.orEmpty()
+                    } catch (_: Exception) {
+                        emptyList()
+                    }
 
-            if (catalogItems.isNotEmpty()) catalogItems else try {
-                api.search(if (categoryKey == "kids") "kids cartoons" else categoryKey, page).items.orEmpty()
-            } catch (_: Exception) {
-                emptyList()
+                    if (catalogItems.isNotEmpty()) catalogItems else try {
+                        api.search(if (categoryKey == "kids") "kids cartoons" else categoryKey, page).items.orEmpty()
+                    } catch (_: Exception) {
+                        emptyList()
+                    }
+                }
             }
         }
 
@@ -399,7 +658,8 @@ object StreamsProvider : Provider {
                     val title = when (item) { is Movie -> item.title; is TvShow -> item.title; else -> "" }.lowercase()
                     title.contains("anime") || title.contains("naruto") || title.contains("dragon ball") || title.contains("one piece") || title.contains("pokemon") || title.contains("attack on titan")
                 }
-                else -> if (selectedSearchCategory == null) allItems else emptyList()
+                "streams_trending_today", "streams_kenyan_content" -> emptyList()
+                else -> emptyList()
             }
         }
 
@@ -408,9 +668,21 @@ object StreamsProvider : Provider {
             name = selectedSearchCategory?.name ?: when (categoryKey) {
                     "kids" -> "Kids"
                     "anime" -> "Anime"
-                    else -> id.replaceFirstChar { it.uppercase() }
+                    "streams_trending_today" -> "Trending Today"
+                    "streams_kenyan_content" -> "Kenyan Series & Movies"
+                    "streams_catalog_movies" -> "Movies"
+                    "streams_catalog_series" -> "Series"
+                    else -> searchQuery?.replaceFirstChar { it.uppercase() }
+                        ?: id.replaceFirstChar { it.uppercase() }
                 },
-            shows = if (selectedSearchCategory != null) {
+            shows = if (searchQuery != null ||
+                selectedSearchCategory != null ||
+                categoryKey == "streams_trending_today" ||
+                categoryKey == "streams_kenyan_content" ||
+                categoryKey == "streams_catalog_movies" ||
+                categoryKey == "streams_catalog_series" ||
+                normalizedId.startsWith("streams_")
+            ) {
                 shows
             } else {
                 shows.ifEmpty { NexaHomeProvider.getGenre(id, page).shows }
@@ -418,9 +690,23 @@ object StreamsProvider : Provider {
         )
         } catch (e: Exception) {
             Log.e("StreamsProvider", "Error in getGenre for $id", e)
-            runCatching { NexaHomeProvider.getGenre(id, page) }
-                .getOrElse { Genre(id = id, name = id, shows = emptyList()) }
+            if (normalizedId.startsWith("streams_") || normalizedId.startsWith("streams_search:")) {
+                Genre(
+                    id = id,
+                    name = when (normalizedId) {
+                        "streams_trending_today" -> "Trending Today"
+                        "streams_kenyan_content" -> "Kenyan Series & Movies"
+                        else -> id.removePrefix("streams_search:")
+                            .replaceFirstChar { it.uppercase() }
+                    },
+                    shows = emptyList()
+                )
+            } else {
+                runCatching { NexaHomeProvider.getGenre(id, page) }
+                    .getOrElse { Genre(id = id, name = id, shows = emptyList()) }
+            }
         }
+
     }
 
     override suspend fun getPeople(id: String, page: Int): People = People(id = id, name = id)
@@ -494,7 +780,12 @@ object StreamsProvider : Provider {
             else -> 0 to 0
         }
         val playbackServers = try {
-            val playback = api.getPlayback(path, season, episode)
+            val rawPlayback = api.getPlayback(path, season, episode)
+            val playback = if (rawPlayback.streams.isNullOrEmpty() && season == 0 && episode == 0) {
+                runCatching { api.getPlayback(path, 1, 1) }.getOrDefault(rawPlayback)
+            } else {
+                rawPlayback
+            }
             playback.streams.orEmpty().mapNotNull { stream ->
                 val url = stream.url?.takeIf(String::isNotBlank) ?: return@mapNotNull null
                 if (stream.vipLocked == true) return@mapNotNull null
@@ -649,7 +940,12 @@ object StreamsProvider : Provider {
         }
 
         val playbackServers = try {
-            val playback = api.getPlayback(path, season, episode)
+            val rawPlayback = api.getPlayback(path, season, episode)
+            val playback = if (rawPlayback.streams.isNullOrEmpty() && season == 0 && episode == 0) {
+                runCatching { api.getPlayback(path, 1, 1) }.getOrDefault(rawPlayback)
+            } else {
+                rawPlayback
+            }
             playback.streams.orEmpty().mapNotNull { stream ->
                 val url = stream.url?.takeIf(String::isNotBlank) ?: return@mapNotNull null
                 if (stream.vipLocked == true) return@mapNotNull null
@@ -832,7 +1128,7 @@ object StreamsProvider : Provider {
     }
 
     private fun subjectToAppItem(subject: StreamsSubject): AppAdapter.Item? =
-        if (subject.typeCode == 2) subjectToTvShow(subject) else subjectToMovie(subject)
+        if (subject.isTv) subjectToTvShow(subject) else subjectToMovie(subject)
 
     private fun subjectToMovie(subject: StreamsSubject): Movie? {
         val id = subject.detailPath?.takeIf(String::isNotBlank) ?: subject.subjectId ?: return null

@@ -195,7 +195,9 @@ class HomeMobileFragment : Fragment() {
             adapter = appAdapter.apply {
                 stateRestorationPolicy = RecyclerView.Adapter.StateRestorationPolicy.PREVENT_WHEN_EMPTY
                 onViewAllClickListener = { category ->
-                    val (genreId, genreName) = when (category.name) {
+                    val (genreId, genreName) = if (UserPreferences.currentProvider === com.nexastream.app.providers.StreamsProvider) {
+                        com.nexastream.app.providers.StreamsProvider.viewAllRoute(category.name)
+                    } else when (category.name) {
                         "CDN Live Channels", "Livestream" -> "cdn_all_channels" to "CDN Live TV"
                         "Live Sports (CDN)", "Live Sports" -> "cdn_sports" to "Live Sports"
                         "Latest Movies" -> "latest_movies" to category.name
@@ -290,7 +292,7 @@ class HomeMobileFragment : Fragment() {
                         "Series Banner" -> "tmdb_tv_popular" to "Series"
                         "Kids Banner" -> "tmdb_kids_family" to "Kids & Family"
                         "Anime Banner" -> "tmdb_anime_universe" to "Anime Universe"
-                        "Trending Today" -> "tmdb_movies_popular" to "Trending"
+                        "Trending Today" -> "streams_trending_today" to category.name
                         "✨ Recommended For You", "Recommended For You", "Recommended for you" -> "tmdb_recommended_for_you" to "Recommended For You"
                         "Upcoming Matches", "Upcoming Sports", "Daily Agenda" -> "upcoming_matches" to category.name
                         "Continue Watching" -> "continue_watching" to category.name
@@ -302,6 +304,7 @@ class HomeMobileFragment : Fragment() {
                         "⚡ WWE Live & Replay", "WWE Live & Replay" -> "wwe_moviebox" to category.name
                         "🎬 Nollywood Movies", "Nollywood Movies" -> "nollywood_movies" to category.name
                         "🌍 Kenyan Movies & Series", "Kenyan Movies & Series", "🌍 Kenyan Series", "Kenyan Series" -> "kenyan_series" to category.name
+                        "Kenyan Series & Movies" -> "streams_kenyan_content" to category.name
 
                         else -> {
                             val name = category.name
@@ -415,7 +418,7 @@ class HomeMobileFragment : Fragment() {
                 "Horror Movies", "Fantasy Movies", "Family Movies", "History Movies",
                 "Mystery Movies", "War Movies", "Biography Movies", "Sport Movies", "Western Movies", "Teen Romance Movies",
                 "🎬 Nollywood Movies", "Nollywood Movies",
-                "🌍 Kenyan Movies & Series", "Kenyan Movies & Series", "🌍 Kenyan Series", "Kenyan Series",
+                "🌍 Kenyan Movies & Series", "Kenyan Movies & Series", "🌍 Kenyan Series", "Kenyan Series", "Kenyan Series & Movies",
                 "All Movies", "Top Movies", "At Cinema"
             )
             val seriesCategories = listOf(
@@ -426,7 +429,7 @@ class HomeMobileFragment : Fragment() {
                 "Documentary Series", "Drama Series", "Family Series", "Sci-Fi & Fantasy Series",
                 "History Series", "Horror Series", "Mystery Series", "Romance Series",
                 "Thriller Series", "War & Politics Series", "Biography Series", "Reality TV", "Reality Series", "Sport Series", "Western Series",
-                "🌍 Kenyan Movies & Series", "Kenyan Movies & Series", "🌍 Kenyan Series", "Kenyan Series",
+                "🌍 Kenyan Movies & Series", "Kenyan Movies & Series", "🌍 Kenyan Series", "Kenyan Series", "Kenyan Series & Movies",
                 "All TV Shows", "Top TV Shows", "New Season & Episode", "Musical Series"
             )
 
@@ -481,6 +484,7 @@ class HomeMobileFragment : Fragment() {
                     cat.name == "🌍 Kenyan Series" ||
                     cat.name == "Kenyan Movies & Series" ||
                     cat.name == "Kenyan Series" ||
+                    cat.name == "Kenyan Series & Movies" ||
                     isLiveCategory(cat.name) ||
                     (cat.name !in moviesCategories &&
                     cat.name !in seriesCategories &&

@@ -31,7 +31,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
-class GenreMobileFragment : Fragment() {
+open class GenreMobileFragment : Fragment() {
 
     private var hasAutoCleared409: Boolean = false
 

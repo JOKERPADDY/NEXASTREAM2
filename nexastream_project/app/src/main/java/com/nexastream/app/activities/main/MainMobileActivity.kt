@@ -125,18 +125,15 @@ class MainMobileActivity : AppCompatActivity() {
         title = ""
 
         ViewCompat.setOnApplyWindowInsetsListener(binding.mainContent) { view, windowInsets ->
-            val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
-            val navHostFragment = supportFragmentManager.findFragmentById(R.id.nav_main_fragment) as? NavHostFragment
-            val currentFragment = navHostFragment?.childFragmentManager?.primaryNavigationFragment
-
-            val isPlayer = currentFragment is PlayerMobileFragment
-            val isHome = currentFragment is HomeMobileFragment
-            val isBottomNavVisible = binding.bnvMain.visibility == View.VISIBLE
-
-            val bottomPadding = if (isPlayer || isBottomNavVisible) 0 else insets.bottom
-            val topPadding = if (isPlayer || isHome) 0 else insets.top
-
-            view.setPadding(insets.left, topPadding, insets.right, bottomPadding)
+            val currentDestinationId =
+                (supportFragmentManager.findFragmentById(R.id.nav_main_fragment) as? NavHostFragment)
+                    ?.navController
+                    ?.currentDestination
+                    ?.id
+            applyMainContentInsets(
+                windowInsets,
+                currentDestinationId,
+            )
             windowInsets
         }
 
@@ -177,13 +174,14 @@ class MainMobileActivity : AppCompatActivity() {
 
         binding.bnvMain.setupWithNavController(navController)
         binding.bnvMain.setOnItemSelectedListener { item ->
-            if (item.itemId == R.id.downloads || item.itemId == R.id.home || item.itemId == R.id.search) {
+            if (item.itemId == R.id.downloads || item.itemId == R.id.home || item.itemId == R.id.short_tv || item.itemId == R.id.search) {
                 binding.ablMain.visibility = View.GONE
             }
             androidx.navigation.ui.NavigationUI.onNavDestinationSelected(item, navController)
         }
         updateNavigationVisibility()
         updateBottomNavigationVisibility(navController.currentDestination?.id)
+        updateShortsStatusBar(navController.currentDestination?.id)
         updateToolbarLogo()
 
         navController.addOnDestinationChangedListener { _, destination, _ ->
@@ -194,11 +192,18 @@ class MainMobileActivity : AppCompatActivity() {
 
             updateNavigationVisibility(destination.id)
             updateBottomNavigationVisibility(destination.id)
-            binding.ablMain.visibility = if (isTopLevelProviderDestination(destination.id) && destination.id != R.id.home && destination.id != R.id.search && destination.id != R.id.downloads) View.VISIBLE else View.GONE
+            updateShortsStatusBar(destination.id)
+            ViewCompat.getRootWindowInsets(binding.mainContent)?.let { insets ->
+                applyMainContentInsets(
+                    insets,
+                    destination.id,
+                )
+            }
+            binding.ablMain.visibility = if (isTopLevelProviderDestination(destination.id) && destination.id != R.id.home && destination.id != R.id.short_tv && destination.id != R.id.search && destination.id != R.id.downloads) View.VISIBLE else View.GONE
             updateToolbarLogo()
 
             val params = binding.navMainFragment.layoutParams as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
-            if (destination.id == R.id.home || destination.id == R.id.search || destination.id == R.id.downloads) {
+            if (destination.id == R.id.home || destination.id == R.id.short_tv || destination.id == R.id.search || destination.id == R.id.downloads) {
                 binding.ablMain.setBackgroundColor(android.graphics.Color.TRANSPARENT)
                 binding.toolbarMain.setBackgroundColor(android.graphics.Color.TRANSPARENT)
                 binding.ablMain.elevation = 0f
@@ -367,13 +372,16 @@ class MainMobileActivity : AppCompatActivity() {
     private fun updateBottomNavigationVisibility(destinationId: Int? = null) {
         val currentDest = destinationId ?: (supportFragmentManager.findFragmentById(R.id.nav_main_fragment) as? NavHostFragment)?.navController?.currentDestination?.id
         val showBottomNav =
-            UserPreferences.currentProvider != null && isTopLevelProviderDestination(currentDest) && !isHomeLoading
+            UserPreferences.currentProvider != null &&
+                isTopLevelProviderDestination(currentDest) &&
+                currentDest != R.id.short_tv &&
+                !isHomeLoading
         binding.bnvMain.visibility = if (showBottomNav) View.VISIBLE else View.GONE
     }
 
     private fun updateNavigationVisibility(currentDestinationId: Int? = null) {
         val destId = currentDestinationId ?: (supportFragmentManager.findFragmentById(R.id.nav_main_fragment) as? NavHostFragment)?.navController?.currentDestination?.id
-        val showAbl = isTopLevelProviderDestination(destId) && destId != R.id.home && destId != R.id.search && destId != R.id.downloads
+        val showAbl = isTopLevelProviderDestination(destId) && destId != R.id.home && destId != R.id.short_tv && destId != R.id.search && destId != R.id.downloads
         binding.ablMain.visibility = if (showAbl) View.VISIBLE else View.GONE
 
         val provider = UserPreferences.currentProvider ?: return
@@ -382,6 +390,7 @@ class MainMobileActivity : AppCompatActivity() {
         val isIptv = provider is IptvProvider
 
         binding.bnvMain.menu.findItem(R.id.search)?.isVisible = true
+        binding.bnvMain.menu.findItem(R.id.short_tv)?.isVisible = true
         binding.bnvMain.menu.findItem(R.id.movies)?.isVisible = supportsMovies
         binding.bnvMain.menu.findItem(R.id.tv_shows)?.apply {
             isVisible = supportsTvShows
@@ -421,6 +430,7 @@ class MainMobileActivity : AppCompatActivity() {
         return destinationId in setOf(
             R.id.search,
             R.id.home,
+            R.id.short_tv,
             R.id.movies,
             R.id.tv_shows,
             R.id.downloads,
@@ -685,6 +695,35 @@ class MainMobileActivity : AppCompatActivity() {
 
     private fun updateToolbarLogo() {
         binding.ivToolbarLogo.visibility = View.GONE
+    }
+
+    private fun applyMainContentInsets(
+        windowInsets: WindowInsetsCompat,
+        destinationId: Int?,
+    ) {
+        val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
+        val isPlayer = destinationId == R.id.player
+        val isHome = destinationId == R.id.home
+        val isShorts = destinationId == R.id.short_tv
+        val bottomPadding =
+            if (isPlayer || isShorts || binding.bnvMain.visibility == View.VISIBLE) 0 else insets.bottom
+        val topPadding = if (isPlayer || isHome || isShorts) 0 else insets.top
+        binding.mainContent.setPadding(insets.left, topPadding, insets.right, bottomPadding)
+    }
+
+    private fun updateShortsStatusBar(destinationId: Int?) {
+        val isShorts = destinationId == R.id.short_tv
+        val systemBarColor = if (isShorts) {
+            android.graphics.Color.TRANSPARENT
+        } else {
+            ThemeManager.palette(UserPreferences.selectedTheme).systemBar
+        }
+        window.statusBarColor = systemBarColor
+        window.navigationBarColor = systemBarColor
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isStatusBarContrastEnforced = !isShorts
+            window.isNavigationBarContrastEnforced = !isShorts
+        }
     }
 
     private fun applyThemeNavigationChrome() {

@@ -170,6 +170,26 @@
             app:nullable="true" />
     </fragment>
     <fragment
+        android:id="@+id/short_tv"
+        android:name="com.nexastream.app.fragments.genre.ShortTvMobileFragment"
+        android:label="Short TV"
+        tools:layout="@layout/fragment_genre_mobile">
+        <argument
+            android:name="id"
+            app:argType="string"
+            android:defaultValue="short_tv" />
+        <argument
+            android:name="name"
+            app:argType="string"
+            android:defaultValue="Short TV" />
+        <action
+            android:id="@+id/action_genre_to_movie"
+            app:destination="@id/movie" />
+        <action
+            android:id="@+id/action_genre_to_tv_show"
+            app:destination="@id/tv_show" />
+    </fragment>
+    <fragment
         android:id="@+id/genre"
         android:name="com.nexastream.app.fragments.genre.GenreMobileFragment"
         android:label="fragment_genre_mobile"

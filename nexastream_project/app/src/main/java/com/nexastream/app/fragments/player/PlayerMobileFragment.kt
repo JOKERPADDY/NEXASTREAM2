@@ -1357,6 +1357,14 @@ class PlayerMobileFragment : Fragment() {
             }
         }
         player.addListener(object : Player.Listener {
+            override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+                super.onVideoSizeChanged(videoSize)
+                if (videoSize.height > videoSize.width && videoSize.height > 0) {
+                    activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
+                    binding.pvPlayer.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                }
+            }
+
             override fun onPlaybackStateChanged(playbackState: Int) {
                 super.onPlaybackStateChanged(playbackState)
                 updateLiveControls()
