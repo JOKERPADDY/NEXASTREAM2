@@ -20,8 +20,8 @@ android {
         applicationId "com.nexastream.app"
         minSdk 23
         targetSdk 35
-        versionCode 13
-        versionName "1.0.12"
+        versionCode 22
+        versionName "1.0.21"
 
         buildConfigField "String", "APP_LAYOUT", "\"${properties.getProperty("APP_LAYOUT", "auto")}\""
         buildConfigField "String", "TMDB_API_KEY", "\"${properties.getProperty("TMDB_API_KEY", "")}\""
@@ -72,7 +72,7 @@ android {
     lint {
         checkReleaseBuilds false
         abortOnError false
-        disable 'NullSafeMutableLiveData', 'RememberInComposition', 'FrequentlyChangingValue'
+        disable 'NullSafeMutableLiveData', 'RememberInComposition', 'FrequentlyChangingValue', 'AutoboxingStateCreation'
     }
 }
 
